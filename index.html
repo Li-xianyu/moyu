@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1e1e1e">
+  <meta name="color-scheme" content="dark">
+  <title>MOYU - 模鱼空间</title>
+  <script>window.APP_VERSION = "26.5.7";</script>
+  <script>
+    (function() {
+      var v = window.APP_VERSION;
+      var hrefs = [
+        "./styles/base/variables.css",
+        "./styles/layout/shell.css",
+        "./styles/views/settings.css",
+        "./styles/base/forms.css",
+        "./styles/views/chat.css",
+        "./styles/base/responsive.css",
+        "./styles/base/scrollbars.css",
+        "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css",
+        "./styles/base/mobile-viewport-fix.css",
+        "./styles/base/drop-overlay.css"
+      ];
+      for (var i = 0; i < hrefs.length; i++) {
+        var link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = hrefs[i] + "?v=" + v;
+        document.head.appendChild(link);
+      }
+    })();
+  </script>
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" focusable="false" class="moyu-logo-defs">
+    <defs>
+      <symbol id="moyuFishIcon" viewBox="0 0 200 120">
+        <path d="M55 35 L78 60 L55 85" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+        <path d="M100 28 H135 Q145 28 150 36 L165 60 L150 84 Q145 92 135 92 H100 Q90 92 85 84 L70 60 L85 36 Q90 28 100 28Z" stroke="currentColor" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+        <circle cx="136" cy="52" r="6" fill="currentColor"></circle>
+      </symbol>
+    </defs>
+  </svg>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg class="brand-logo" viewBox="0 0 200 120" aria-hidden="true">
+            <use href="#moyuFishIcon"></use>
+          </svg>
+          <h1 class="brand-inline-title" data-i18n="brand.sidebarTitle">MOYU</h1>
+        </div>
+        <h1 data-i18n="brand.title">MOYU-模鱼</h1>
+        <p data-i18n="brand.subtitle">开始模鱼，开始摸鱼！</p>
+      </div>
+
+      <nav class="nav nav-main">
+        <button class="nav-btn nav-btn-create" data-view="create">
+          <span class="nav-btn-icon" aria-hidden="true">
+            <i class="bi bi-plus-lg nav-icon-svg"></i>
+          </span>
+          <span data-i18n="nav.create">创建聊天</span>
+        </button>
+        <div class="chat-list-control">
+          <button id="chatListToggleBtn" class="nav-text-toggle" type="button">
+            <span data-i18n="nav.chatList">聊天列表</span>
+            <span class="toggle-icon" aria-hidden="true">
+              <i class="bi bi-chevron-right nav-icon-svg" id="chatListArrowIcon"></i>
+            </span>
+          </button>
+          <div id="chatListMenu" class="chat-list-menu hidden">
+            <button id="openCurrentChatBtn" class="chat-list-item" type="button" data-i18n="chat.currentSession">当前会话</button>
+            <div id="chatListEmpty" class="chat-list-empty" data-i18n="chat.emptySessions">还没有会话</div>
+          </div>
+        </div>
+      </nav>
+
+      <nav class="nav nav-bottom">
+        <button class="nav-btn nav-btn-settings" data-view="settings">
+          <span class="nav-btn-icon" aria-hidden="true">
+            <i class="bi bi-gear nav-icon-svg"></i>
+          </span>
+          <span data-i18n="nav.settings">设置</span>
+        </button>
+      </nav>
+    </aside>
+
+    <button id="sidebarToggleBtn" class="shell-toggle-btn" type="button" aria-label="切换侧栏">
+      <i class="bi bi-list nav-icon-svg"></i>
+    </button>
+    <button id="sidebarBackdrop" class="sidebar-backdrop hidden" type="button" aria-label="关闭侧栏"></button>
+
+    <main class="main">
+      <section id="settingsView" class="view view-with-shell-offset">
+        <div class="settings-stage">
+          <section class="settings-list-panel">
+            <div class="settings-list-head">
+              <div class="settings-list-head-copy">
+                <h3 data-i18n="settings.sectionTitle">设置分类</h3>
+                <p class="hint-text" data-i18n="settings.sectionHint">先选择要调整的设置分组。</p>
+              </div>
+            </div>
+            <div class="settings-section-nav">
+              <button id="globalSettingsTabBtn" class="settings-section-btn active" type="button" data-i18n="settings.globalTab">全局设置</button>
+              <button id="assistantSettingsTabBtn" class="settings-section-btn" type="button" data-i18n="settings.assistantTab">辅助 AI</button>
+              <button id="sessionSettingsTabBtn" class="settings-section-btn" type="button" data-i18n="settings.sessionTab">会话设置</button>
+              <button id="apiSettingsTabBtn" class="settings-section-btn" type="button" data-i18n="settings.apiTab">接口设置</button>
+            </div>
+          </section>
+
+          <section class="settings-main-panel">
+            <div class="settings-main-head">
+              <div>
+                <h2 id="settingsPanelTitle" data-i18n="settings.globalTitle">全局设置</h2>
+                <p id="settingsPanelSubtitle" data-i18n="settings.globalSubtitle">调整整个应用通用的设置项。</p>
+              </div>
+            </div>
+
+            <section id="globalSettingsPanel" class="settings-page-panel active">
+              <div class="settings-global-grid">
+                <section class="settings-global-section">
+                  <div class="sub-panel-head">
+                    <div>
+                      <h3 data-i18n="settings.languageTitle">语言设置</h3>
+                      <p class="hint-text" data-i18n="settings.languageHint">控制整个应用当前使用的界面语言。</p>
+                    </div>
+                  </div>
+                  <label class="field settings-language-field">
+                    <span data-i18n="settings.languageLabel">界面语言</span>
+                    <select id="localeSelect">
+                      <option value="zh-CN" data-i18n="settings.locale.zh-CN">简体中文</option>
+                      <option value="en-US" data-i18n="settings.locale.en-US">English</option>
+                    </select>
+                  </label>
+                </section>
+
+                <section class="settings-global-section">
+                  <div class="sub-panel-head">
+                    <div>
+                      <h3 data-i18n="settings.startupTitle">初始页面</h3>
+                      <p class="hint-text" data-i18n="settings.startupHint">控制刷新页面后默认进入哪一种主界面。</p>
+                    </div>
+                  </div>
+                  <label class="field settings-language-field">
+                    <span data-i18n="settings.initialPageLabel">启动时打开</span>
+                    <select id="initialPageSelect">
+                      <option value="welcome" data-i18n="settings.initialPage.welcome">默认欢迎页</option>
+                      <option value="create" data-i18n="settings.initialPage.create">创建新聊天</option>
+                      <option value="last-chat" data-i18n="settings.initialPage.lastChat">最后一次聊天</option>
+                    </select>
+                  </label>
+                </section>
+
+                <section class="settings-global-section">
+                  <div class="sub-panel-head">
+                    <div>
+                      <h3 data-i18n="settings.devTitle">开发者选项</h3>
+                      <p class="hint-text" data-i18n="settings.devHint">用于排查导演调度和会话流程问题。</p>
+                    </div>
+                  </div>
+                  <label class="settings-toggle-row" for="debugModeToggle">
+                    <div class="settings-toggle-copy">
+                      <span data-i18n="settings.debugModeLabel">调试模式</span>
+                      <small class="hint-text" data-i18n="settings.debugModeHint">开启后会在 console 中输出结构化调试日志。</small>
+                    </div>
+                    <input id="debugModeToggle" class="settings-toggle-input" type="checkbox">
+                    <span class="settings-toggle-ui" aria-hidden="true"></span>
+                  </label>
+                  <label class="settings-toggle-row" for="mobileConsoleToggle">
+                    <div class="settings-toggle-copy">
+                      <span data-i18n="settings.mobileConsoleLabel">移动端调试控制台</span>
+                      <small class="hint-text" data-i18n="settings.mobileConsoleHint">开启后会在小屏或触屏设备自动加载 Eruda 调试工具。</small>
+                    </div>
+                    <input id="mobileConsoleToggle" class="settings-toggle-input" type="checkbox">
+                    <span class="settings-toggle-ui" aria-hidden="true"></span>
+                  </label>
+                </section>
+
+                <section class="settings-global-section">
+                  <div class="sub-panel-head">
+                    <div>
+                      <h3 data-i18n="settings.backupTitle">设置备份</h3>
+                      <p class="hint-text" data-i18n="settings.backupHint">导出所有设置（含 API Key）为 JSON 文件，或从备份文件恢复。</p>
+                    </div>
+                  </div>
+                  <div class="settings-field-row">
+                    <button id="exportBackupBtn" class="secondary-btn" data-i18n="settings.exportBackup">导出设置备份</button>
+                    <button id="importBackupBtn" class="secondary-btn" data-i18n="settings.importBackup">导入设置备份</button>
+                    <input id="importBackupInput" type="file" accept=".json,application/json" style="display: none">
+                  </div>
+                </section>
+              </div>
+            </section>
+
+            <section id="assistantSettingsPanel" class="settings-page-panel">
+              <div class="settings-global-grid">
+                <section class="settings-global-section">
+                  <div class="sub-panel-head">
+                    <div>
+                      <h3 data-i18n="settings.assistantModelTitle">辅助模型</h3>
+                      <p class="hint-text" data-i18n="settings.assistantModelHint">从所有工作模型里选一个，作为全局辅助 AI 默认模型。</p>
+                    </div>
+                  </div>
+                  <label class="field settings-language-field">
+                    <span data-i18n="settings.assistantModelLabel">辅助模型</span>
+                    <select id="assistantModelSelect">
+                      <option value="" data-i18n="settings.assistantModelEmpty">请先在接口设置中勾选工作模型</option>
+                    </select>
+                  </label>
+                </section>
+              </div>
+            </section>
+
+            <section id="sessionSettingsPanel" class="settings-page-panel">
+              <div class="settings-global-grid">
+                <section class="settings-global-section">
+                  <div class="sub-panel-head">
+                    <div>
+                      <h3 data-i18n="settings.compressThresholdLabel">自动压缩阈值</h3>
+                      <p class="hint-text" data-i18n="settings.compressThresholdHint">导演上下文 Token 数超过此值后，在发送消息时自动触发压缩。</p>
+                    </div>
+                  </div>
+                  <div class="settings-field-row">
+                    <input id="compressThresholdInput" type="number" min="500" max="10000" step="100" class="field" style="width:140px">
+                  </div>
+                </section>
+
+                <section class="settings-global-section">
+                  <div class="sub-panel-head">
+                    <div>
+                      <h3 data-i18n="settings.showTokenDisplayLabel">显示 Token 用量</h3>
+                      <p class="hint-text" data-i18n="settings.showTokenDisplayHint">关闭后 AI 回复气泡底部将不再显示 Token 统计信息。</p>
+                    </div>
+                  </div>
+                  <label class="settings-toggle-row" for="showTokenDisplayToggle">
+                    <div class="settings-toggle-copy">
+                      <span data-i18n="settings.showTokenDisplayLabel">显示 Token 用量</span>
+                    </div>
+                    <input id="showTokenDisplayToggle" class="settings-toggle-input" type="checkbox">
+                    <span class="settings-toggle-ui" aria-hidden="true"></span>
+                  </label>
+                </section>
+
+                <section class="settings-global-section">
+                  <div class="sub-panel-head">
+                    <div>
+                      <h3 data-i18n="settings.exportSessionsTitle">导出会话</h3>
+                      <p class="hint-text" data-i18n="settings.exportSessionsHint">将所有会话导出为 JSON 文件。</p>
+                    </div>
+                  </div>
+                  <div class="settings-field-row">
+                    <button id="exportSessionsBtn" class="secondary-btn" data-i18n="settings.exportSessionsTitle">导出全部会话</button>
+                  </div>
+                </section>
+
+                <section class="settings-global-section">
+                  <div class="sub-panel-head">
+                    <div>
+                      <h3 data-i18n="settings.importSessionsTitle">导入会话</h3>
+                      <p class="hint-text" data-i18n="settings.importSessionsHint">从 JSON 文件导入一个或多个会话。</p>
+                    </div>
+                  </div>
+                  <div class="settings-field-row">
+                    <button id="importSessionsBtn" class="secondary-btn" data-i18n="settings.importSessionsTitle">导入会话</button>
+                    <input id="importSessionsInput" type="file" accept=".json,application/json" style="display:none">
+                  </div>
+                </section>
+              </div>
+            </section>
+
+            <section id="apiSettingsPanel" class="settings-page-panel">
+              <div class="settings-api-shell">
+                <section class="settings-api-list-panel">
+                  <div class="settings-api-list-head">
+                    <div class="settings-list-head-copy">
+                      <h3 data-i18n="settings.savedConfigs">接口列表</h3>
+                      <p class="hint-text" data-i18n="settings.savedConfigsHint">新增、切换并维护你的接口配置。</p>
+                    </div>
+                    <button id="addConfigBtn" class="primary-btn" data-i18n="settings.addConfig">新增</button>
+                  </div>
+                  <div id="savedConfigs" class="settings-config-list"></div>
+                </section>
+
+                <div id="settingsResizableLayout" class="settings-resizable-layout">
+                  <div id="settingsTopPane" class="settings-top-pane">
+                    <div class="settings-content-grid">
+                      <section class="settings-detail-panel settings-plain-section">
+                        <div class="form-grid">
+                          <label class="field">
+                            <span data-i18n="settings.configNameLabel">接口名称</span>
+                            <input id="configNameInput" type="text" data-i18n-placeholder="settings.configNamePlaceholder" placeholder="例如 OpenAI 主账号 / 测试中转站">
+                          </label>
+                          <label class="field">
+                            <span data-i18n="settings.hostLabel">API Host</span>
+                            <input id="apiHostInput" type="text" data-i18n-placeholder="settings.hostPlaceholder" placeholder="例如 https://api.openai.com/v1">
+                          </label>
+                          <label class="field field-full">
+                            <span data-i18n="settings.keyLabel">API Key</span>
+                            <input id="apiKeyInput" type="password" data-i18n-placeholder="settings.keyPlaceholder" placeholder="sk-...">
+                          </label>
+                        </div>
+
+                        <div class="settings-actions-row">
+                          <button id="saveSettingsBtn" class="primary-btn" data-i18n="settings.save">保存设置</button>
+                          <div class="actions actions-compact">
+                            <button id="fetchModelsBtn" class="secondary-btn" data-i18n="settings.fetch">获取模型列表</button>
+                            <button id="clearCacheBtn" class="ghost-btn" data-i18n="settings.clearCache">清空当前缓存</button>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section class="settings-model-panel settings-plain-section">
+                        <div class="sub-panel-head">
+                          <div>
+                            <h3 data-i18n="settings.cachedModels">缓存模型</h3>
+                            <div id="modelCacheInfo" class="hint-text">当前没有缓存</div>
+                          </div>
+                        </div>
+                        <label class="field field-search">
+                          <span data-i18n="settings.searchLabel">搜索模型</span>
+                          <input id="modelSearchInput" type="text" data-i18n-placeholder="settings.searchPlaceholder" placeholder="输入模型名筛选并点击选择工作模型">
+                        </label>
+                        <ul id="modelList" class="model-list"></ul>
+                      </section>
+                    </div>
+                  </div>
+
+                  <div id="settingsResizeHandle" class="settings-resize-handle" aria-hidden="true"></div>
+
+                  <section class="settings-work-models-panel settings-plain-section">
+                    <div class="sub-panel-head">
+                      <div>
+                        <h3 data-i18n="settings.workModelsTitle">工作模型</h3>
+                        <p class="hint-text" data-i18n="settings.workModelsHint">在右侧缓存模型区点击即可加入或移出工作模型。</p>
+                      </div>
+                      <div class="actions actions-compact">
+                        <button id="clearWorkModelsBtn" class="ghost-btn" type="button" data-i18n="settings.clearWorkModels">清空</button>
+                      </div>
+                    </div>
+                    <div id="workModelHint" class="hint-text" data-i18n="settings.workModelsEmpty">请先获取模型列表</div>
+                    <div id="workModelList" class="work-model-list"></div>
+                  </section>
+                </div>
+              </div>
+            </section>
+          </section>
+        </div>
+      </section>
+
+      <section id="createView" class="view view-with-shell-offset">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2 data-i18n="create.title">创建新聊天</h2>
+              <p data-i18n="create.subtitle">先填写全局设定，再指定导演模型和 2-5 个 NPC。</p>
+            </div>
+          </div>
+
+          <div class="stack">
+            <label class="field">
+              <span data-i18n="create.globalPromptLabel">全局 Prompt</span>
+              <textarea id="globalPromptInput" rows="5" data-i18n-placeholder="create.globalPromptPlaceholder" placeholder="描述这个聊天是做什么的、世界观是什么、所有 AI 都应该知道什么。"></textarea>
+            </label>
+
+            <div class="field">
+              <span data-i18n="create.modeLabel">会话模式</span>
+              <div id="sessionModeSelector" class="mode-selector">
+                <label class="mode-option" data-mode-option="story">
+                  <input type="radio" name="sessionMode" value="story" checked>
+                  <span class="mode-option-label">
+                    <span data-i18n="create.modeStory">创作模式</span>
+                    <small class="hint-text" data-i18n="create.modeStoryHint">面向剧情与角色互动，导演负责推进场景并调度 NPC</small>
+                  </span>
+                </label>
+                <label class="mode-option" data-mode-option="work">
+                  <input type="radio" name="sessionMode" value="work">
+                  <span class="mode-option-label">
+                    <span data-i18n="create.modeWork">工作模式</span>
+                    <small class="hint-text" data-i18n="create.modeWorkHint">面向协作分工，导演负责安排回答顺序和任务分配</small>
+                  </span>
+                </label>
+              </div>
+              <small id="sessionModeHint" class="hint-text" data-i18n="create.modeHint">创建时选择会话模式；创建后模式会锁定。两种模式都由导演调度，只是调度目标不同。</small>
+            </div>
+
+            <label class="field">
+              <span data-i18n="create.directorLabel">导演模型</span>
+              <select id="directorModelSelect">
+                <option value="">请先在设置中勾选工作模型</option>
+              </select>
+            </label>
+
+            <div class="npc-header">
+              <div>
+                <h3 data-i18n="create.npcTitle">NPC 配置</h3>
+                <p data-i18n="create.npcSubtitle">每个 NPC 必须绑定一个模型，也可以填写独立人物 Prompt。</p>
+              </div>
+              <button id="addNpcBtn" class="secondary-btn" data-i18n="create.addNpc">添加 NPC</button>
+            </div>
+
+            <div id="npcList" class="npc-list"></div>
+
+            <div class="actions">
+              <button id="createChatBtn" class="primary-btn" data-i18n="create.submit">创建会话</button>
+            </div>
+            <div id="createStatus" class="status-text">请保持 2 到 5 个 NPC</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="chatView" class="view active">
+        <div id="chatStage" class="chat-stage">
+          <button id="infoToggleBtn" class="info-btn floating" type="button" aria-label="会话信息">i</button>
+          <div id="chatInfoPopover" class="chat-info-popover hidden">
+            <div class="chat-info-card">
+              <h3>会话信息</h3>
+              <div id="chatMeta" class="chat-meta empty" data-i18n="chat.noActiveSession">还没有活动会话</div>
+            </div>
+          </div>
+
+          <div id="chatWelcome" class="chat-welcome">
+            <div class="chat-welcome-copy">
+              <svg class="welcome-logo" viewBox="0 0 200 120" aria-hidden="true">
+                <use href="#moyuFishIcon"></use>
+              </svg>
+              <h2 data-i18n="brand.title">MOYU-模鱼</h2>
+              <p data-i18n="chat.welcomeIntro">一个多 AI 剧场与角色对话实验场。</p>
+              <p data-i18n="chat.welcomeHint">先在左侧设置接口与工作模型，再创建聊天开始模鱼。</p>
+            </div>
+          </div>
+
+          <div id="chatMessages" class="chat-messages"></div>
+
+          <div class="composer-shell">
+            <div class="composer-status-bar">
+              <div id="chatStatus" class="status-text" data-i18n="chat.readyAfterCreate" data-tone="success">创建会话后即可聊天</div>
+            </div>
+            <div class="composer">
+              <textarea id="chatInput" rows="3" data-i18n-placeholder="chat.inputPlaceholder" placeholder="输入你想说的话..." disabled></textarea>
+              <div class="composer-footer">
+                <button id="compressMemoryBtn" class="secondary-btn memory-compress-btn" type="button" disabled>压缩记忆</button>
+                <button id="sendBtn" class="primary-btn send-inside-btn" data-i18n="chat.send" disabled>发送</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="dropOverlay" class="drop-overlay hidden">
+    <div class="drop-overlay-content">
+      <div class="drop-overlay-icon">
+        <i class="bi bi-cloud-upload"></i>
+      </div>
+      <p id="dropOverlayText" class="drop-overlay-text">松开以导入文件</p>
+    </div>
+  </div>
+
+  <template id="npcTemplate">
+    <article class="npc-card">
+      <button class="npc-accordion-toggle" type="button">
+        <span class="npc-accordion-name" data-i18n="npc.unnamed">未命名 NPC</span>
+        <span class="npc-accordion-arrow" aria-hidden="true">⌄</span>
+      </button>
+      <div class="npc-accordion-body">
+      <div class="npc-top">
+        <label class="field">
+          <span data-i18n="npc.nameLabel">NPC 名称</span>
+          <input class="npc-name" type="text" data-i18n-placeholder="npc.namePlaceholder" placeholder="例如：侦探 / 店主 / 军师">
+        </label>
+        <label class="field">
+          <span data-i18n="npc.modelLabel">模型</span>
+          <select class="npc-model"></select>
+        </label>
+      </div>
+      <label class="field">
+        <span data-i18n="npc.promptLabel">NPC Prompt</span>
+        <textarea class="npc-prompt" rows="3" data-i18n-placeholder="npc.promptPlaceholder" placeholder="可选：人物口吻、秘密、目标、说话风格。"></textarea>
+      </label>
+      <div class="npc-footer">
+        <span class="hint-text" data-i18n="npc.footer">所有 NPC 都会看到全局 Prompt 和完整聊天记录。</span>
+        <button class="ghost-btn remove-npc-btn" type="button" data-i18n="npc.remove">删除</button>
+      </div>
+      </div>
+    </article>
+  </template>
+
+  <script>
+    (function() {
+      var v = window.APP_VERSION;
+      var srcs = [
+        "./scripts/core/constants.js",
+        "./scripts/core/helpers.js",
+        "./scripts/core/state.js",
+        "./scripts/features/navigation.js",
+        "./scripts/features/settings.js",
+        "./scripts/features/create.js",
+        "./scripts/features/sessions.js",
+        "./scripts/features/filedrop.js",
+        "./scripts/features/chat.js",
+        "./scripts/bootstrap.js"
+      ];
+      (function load(i) {
+        if (i >= srcs.length) return;
+        var s = document.createElement("script");
+        s.src = srcs[i] + "?v=" + v;
+        s.async = false;
+        s.onload = function() { load(i + 1); };
+        s.onerror = function() { load(i + 1); };
+        document.body.appendChild(s);
+      })(0);
+    })();
+  </script>
+</body>
+</html>

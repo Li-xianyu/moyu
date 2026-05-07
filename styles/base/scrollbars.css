@@ -1,0 +1,89 @@
+.chat-messages::-webkit-scrollbar,
+#chatInput::-webkit-scrollbar,
+#globalPromptInput::-webkit-scrollbar,
+.npc-prompt::-webkit-scrollbar,
+.session-card::-webkit-scrollbar,
+.panel::-webkit-scrollbar,
+.model-list::-webkit-scrollbar,
+.settings-config-list::-webkit-scrollbar,
+.work-model-list::-webkit-scrollbar,
+.settings-work-models-panel::-webkit-scrollbar,
+.settings-detail-panel::-webkit-scrollbar,
+.settings-model-panel::-webkit-scrollbar,
+.settings-page-panel::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-track,
+#chatInput::-webkit-scrollbar-track,
+#globalPromptInput::-webkit-scrollbar-track,
+.npc-prompt::-webkit-scrollbar-track,
+.session-card::-webkit-scrollbar-track,
+.panel::-webkit-scrollbar-track,
+.model-list::-webkit-scrollbar-track,
+.settings-config-list::-webkit-scrollbar-track,
+.work-model-list::-webkit-scrollbar-track,
+.settings-work-models-panel::-webkit-scrollbar-track,
+.settings-detail-panel::-webkit-scrollbar-track,
+.settings-model-panel::-webkit-scrollbar-track,
+.settings-page-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb,
+#chatInput::-webkit-scrollbar-thumb,
+#globalPromptInput::-webkit-scrollbar-thumb,
+.npc-prompt::-webkit-scrollbar-thumb,
+.session-card::-webkit-scrollbar-thumb,
+.panel::-webkit-scrollbar-thumb,
+.model-list::-webkit-scrollbar-thumb,
+.settings-config-list::-webkit-scrollbar-thumb,
+.work-model-list::-webkit-scrollbar-thumb,
+.settings-work-models-panel::-webkit-scrollbar-thumb,
+.settings-detail-panel::-webkit-scrollbar-thumb,
+.settings-model-panel::-webkit-scrollbar-thumb,
+.settings-page-panel::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover,
+#chatInput::-webkit-scrollbar-thumb:hover,
+#globalPromptInput::-webkit-scrollbar-thumb:hover,
+.npc-prompt::-webkit-scrollbar-thumb:hover,
+.session-card::-webkit-scrollbar-thumb:hover,
+.panel::-webkit-scrollbar-thumb:hover,
+.model-list::-webkit-scrollbar-thumb:hover,
+.settings-config-list::-webkit-scrollbar-thumb:hover,
+.work-model-list::-webkit-scrollbar-thumb:hover,
+.settings-work-models-panel::-webkit-scrollbar-thumb:hover,
+.settings-detail-panel::-webkit-scrollbar-thumb:hover,
+.settings-model-panel::-webkit-scrollbar-thumb:hover,
+.settings-page-panel::-webkit-scrollbar-thumb:hover {
+  background: #424242;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+@keyframes caret-blink {
+  0%, 49% {
+    opacity: 0.8;
+  }
+  50%, 100% {
+    opacity: 0;
+  }
+}
+
+@keyframes typing-bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  40% {
+    transform: translateY(-3px);
+    opacity: 0.95;
+  }
+}
