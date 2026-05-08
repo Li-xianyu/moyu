@@ -78,13 +78,19 @@
     color: var(--text);
   }
 
+  .toggle-action-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
   .chat-list-menu {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
     width: min(420px, calc(100vw - 24px));
     max-height: min(60dvh, 440px);
-    overflow: auto;
+    overflow: hidden;
     margin-top: 0;
     padding: 8px;
     border: 1px solid #333333;

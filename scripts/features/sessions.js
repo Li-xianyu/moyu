@@ -19,6 +19,8 @@
     els.chatMessages.innerHTML = "";
     setText(els.chatStatus, t("chat.readyAfterCreate"));
     autoResizeChatInput();
+    if (typeof clearSuggestions === "function") clearSuggestions();
+    if (typeof updateSuggestBtn === "function") updateSuggestBtn();
     return;
   }
 
@@ -128,22 +130,42 @@ function bindChatMetaExpanders() {
   });
 }
 
+function sessionMatchesQuery(session, query) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  if ((session.title || "").toLowerCase().includes(q)) return true;
+  if ((session.globalPrompt || "").toLowerCase().includes(q)) return true;
+  if (Array.isArray(session.messages)) {
+    for (let i = 0; i < session.messages.length; i++) {
+      const content = session.messages[i]?.content;
+      if (content && String(content).toLowerCase().includes(q)) return true;
+    }
+  }
+  return false;
+}
+
 function renderChatListMenu() {
   const sessions = [...state.sessions].sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
-  els.chatListMenu.innerHTML = "";
+  els.chatListItems.innerHTML = "";
 
-  if (!sessions.length) {
+  const query = (state.chatSearchQuery || "").trim();
+  const filtered = query ? sessions.filter((s) => sessionMatchesQuery(s, query)) : sessions;
+
+  if (!filtered.length) {
     const empty = document.createElement("div");
     empty.className = "chat-list-empty";
-    empty.textContent = t("chat.emptySessions");
-    els.chatListMenu.appendChild(empty);
+    empty.textContent = query ? "没有匹配的会话" : t("chat.emptySessions");
+    els.chatListItems.appendChild(empty);
     return;
   }
 
-  sessions.forEach((session) => {
+  const isChatView = els.views.chat?.classList.contains("active") || false;
+  const showActive = isChatView && !state.showWelcomeHome && !state.editingSessionId;
+
+  filtered.forEach((session) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `chat-list-item ${session.id === state.currentSessionId ? "active" : ""} ${state.openChatMenuId === session.id ? "menu-open" : ""}`.trim();
+    button.className = `chat-list-item ${(showActive && session.id === state.currentSessionId) ? "active" : ""} ${state.openChatMenuId === session.id ? "menu-open" : ""}`.trim();
     button.addEventListener("click", () => {
       if (state.renameSessionId) {
         commitRenameIfNeeded();
@@ -311,7 +333,7 @@ function renderChatListMenu() {
 
     button.appendChild(main);
     button.appendChild(actions);
-    els.chatListMenu.appendChild(button);
+    els.chatListItems.appendChild(button);
   });
 }
 
@@ -320,15 +342,6 @@ function positionChatItemMenu(menu, anchorButton) {
     return;
   }
 
-  if (!isMobileViewport()) {
-    menu.classList.remove("mobile-floating");
-    menu.style.removeProperty("top");
-    menu.style.removeProperty("left");
-    menu.style.removeProperty("width");
-    return;
-  }
-
-  menu.classList.add("mobile-floating");
   const anchorRect = anchorButton.getBoundingClientRect();
   const previousVisibility = menu.style.visibility;
   menu.style.visibility = "hidden";
@@ -423,6 +436,7 @@ function restartSessionFromExisting(sessionId) {
     directorMemory: normalizeDirectorMemory(source.directorMemory),
     directorSummary: "",
     compressedUntilMessageId: "",
+    suggestionGuide: "",
     messages: [
       {
         role: "system",
@@ -448,6 +462,7 @@ function restartSessionFromExisting(sessionId) {
   if (session.titleSource !== "manual") {
     void generateSessionTitle(session);
   }
+  void generateSuggestionGuide(session);
 }
 
 function exportSingleSession(sessionId) {

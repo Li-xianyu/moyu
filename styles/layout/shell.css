@@ -202,15 +202,90 @@
   transform: rotate(90deg);
 }
 
+.toggle-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #6e7681;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.toggle-action-btn .nav-icon-svg {
+  font-size: 14px;
+}
+
+.toggle-action-btn:hover {
+  color: #cccccc;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.toggle-action-btn.active {
+  color: #007acc;
+}
+
+.chat-list-menu-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-right: 6px;
+  margin-bottom: 4px;
+}
+
+.chat-search-input {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 6px 0;
+  border: 0;
+  border-bottom: 1px solid #444444;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.chat-search-input[hidden] {
+  display: none;
+}
+
+.chat-search-input:focus {
+  border-bottom-color: #007acc;
+}
+
+.chat-search-input::placeholder {
+  color: #6e7681;
+}
+
+.chat-search-input::placeholder {
+  color: #6e7681;
+}
+
 .chat-list-menu {
   margin-top: 6px;
   display: grid;
-  gap: 6px;
-  padding-left: 4px;
+  gap: 2px;
+  padding-left: 2px;
 }
 
 .chat-list-menu.hidden {
   display: none;
+}
+
+.chat-list-items {
+  display: grid;
+  gap: 6px;
+  max-height: min(60dvh, 420px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #424242 transparent;
 }
 
 .chat-list-item,
@@ -311,10 +386,11 @@
 }
 
 .chat-item-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 152px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  min-width: 164px;
+  max-width: min(220px, calc(100vw - 24px));
   padding: 6px;
   border-radius: 12px;
   border: 1px solid #333333;
@@ -322,15 +398,6 @@
   box-shadow: 0 5px 14px rgba(0, 0, 0, 0.14);
   display: grid;
   gap: 4px;
-  z-index: 8;
-}
-
-.chat-item-menu.mobile-floating {
-  position: fixed;
-  top: 0;
-  right: auto;
-  min-width: 164px;
-  max-width: min(220px, calc(100vw - 24px));
   z-index: 48;
 }
 

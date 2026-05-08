@@ -4,6 +4,26 @@
   });
 }
 
+function smoothScrollTo(element, targetY) {
+  const startY = element.scrollTop;
+  const distance = targetY - startY;
+  if (Math.abs(distance) < 1) return;
+  const duration = Math.min(Math.max(Math.abs(distance) * 0.2 + 60, 100), 360);
+  const startTime = performance.now();
+
+  function step(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    const ease = 1 - (1 - t) * (1 - t);
+    element.scrollTop = startY + distance * ease;
+    if (t < 1) {
+      requestAnimationFrame(step);
+    }
+  }
+
+  requestAnimationFrame(step);
+}
+
 async function safeReadError(response) {
   try {
     const data = await response.json();
@@ -98,6 +118,22 @@ function getChatStatusTone(text) {
     return "success";
   }
   return "muted";
+}
+
+function showToast(message, type = "error", duration = 4000) {
+  const container = document.getElementById("toastContainer");
+  if (!container) return;
+
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => toast.classList.add("visible"));
+  setTimeout(() => {
+    toast.classList.remove("visible");
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
 }
 
 function maskKey(key) {

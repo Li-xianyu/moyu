@@ -58,6 +58,14 @@ function bindChat() {
       sendUserMessage();
     }
   });
+  els.chatInput.addEventListener("input", clearSuggestions);
+  if (els.suggestBtn) {
+    els.suggestBtn.addEventListener("click", generateSuggestions);
+  }
+  const suggestionClose = els.suggestionBar?.querySelector(".suggestion-close-btn");
+  if (suggestionClose) {
+    suggestionClose.addEventListener("click", clearSuggestions);
+  }
   els.chatInput.addEventListener("input", autoResizeChatInput);
   els.chatMessages.addEventListener("click", (event) => {
     if (!event.target.closest(".message.user")) {
@@ -131,6 +139,8 @@ function updateComposerMode() {
       els.compressMemoryBtn.disabled = true;
     }
     setText(els.chatStatus, "正在修改一条历史消息，确认后会删除其后的内容并重新生成");
+    clearSuggestions();
+    updateSuggestBtn();
     return;
   }
 
@@ -150,6 +160,7 @@ function updateComposerMode() {
   renderCompressMemoryPopover();
   els.sendBtn.textContent = t("chat.send");
   setText(els.chatStatus, state.isSending ? "正在处理中..." : "可以开始聊天了");
+  updateSuggestBtn();
 }
 
 function beginUserMessageEdit(messageId) {
@@ -415,6 +426,8 @@ async function sendUserMessage() {
   if (!session || state.isSending) {
     return;
   }
+
+  clearSuggestions();
 
   const content = els.chatInput.value.trim();
   if (!content) {
@@ -2219,4 +2232,166 @@ async function streamLocalText(message, content) {
   message.content = text;
   message.streaming = false;
   renderMessages({ stickToBottom: true });
+}
+
+function updateSuggestBtn() {
+  const session = getCurrentSession();
+  const isIdle = session && !state.isSending && !state.editingUserMessageId;
+  const lastMsg = isIdle && session.messages.length ? session.messages[session.messages.length - 1] : null;
+  const aiReplied = lastMsg && lastMsg.role !== "user";
+  const hasAssistant = Boolean(state.settings?.assistant?.model) && state.settings.configs.length > 0;
+
+  els.suggestBtn.disabled = !(isIdle && aiReplied && hasAssistant);
+}
+
+function clearSuggestions() {
+  const list = els.suggestionBar?.querySelector(".suggestion-list");
+  if (list) list.innerHTML = "";
+  els.suggestionBar?.classList.add("hidden");
+  if (els.chatMessages) els.chatMessages.style.paddingBottom = "";
+}
+
+function getSuggestionContextMessages(session) {
+  const recentLimit = 4;
+  const messages = [];
+
+  const recentMessages = session.messages.slice(-(recentLimit + 1)).filter((m) => m.role !== "system" && m.content);
+  messages.push(...recentMessages.map((m) => ({ role: m.role || "user", content: String(m.content || "") })));
+
+  return messages;
+}
+
+async function generateSuggestions() {
+  const session = getCurrentSession();
+  if (!session || state.isSending) return;
+
+  const assistantKey = state.settings?.assistant?.model;
+  if (!assistantKey) {
+    setText(els.chatStatus, "请先在设置-辅助 AI 中配置辅助模型");
+    return;
+  }
+
+  const parts = assistantKey.split(":::");
+  const configId = parts[0];
+  const modelName = parts.slice(1).join(":::");
+
+  let config;
+  try {
+    config = resolveModelConfig(configId, modelName);
+  } catch {
+    setText(els.chatStatus, "未找到辅助模型对应的接口配置");
+    return;
+  }
+
+  els.suggestBtn.classList.add("generating");
+  els.suggestBtn.disabled = true;
+  setText(els.chatStatus, "正在生成推荐回复...");
+
+  const contextMessages = getSuggestionContextMessages(session);
+  const requestMessages = [...contextMessages, {
+    role: "user",
+    content: "忽略你之前的任何角色设定。现在你是我的回复建议助手。根据以上对话历史，以我（用户）的口吻和视角推荐3条我接下来可以发送的自然回复。必须只输出JSON数组，例如：[\"回复1\", \"回复2\", \"回复3\"]，不要任何其他文字。",
+  }];
+
+  try {
+    const content = await createChatCompletion(config.host, config.key, modelName, requestMessages, false, 0.8);
+    const normalized = content.replace(/“|”|„|‟/g, '"');
+    let suggestions;
+    try {
+      suggestions = JSON.parse(normalized);
+    } catch {
+      const cleaned = normalized
+        .replace(/^[\s\S]*?```(?:json)?\s*\[/, "[")
+        .replace(/\][\s\S]*?```[\s\S]*$/, "]")
+        .replace(/```[\s\S]*?$/g, "")
+        .trim();
+      let arrayStr = cleaned;
+      if (!cleaned.startsWith("[")) {
+        const match = cleaned.match(/\[[\s\S]*?\]/);
+        arrayStr = match ? match[0] : cleaned;
+      }
+      try {
+        suggestions = JSON.parse(arrayStr);
+      } catch {
+        suggestions = null;
+      }
+    }
+
+    if (!Array.isArray(suggestions) || !suggestions.length) {
+      console.warn("[Suggest] 原始响应:", content);
+      throw new Error("invalid");
+    }
+
+    const valid = suggestions.filter((s) => typeof s === "string" && s.trim()).slice(0, 4);
+    if (!valid.length) throw new Error("invalid");
+
+    const list = els.suggestionBar.querySelector(".suggestion-list");
+    if (!list) throw new Error("missing suggestion-list");
+    list.innerHTML = "";
+    valid.forEach((text) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "suggestion-chip";
+      chip.textContent = text.trim();
+      chip.addEventListener("click", () => {
+        clearSuggestions();
+        els.chatInput.value = text.trim();
+        sendUserMessage();
+      });
+      list.appendChild(chip);
+    });
+    els.suggestionBar.classList.remove("hidden");
+    els.chatMessages.style.paddingBottom = "200px";
+    smoothScrollTo(els.chatMessages, els.chatMessages.scrollHeight);
+    setText(els.chatStatus, "选择一个推荐回复，或自行输入");
+  } catch (err) {
+    const msg = err.message === "invalid"
+      ? "推荐回复生成失败，请重试"
+      : `推荐回复生成失败：${err.message || "未知错误"}`;
+    setText(els.chatStatus, msg);
+    showToast(msg, "error");
+    console.error("[Suggest]", err);
+  } finally {
+    els.suggestBtn.classList.remove("generating");
+    updateSuggestBtn();
+  }
+}
+
+async function generateSuggestionGuide(session) {
+  if (!session?.globalPrompt) return;
+
+  const assistantKey = state.settings?.assistant?.model;
+  let config, modelName;
+
+  if (assistantKey) {
+    const parts = assistantKey.split(":::");
+    try {
+      config = resolveModelConfig(parts[0], parts.slice(1).join(":::"));
+      modelName = parts.slice(1).join(":::");
+    } catch {}
+  }
+
+  if (!config) {
+    try {
+      config = resolveModelConfig(session.directorConfigId, session.directorModel, session.configId);
+      modelName = session.directorModel;
+    } catch {
+      return;
+    }
+  }
+
+  const guidePrompt = {
+    role: "system",
+    content: "将以下全局设定压缩成一段100字以内的简短指引，用于AI在对话中为用户推荐回复时参考。\n\n保留：题材风格、语言特点、核心氛围。\n删除：具体世界观细节、角色关系、剧情线索、历史事件。\n\n直接输出压缩后的指引文本，不要任何前缀或解释。",
+  };
+  const userMsg = { role: "user", content: session.globalPrompt };
+
+  try {
+    const guide = await createChatCompletion(config.host, config.key, modelName, [guidePrompt, userMsg], false, 0.3);
+    const trimmed = guide?.trim();
+    if (trimmed && trimmed.length < session.globalPrompt.length) {
+      session.suggestionGuide = trimmed;
+      persistSessions();
+    }
+  } catch {}
 }

@@ -82,9 +82,6 @@ function bindChatList() {
     const willOpen = els.chatListMenu.classList.contains("hidden");
     els.chatListMenu.classList.toggle("hidden", !willOpen);
     els.chatListArrowIcon.classList.toggle("expanded", willOpen);
-    if (willOpen) {
-      renderChatListMenu();
-    }
   });
 
   els.chatListMenu.addEventListener("click", (event) => {
@@ -96,6 +93,50 @@ function bindChatList() {
     state.openChatMenuId = null;
     state.deleteConfirmSessionId = null;
     renderChatListMenu();
+  });
+
+  els.chatExportBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (typeof exportAllSessions === "function") {
+      exportAllSessions();
+    }
+  });
+
+  els.chatImportBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    els.chatImportInput.click();
+  });
+
+  els.chatImportInput.addEventListener("change", () => {
+    const file = els.chatImportInput.files?.[0];
+    if (file && typeof importSessionsFromFile === "function") {
+      importSessionsFromFile(file);
+    }
+    els.chatImportInput.value = "";
+  });
+
+  els.chatSearchBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const isHidden = els.chatSearchInput.hidden;
+    els.chatSearchInput.hidden = !isHidden;
+    els.chatSearchBtn.classList.toggle("active", isHidden);
+    if (isHidden) {
+      els.chatSearchInput.value = state.chatSearchQuery || "";
+      els.chatSearchInput.focus();
+    } else {
+      state.chatSearchQuery = "";
+      els.chatSearchInput.value = "";
+      renderChatListMenu();
+    }
+  });
+
+  let searchTimer;
+  els.chatSearchInput.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      state.chatSearchQuery = els.chatSearchInput.value.trim();
+      renderChatListMenu();
+    }, 150);
   });
 }
 

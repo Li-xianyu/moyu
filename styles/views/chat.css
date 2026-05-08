@@ -251,6 +251,8 @@
   flex-direction: column;
   gap: 12px;
   min-height: 0;
+  padding-bottom: max(4px, env(safe-area-inset-bottom));
+  scroll-padding-bottom: 200px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
@@ -615,6 +617,7 @@
 }
 
 .composer-shell {
+  position: relative;
   display: grid;
   gap: 4px;
   padding-top: 10px;
@@ -922,6 +925,118 @@
   min-height: 38px;
 }
 
+/* ----- Suggestion button & bar ----- */
+.suggest-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #5a5f6a;
+  font-size: 15px;
+  line-height: 1;
+  flex: 0 0 auto;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+  margin-right: 4px;
+  margin-bottom: 6px;
+}
+
+.suggest-btn:hover:not(:disabled) {
+  color: #c8cad0;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.suggest-btn:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.suggest-btn.generating {
+  animation: suggest-pulse 1s ease-in-out infinite;
+  color: #6d8cff;
+}
+
+@keyframes suggest-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.suggestion-bar {
+  display: none;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 6px;
+  width: auto;
+  min-width: 260px;
+  max-width: min(480px, calc(100vw - 32px));
+  z-index: 10;
+}
+
+.suggestion-bar.hidden {
+  display: none;
+}
+
+.suggestion-bar:not(.hidden) {
+  display: block;
+}
+
+.suggestion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.suggestion-chip {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border: 1px solid #333333;
+  border-radius: 10px;
+  background: #1e1e1e;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.suggestion-chip:hover {
+  border-color: #007acc;
+  background: #1e3a5f;
+  color: #e0e2e6;
+}
+
+.suggestion-chip:active {
+  background: #0d4d7a;
+}
+
+.suggestion-close-btn {
+  display: block;
+  margin: 8px auto 0;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: #333333;
+  color: #cccccc;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.suggestion-close-btn:hover {
+  background: #555555;
+}
+
 /* ===== Mobile-responsive composer ===== */
 @media (max-width: 960px) {
   #chatInput {
@@ -943,6 +1058,26 @@
   .composer-status-bar {
     min-height: 20px;
     padding: 0;
+  }
+
+  .suggest-btn {
+    margin-bottom: 0;
+  }
+
+  .suggestion-bar {
+    padding: 8px 8px 4px;
+    margin-bottom: 4px;
+  }
+
+  .suggestion-chip {
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+
+  .suggestion-close-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
   }
 
   .composer-footer {

@@ -50,6 +50,7 @@ function bindCreateFlow() {
       directorMemory: normalizeDirectorMemory(null),
       directorSummary: "",
       compressedUntilMessageId: "",
+      suggestionGuide: "",
       messages: [
         {
           role: "system",
@@ -70,6 +71,7 @@ function bindCreateFlow() {
     setText(els.createStatus, t("create.statusCreated"));
     setText(els.chatStatus, t("chat.readyAfterCreate"));
     void generateSessionTitle(session);
+    void generateSuggestionGuide(session);
   });
 }
 
@@ -494,6 +496,7 @@ function saveSessionEdits(payload, activeConfig) {
   session.directorMemory = normalizeDirectorMemory(null);
   session.directorSummary = "";
   session.compressedUntilMessageId = "";
+  session.suggestionGuide = "";
   touchSession(session);
   persistSessions();
   state.currentSessionId = session.id;

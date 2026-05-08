@@ -370,7 +370,11 @@
   padding: 0 0 2px;
   max-height: none;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: #424242 transparent;
 }
 
 .settings-plain-section {

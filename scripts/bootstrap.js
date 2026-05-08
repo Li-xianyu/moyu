@@ -170,8 +170,9 @@ function init() {
   ensureMinimumNpcs();
   updateCreateViewMode();
   const initialView = resolveInitialView();
-  renderSession();
   switchView(initialView);
+  renderChatListMenu();
+  renderSession();
   updateMobileViewportFix();
   syncMobileDebugConsole();
 }

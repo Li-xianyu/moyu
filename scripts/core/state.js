@@ -19,6 +19,7 @@
   renameSessionId: null,
   deleteConfirmSessionId: null,
   deleteConfirmConfigId: null,
+  chatSearchQuery: "",
 };
 
 const els = {
@@ -73,6 +74,8 @@ const els = {
   chatMeta: document.getElementById("chatMeta"),
   chatMessages: document.getElementById("chatMessages"),
   chatInput: document.getElementById("chatInput"),
+  suggestBtn: document.getElementById("suggestBtn"),
+  suggestionBar: document.getElementById("suggestionBar"),
   compressMemoryBtn: document.getElementById("compressMemoryBtn"),
   sendBtn: document.getElementById("sendBtn"),
   chatStatus: document.getElementById("chatStatus"),
@@ -84,11 +87,17 @@ const els = {
   chatInfoPopover: document.getElementById("chatInfoPopover"),
   chatListToggleBtn: document.getElementById("chatListToggleBtn"),
   chatListMenu: document.getElementById("chatListMenu"),
+  chatListItems: document.getElementById("chatListItems"),
   chatListArrowIcon: document.getElementById("chatListArrowIcon"),
   sidebarToggleBtn: document.getElementById("sidebarToggleBtn"),
   sidebarBackdrop: document.getElementById("sidebarBackdrop"),
   openCurrentChatBtn: document.getElementById("openCurrentChatBtn"),
   chatListEmpty: document.getElementById("chatListEmpty"),
+  chatSearchBtn: document.getElementById("chatSearchBtn"),
+  chatSearchInput: document.getElementById("chatSearchInput"),
+  chatExportBtn: document.getElementById("chatExportBtn"),
+  chatImportBtn: document.getElementById("chatImportBtn"),
+  chatImportInput: document.getElementById("chatImportInput"),
   workModelList: document.getElementById("workModelList"),
   workModelHint: document.getElementById("workModelHint"),
   clearWorkModelsBtn: document.getElementById("clearWorkModelsBtn"),
@@ -172,6 +181,7 @@ function migrateLegacySessions() {
     directorMemory: resolveDirectorMemory(session.directorMemory, session.directorSummary),
     directorSummary: typeof session.directorSummary === "string" ? session.directorSummary : "",
     compressedUntilMessageId: session.compressedUntilMessageId || "",
+    suggestionGuide: session.suggestionGuide || "",
   })).map((session) => ensureSessionMessageIds(session));
 
   if (legacySession && legacySession.id && !state.sessions.some((session) => session.id === legacySession.id)) {
@@ -183,6 +193,7 @@ function migrateLegacySessions() {
       directorMemory: resolveDirectorMemory(legacySession.directorMemory, legacySession.directorSummary),
       directorSummary: typeof legacySession.directorSummary === "string" ? legacySession.directorSummary : "",
       compressedUntilMessageId: legacySession.compressedUntilMessageId || "",
+      suggestionGuide: legacySession.suggestionGuide || "",
     });
     ensureSessionMessageIds(state.sessions[0]);
   }

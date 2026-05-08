@@ -41,7 +41,7 @@
       </symbol>
     </defs>
   </svg>
-  <div class="app-shell">
+<div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">
@@ -61,17 +61,39 @@
           </span>
           <span data-i18n="nav.create">创建聊天</span>
         </button>
+        
         <div class="chat-list-control">
+
           <button id="chatListToggleBtn" class="nav-text-toggle" type="button">
+
             <span data-i18n="nav.chatList">聊天列表</span>
+
             <span class="toggle-icon" aria-hidden="true">
-              <i class="bi bi-chevron-right nav-icon-svg" id="chatListArrowIcon"></i>
+          <i class="bi bi-chevron-right nav-icon-svg expanded" id="chatListArrowIcon"></i>
+
             </span>
+
           </button>
-          <div id="chatListMenu" class="chat-list-menu hidden">
-            <button id="openCurrentChatBtn" class="chat-list-item" type="button" data-i18n="chat.currentSession">当前会话</button>
-            <div id="chatListEmpty" class="chat-list-empty" data-i18n="chat.emptySessions">还没有会话</div>
+
+          <div id="chatListMenu" class="chat-list-menu">
+
+            <div class="chat-list-menu-toolbar">
+              <button id="chatExportBtn" class="toggle-action-btn" type="button" title="导出全部会话">
+                <i class="bi bi-download nav-icon-svg"></i>
+              </button>
+              <button id="chatImportBtn" class="toggle-action-btn" type="button" title="导入会话">
+                <i class="bi bi-upload nav-icon-svg"></i>
+              </button>
+              <button id="chatSearchBtn" class="toggle-action-btn" type="button" title="搜索会话">
+                <i class="bi bi-search nav-icon-svg"></i>
+              </button>
+              <input id="chatImportInput" type="file" accept=".json,application/json" hidden>
+            </div>
+            <input id="chatSearchInput" class="chat-search-input" type="text" placeholder="搜索会话标题或内容..." hidden>
+            <div id="chatListItems" class="chat-list-items"></div>
+
           </div>
+
         </div>
       </nav>
 
@@ -432,7 +454,14 @@
           <div id="chatMessages" class="chat-messages"></div>
 
           <div class="composer-shell">
+            <div id="suggestionBar" class="suggestion-bar hidden">
+              <div class="suggestion-list"></div>
+              <button type="button" class="suggestion-close-btn" title="关闭">×</button>
+            </div>
             <div class="composer-status-bar">
+              <button id="suggestBtn" class="suggest-btn" type="button" disabled title="推荐回复">
+                <i class="bi bi-magic"></i>
+              </button>
               <div id="chatStatus" class="status-text" data-i18n="chat.readyAfterCreate" data-tone="success">创建会话后即可聊天</div>
             </div>
             <div class="composer">
@@ -512,5 +541,6 @@
       })(0);
     })();
   </script>
+  <div id="toastContainer" class="toast-container"></div>
 </body>
 </html>
