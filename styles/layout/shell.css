@@ -7,6 +7,27 @@
   overflow: hidden;
   position: relative;
 }
+/* Ban selection on navigation chrome */
+.sidebar,
+.nav-btn,
+.nav-text-toggle,
+.brand,
+.settings-section-nav,
+.settings-list-head,
+.settings-main-head,
+.mode-selector,
+button,
+.composer-footer,
+.composer-status-bar,
+.suggestion-bar,
+.code-block-header,
+.code-copy-btn,
+.message-tools,
+.message-token-bar,
+.info-btn,
+.toast-container {
+  user-select: none;
+}
 
 .sidebar {
   padding: 18px 14px;
@@ -454,11 +475,15 @@
 }
 
 .main {
+  height: 100%;
   padding: 20px;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
 
@@ -480,7 +505,10 @@
 }
 
 .app-shell.sidebar-collapsed .main {
-  margin-left: -280px;
+  transform: translateX(-280px);
+}
+.main {
+  transition: transform 0.22s ease;
 }
 
 .shell-toggle-btn {

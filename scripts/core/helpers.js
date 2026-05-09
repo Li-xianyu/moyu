@@ -137,8 +137,9 @@ function showToast(message, type = "error", duration = 4000) {
 }
 
 function scrollChatToBottom() {
-  if (els.chatMessages) {
-    smoothScrollTo(els.chatMessages, els.chatMessages.scrollHeight);
+  var scrollEl = els.chatMessages?.closest(".main");
+  if (scrollEl) {
+    smoothScrollTo(scrollEl, scrollEl.scrollHeight);
   }
 }
 
@@ -160,6 +161,12 @@ function escapeHtml(value) {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isWeakModel(modelName) {
+  const name = (modelName || "").toLowerCase();
+  const weakPatterns = ["flash", "mini", "light", "tiny", "nano", "lte", "nothinking", "fast", "quick"];
+  return weakPatterns.some((pattern) => name.includes(pattern));
 }
 
 function sanitizeGeneratedTitle(value) {
@@ -225,6 +232,7 @@ function normalizeSettings(raw) {
       mobileConsole: Boolean(raw?.developer?.mobileConsole),
     },
     session: {
+      ...(raw?.session || {}),
       compressThreshold: typeof raw?.session?.compressThreshold === "number"
         ? raw.session.compressThreshold
         : 1800,

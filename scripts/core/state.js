@@ -15,6 +15,7 @@
   openUserMessageToolsId: null,
   openAgentTokenInfoId: null,
   openCompressMemoryInfo: false,
+  directorThinking: false,
   openChatMenuId: null,
   renameSessionId: null,
   deleteConfirmSessionId: null,
@@ -77,6 +78,10 @@ const els = {
   suggestBtn: document.getElementById("suggestBtn"),
   suggestionBar: document.getElementById("suggestionBar"),
   compressMemoryBtn: document.getElementById("compressMemoryBtn"),
+  directorThinkingBtn: document.getElementById("directorThinkingBtn"),
+  modelThinkingBtn: document.getElementById("modelThinkingBtn"),
+  thinkingToggleBtn: document.getElementById("thinkingToggleBtn"),
+  thinkingPopover: document.getElementById("thinkingPopover"),
   sendBtn: document.getElementById("sendBtn"),
   chatStatus: document.getElementById("chatStatus"),
   createViewTitle: document.querySelector("#createView .panel-head h2"),
@@ -175,6 +180,7 @@ function migrateLegacySessions() {
 
   state.sessions = state.sessions.map((session) => ({
     ...session,
+    mode: session.mode || SESSION_MODE_STORY,
     title: session.title || buildFallbackTitle(session),
     titleSource: session.titleSource || "auto",
     transientNpcs: Array.isArray(session.transientNpcs) ? session.transientNpcs : [],

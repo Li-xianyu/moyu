@@ -37,11 +37,11 @@ body::after {
     overflow: hidden !important;
   }
 
-  .main,
-  .view.active,
-  #chatView,
-  #chatView.active,
-  .chat-stage {
+  .main {
+    overflow-y: auto !important;
+  }
+  .view.active:not(#chatView),
+  #createView {
     height: 100% !important;
     min-height: 0 !important;
     overflow: hidden !important;
@@ -63,17 +63,20 @@ body::after {
   }
 
   .chat-messages {
-    flex: 1 1 0 !important;
+    flex: 1 0 auto !important;
     min-height: 0 !important;
-    overflow-y: auto !important;
     padding-bottom: 6px !important;
   }
 
   .composer-shell {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 5 !important;
     flex: 0 0 auto !important;
     padding-top: 8px !important;
     padding-bottom: 2px !important;
-    background: var(--bg) !important;
+    background: linear-gradient(180deg, transparent 0%, var(--bg, #1e1e1e) 40%) !important;
+    box-shadow: none !important;
   }
 
   .keyboard-open .app-shell {
@@ -88,16 +91,8 @@ body::after {
     padding-bottom: 0 !important;
   }
 
-  .keyboard-open #chatView.view.active,
-  .keyboard-open #chatView.active,
-  .keyboard-open #chatView .chat-stage {
-    height: 100% !important;
-    min-height: 0 !important;
-  }
-
-  .keyboard-open #chatView .chat-messages {
-    flex: 1 1 0 !important;
-    min-height: 0 !important;
+  .keyboard-open .main {
+    overflow-y: auto !important;
   }
 }
 
@@ -116,29 +111,28 @@ body::after {
 }
 
 /* V7_SETTINGS_MOBILE_SCROLL_FIX
-   v4 的通用移动端修复会把 .view.active 统一 overflow:hidden；
-   设置页/创建页是长表单页面，必须单独把滚动权还回来。
-   放在本文件最后，专门压过前面的 !important。 */
+   聊天页滚动归 .main 管（全宽滚动条贴屏右）；
+   设置页/创建页是长表单页面，单独滚动。 */
 @media (max-width: 960px), (hover: none) and (pointer: coarse) {
   .main {
     display: flex !important;
     flex-direction: column !important;
-    min-height: 0 !important;
     height: 100% !important;
-    overflow: hidden !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
   }
 
-  /* 只让当前页面本身占满 main，聊天页仍由 chat-messages 内部滚动。 */
   .view.active {
     flex: 1 1 auto !important;
     width: 100% !important;
     min-height: 0 !important;
   }
 
-  /* 设置页：外层负责滚动，里面的面板不要再抢高度/裁剪内容。 */
+  /* 设置页 / 创建页：自己滚动 */
   #settingsView.view.active,
   #createView.view.active {
-    height: auto !important;
+    height: 100% !important;
     min-height: 0 !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;

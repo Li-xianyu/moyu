@@ -88,6 +88,24 @@ function bindSettings() {
     persistSettings();
   });
 
+  const directorDispatchToggle = document.getElementById("directorDispatchToggle");
+  if (directorDispatchToggle) {
+    directorDispatchToggle.addEventListener("change", () => {
+      state.settings.session = state.settings.session || {};
+      state.settings.session.directorDispatchOnly = Boolean(directorDispatchToggle.checked);
+      persistSettings();
+    });
+  }
+
+  const markdownRenderToggle = document.getElementById("markdownRenderToggle");
+  if (markdownRenderToggle) {
+    markdownRenderToggle.addEventListener("change", () => {
+      state.settings.session = state.settings.session || {};
+      state.settings.session.markdownRender = Boolean(markdownRenderToggle.checked);
+      persistSettings();
+    });
+  }
+
   els.addConfigBtn.addEventListener("click", () => {
     const config = createEmptyConfig();
     state.settings.configs.unshift(config);
@@ -270,6 +288,14 @@ function hydrateSettingsInputs() {
   els.mobileConsoleToggle.checked = Boolean(state.settings?.developer?.mobileConsole);
   els.compressThresholdInput.value = state.settings?.session?.compressThreshold || 1800;
   els.showTokenDisplayToggle.checked = state.settings?.session?.showTokenDisplay !== false;
+  const directorDispatchToggle = document.getElementById("directorDispatchToggle");
+  if (directorDispatchToggle) {
+    directorDispatchToggle.checked = state.settings?.session?.directorDispatchOnly === true;
+  }
+  const markdownRenderToggle = document.getElementById("markdownRenderToggle");
+  if (markdownRenderToggle) {
+    markdownRenderToggle.checked = state.settings?.session?.markdownRender !== false;
+  }
   els.configNameInput.value = activeConfig?.name || "";
   els.apiHostInput.value = activeConfig?.host || "";
   els.apiKeyInput.value = activeConfig?.key || "";

@@ -111,6 +111,7 @@
 .settings-page-panel.active {
   display: block;
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: thin;
   scrollbar-color: #424242 transparent;
 }
@@ -350,7 +351,8 @@
 .settings-detail-panel,
 .settings-model-panel,
 .settings-work-models-panel {
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
   overflow-x: hidden;
   scrollbar-width: thin;

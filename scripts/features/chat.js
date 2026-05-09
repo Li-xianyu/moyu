@@ -52,6 +52,49 @@ function bindChat() {
       renderCompressMemoryPopover();
     });
   }
+  // Director thinking toggle (inside popover)
+  if (els.directorThinkingBtn) {
+    els.directorThinkingBtn.addEventListener("click", () => {
+      state.directorThinking = !state.directorThinking;
+      els.directorThinkingBtn.classList.toggle("active", state.directorThinking);
+    });
+  }
+  // Model thinking toggle (inside popover)
+  if (els.modelThinkingBtn) {
+    els.modelThinkingBtn.addEventListener("click", () => {
+      const current = els.modelThinkingBtn.dataset.state === "enabled" ? "disabled" : "enabled";
+      els.modelThinkingBtn.dataset.state = current;
+      state.settings.session = state.settings.session || {};
+      state.settings.session.modelThinking = current;
+      persistSettings();
+      updateModelThinkingBtn();
+    });
+  }
+  updateModelThinkingBtn();
+  // Thinking settings toggle button (shows/hides popover)
+  if (els.thinkingToggleBtn) {
+    els.thinkingToggleBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const isOpen = els.thinkingPopover && !els.thinkingPopover.classList.contains("hidden");
+      if (els.thinkingPopover) {
+        els.thinkingPopover.classList.toggle("hidden", isOpen);
+        els.thinkingPopover.classList.toggle("visible", !isOpen);
+      }
+      els.thinkingToggleBtn.classList.toggle("active", !isOpen);
+    });
+  }
+  // Close thinking popover on click outside
+  document.addEventListener("click", (event) => {
+    if (els.thinkingPopover && !els.thinkingPopover.classList.contains("hidden")) {
+      const target = event.target;
+      if (target !== els.thinkingToggleBtn && !els.thinkingToggleBtn?.contains(target) &&
+          target !== els.thinkingPopover && !els.thinkingPopover?.contains(target)) {
+        els.thinkingPopover.classList.add("hidden");
+        els.thinkingPopover.classList.remove("visible");
+        els.thinkingToggleBtn?.classList.remove("active");
+      }
+    }
+  });
   els.chatInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
@@ -157,6 +200,19 @@ function updateComposerMode() {
   if (els.compressMemoryBtn) {
     els.compressMemoryBtn.disabled = state.isSending || !currentSession;
   }
+  if (els.directorThinkingBtn) {
+    els.directorThinkingBtn.disabled = state.isSending || !currentSession || !currentSession?.directorModel;
+    if (!currentSession?.directorModel) {
+      state.directorThinking = false;
+      els.directorThinkingBtn.classList.remove("active");
+    }
+  }
+  if (els.modelThinkingBtn) {
+    els.modelThinkingBtn.disabled = state.isSending || !currentSession;
+    const saved = state.settings?.session?.modelThinking || "disabled";
+    els.modelThinkingBtn.dataset.state = saved;
+    updateModelThinkingBtn();
+  }
   renderCompressMemoryPopover();
   els.sendBtn.textContent = t("chat.send");
   setText(els.chatStatus, state.isSending ? "正在处理中..." : "可以开始聊天了");
@@ -240,6 +296,11 @@ async function regenerateFromUserMessage(messageId) {
   }
 
   state.isSending = true;
+  if (els.thinkingPopover && !els.thinkingPopover.classList.contains("hidden")) {
+    els.thinkingPopover.classList.add("hidden");
+    els.thinkingPopover.classList.remove("visible");
+    els.thinkingToggleBtn?.classList.remove("active");
+  }
   els.sendBtn.disabled = true;
   els.chatInput.disabled = true;
   updateComposerMode();
@@ -279,13 +340,16 @@ function applyUserMessageEdit(session, messageId, content) {
 
 function renderMessages(options = {}) {
   const shouldStickToBottom = Boolean(options.stickToBottom);
-  const previousScrollTop = els.chatMessages.scrollTop;
-  const previousScrollHeight = els.chatMessages.scrollHeight;
+  const scrollEl = els.chatMessages.closest(".main") || els.chatMessages;
+  const previousScrollTop = scrollEl.scrollTop;
+  const previousScrollHeight = scrollEl.scrollHeight;
   const session = getCurrentSession();
   els.chatMessages.innerHTML = "";
   if (!session) {
     return;
   }
+
+  const sessionMode = session.mode || SESSION_MODE_STORY;
 
   session.messages.forEach((message) => {
     if (message.uiType === "system-notice") {
@@ -309,6 +373,7 @@ function renderMessages(options = {}) {
         : escapeHtml(narrationText).replace(/\n/g, "<br>");
       if (message.id && tokenLabel && isMobileTokenToggleMode()) {
         narration.addEventListener("click", () => {
+          if (window.getSelection().toString().trim()) return;
           state.openAgentTokenInfoId = state.openAgentTokenInfoId === message.id ? null : message.id;
           renderMessages();
         });
@@ -342,19 +407,60 @@ function renderMessages(options = {}) {
     const tokenLabel = message.role === "assistant" ? buildMessageTokenLabel(message) : "";
 
     const isSingleLineMessage = !message.pending && !/[\r\n]/.test(message.content || "");
+    const isWorkAgent = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
     const bubble = document.createElement("div");
-    bubble.className = `message ${message.role === "user" ? "user" : message.role === "system" ? "system" : "agent"} ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${isSingleLineMessage ? "single-line" : ""}`.trim();
-    bubble.innerHTML = message.pending
-      ? `<span class="typing-row"><span></span><span></span><span></span></span>`
-      : escapeHtml(message.content).replace(/\n/g, "<br>");
+    bubble.className = `message ${message.role === "user" ? "user" : message.role === "system" ? "system" : "agent"} ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${isSingleLineMessage ? "single-line" : ""} ${isWorkAgent ? "agent-plain" : ""}`.trim();
+    if (message.pending) {
+      bubble.innerHTML = `<span class="typing-row"><span></span><span></span><span></span></span>`;
+    } else {
+      let html = "";
+      const thinkingText = (message.thinking || "").trim();
+      if (thinkingText) {
+        html += `<details class="thinking-section"${message.streaming ? " open" : ""}>`;
+        html += `<summary><span class="thinking-label">思考过程</span></summary>`;
+        html += `<div class="thinking-content">${escapeHtml(thinkingText).replace(/\n/g, "<br>")}</div>`;
+        html += `</details>`;
+      }
+      const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
+      if (enableMd) {
+        html += renderMarkdownContent(escapeHtml(message.content));
+      } else if (sessionMode === SESSION_MODE_STORY) {
+        html += renderStoryContent(escapeHtml(message.content));
+      } else {
+        html += escapeHtml(message.content).replace(/\n/g, "<br>");
+      }
+      bubble.innerHTML = html;
+      if (typeof hljs !== 'undefined' && enableMd) {
+        bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
+      }
+      if (sessionMode === SESSION_MODE_WORK) {
+        bubble.querySelectorAll('.code-copy-btn').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            var pre = btn.closest('.pre-code-block');
+            const code = pre ? pre.querySelector('code').textContent : '';
+            navigator.clipboard.writeText(code).then(() => {
+              btn.className = 'code-copy-btn copied';
+              btn.innerHTML = '<i class="bi bi-check"></i>';
+              setTimeout(() => {
+                btn.className = 'code-copy-btn';
+                btn.innerHTML = '<i class="bi bi-clipboard"></i>';
+              }, 1500);
+            }).catch(() => {});
+          });
+        });
+      }
+    }
     if (message.role === "user" && message.id) {
       bubble.addEventListener("click", () => {
+        if (window.getSelection().toString().trim()) return;
         state.openUserMessageToolsId = state.openUserMessageToolsId === message.id ? null : message.id;
         renderMessages();
       });
     }
     if (message.role === "assistant" && message.id && isMobileTokenToggleMode()) {
       bubble.addEventListener("click", () => {
+        if (window.getSelection().toString().trim()) return;
         state.openAgentTokenInfoId = state.openAgentTokenInfoId === message.id ? null : message.id;
         renderMessages();
       });
@@ -413,12 +519,12 @@ function renderMessages(options = {}) {
   });
 
   if (shouldStickToBottom) {
-    els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+    scrollEl.scrollTop = scrollEl.scrollHeight;
     return;
   }
 
-  const heightDelta = els.chatMessages.scrollHeight - previousScrollHeight;
-  els.chatMessages.scrollTop = previousScrollTop + Math.max(0, heightDelta);
+  const heightDelta = scrollEl.scrollHeight - previousScrollHeight;
+  scrollEl.scrollTop = previousScrollTop + Math.max(0, heightDelta);
 }
 
 async function sendUserMessage() {
@@ -436,6 +542,11 @@ async function sendUserMessage() {
   }
 
   state.isSending = true;
+  if (els.thinkingPopover && !els.thinkingPopover.classList.contains("hidden")) {
+    els.thinkingPopover.classList.add("hidden");
+    els.thinkingPopover.classList.remove("visible");
+    els.thinkingToggleBtn?.classList.remove("active");
+  }
   els.sendBtn.disabled = true;
   els.chatInput.disabled = true;
   updateComposerMode();
@@ -510,6 +621,7 @@ async function runSessionTurn(session) {
       els.chatInput.disabled = false;
       autoResizeChatInput();
       updateComposerMode();
+      queueMicrotask(() => els.chatInput.focus());
     }
     return;
   }
@@ -609,6 +721,7 @@ async function runSessionTurn(session) {
     els.chatInput.disabled = false;
     autoResizeChatInput();
     updateComposerMode();
+    queueMicrotask(() => els.chatInput.focus());
   }
 }
 
@@ -625,6 +738,10 @@ async function callDirector(session) {
     { role: "system", content: "全局设定：" + session.globalPrompt },
     ...buildDirectorContextMessages(session),
   ];
+
+  if (state.settings?.session?.directorDispatchOnly) {
+    messages.push({ role: "system", content: "你只负责调度。禁止输出 npc_instructions 字段——NPC 不需要你的指挥，让他们自由发挥。" });
+  }
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
     debugLog("director", "Request attempt", {
@@ -653,7 +770,11 @@ async function callDirector(session) {
         ];
 
     const directorConfig = resolveModelConfig(session.directorConfigId, session.directorModel, session.configId);
-    const payload = await createChatCompletionPayload(directorConfig.host, directorConfig.key, session.directorModel, requestMessages, false, 0.5);
+    const directorExtra = buildThinkingExtra(session.directorModel, state.directorThinking);
+    const promptMessages = !state.directorThinking && !supportsThinkingParam(session.directorModel)
+      ? [...requestMessages, { role: "system", content: "直接输出，不要输出思考过程。" }]
+      : requestMessages;
+    const payload = await createChatCompletionPayload(directorConfig.host, directorConfig.key, session.directorModel, promptMessages, false, 0.5, directorExtra);
     const content = payload.content;
     debugLog("director", "Raw response received", {
       attempt: attempt + 1,
@@ -818,6 +939,7 @@ async function callNpc(session, npc, npcInstructions = {}) {
     role: "assistant",
     speaker: npc.name,
     content: "",
+    thinking: "",
     createdAt: new Date().toISOString(),
     pending: true,
     streaming: false,
@@ -829,7 +951,7 @@ async function callNpc(session, npc, npcInstructions = {}) {
 
   const turnContext = getCurrentTurnNpcContext(session, npc.name);
   const priorRepliesText = turnContext.previousSpeakers.length
-    ? `本轮在你之前已经发言的 NPC：${turnContext.previousSpeakers.join("、")}。`
+    ? `本轮在你之前已经发言的 NPC：${turnContext.previousSpeakers.join("、")}（他们和你一样仍在现场，没有离开，你们正在一起交谈）。`
     : "你是本轮第一个发言的 NPC。";
 
   // 导演给这个 NPC 的额外指令
@@ -846,33 +968,65 @@ async function callNpc(session, npc, npcInstructions = {}) {
       ].join("\n")
     : "";
 
-  const baseRules = [
-    `你现在扮演 ${npc.name}。`,
-    npc.prompt ? `人物要求：${npc.prompt}` : "请根据全局设定和当前聊天自然回应。",
-    priorRepliesText,
-    directiveSection,
-    "",
-    "=== 绝对禁止 ===",
-    "1. 禁止重复！检查历史中你自己的上一条回复，如果与你要说的话有 40% 以上词语重合，这是严重违规。",
-    "   每轮必须用全新的措辞、不同的比喻、不同的角度来回应。宁可说一句全新的话，也不准改写旧内容。",
-    "2. 禁止模拟别的 NPC、禁止替别人补充、禁止自问自答、禁止连续写多轮对话。",
-    `3. 禁止输出"${npc.name}："这种说话人标签，直接输出内容本身。`,
-    "4. 只输出一版最终答案，不要给草稿、补充版、总结版、收尾版。",
-    "5. 只能写你自己的发言、动作、神态、感受和判断。禁止替别的 NPC 决定动作，禁止代替别的 NPC 说话。",
-    "6. 如果本轮在你之前已经有 NPC 说过话，禁止重写、复述、扩写、改写那位 NPC 刚刚说过的大段内容。",
-    "7. 你可以接着别人的话往下说，但必须明显往前推进，不能把上一位的整段描写再说一遍。",
-    "",
-    "=== 必须遵守 ===",
-    "如果用户要求限制字数、格式或风格，你必须严格遵守。",
-  ].join("\n");
+  const baseRules = isWeakModel(npc.model)
+    ? [
+        `你现在扮演 ${npc.name}。`,
+        npc.prompt ? `人物要求：${npc.prompt}` : "请根据全局设定自然回应。",
+        priorRepliesText,
+        directorInstruction,
+        directorInstruction ? "严格按照导演指令回应。" : "",
+        "禁止输出思考过程，禁止任何形式的说话人标签。",
+        `直接输出 ${npc.name} 的回应内容，不要写"${npc.name}："或"模型："或"AI："等前缀。`,
+        "禁止替用户说话或行动，用户会自己发言。",
+        ...(session.mode === SESSION_MODE_STORY ? ["对话用双引号包起来，动作和想法用圆括号包起来。例如：\"你好吗？\"（她推开门）"] : []),
+      ].filter(Boolean)
+    : [
+        `你现在扮演 ${npc.name}。`,
+        npc.prompt ? `人物要求：${npc.prompt}` : "请根据全局设定和当前聊天自然回应。",
+        priorRepliesText,
+        directiveSection,
+        "",
+        "=== 绝对禁止 ===",
+        `1. 禁止输出任何形式的说话人标签。不要写"${npc.name}："、"模型："、"AI："等前缀。历史中的 [标签] 仅为标识谁在说话，不要模仿。直接输出内容，不要加任何前缀。`,
+        "2. 禁止重复！检查历史中你自己的上一条回复，如果与你要说的话有 40% 以上词语重合，这是严重违规。",
+        "   每轮必须用全新的措辞、不同的比喻、不同的角度来回应。宁可说一句全新的话，也不准改写旧内容。",
+        "3. 禁止模拟别的 NPC、禁止替别人补充、禁止自问自答、禁止连续写多轮对话。",
+        "4. 只输出一版最终答案，不要给草稿、补充版、总结版、收尾版。",
+        "5. 只能写你自己的发言、动作、神态、感受和判断。禁止替别的 NPC 决定动作，禁止代替别的 NPC 说话。",
+        "6. 禁止替用户说话、行动或做决定。用户会自己发言，不需要你代言。",
+        "7. 如果本轮在你之前已经有 NPC 说过话，禁止重写、复述、扩写、改写那位 NPC 刚刚说过的大段内容。",
+        "8. 你可以接着别人的话往下说，但必须明显往前推进，不能把上一位的整段描写再说一遍。",
+        "",
+        "=== 输出格式 ===",
+        `直接输出 ${npc.name} 说的话，禁止加任何前缀标签。不要包含说话人标识。`,
+        ...(session.mode === SESSION_MODE_STORY ? [
+          "对话用双引号包起来，例如\"你好吗？\"。动作和想法用圆括号包起来，例如（她推开门）(他在想什么)。",
+          "禁止替用户做动作——用户进门你写\"（听到门响）\"就好，不要写\"（推开门）\"这个动作本身。只写你自己的动作和感知。",
+          "禁止使用 Markdown 格式，禁止输出代码块。",
+        ] : [
+          "一句完整的回应就好。",
+        ]),
+
+        "=== 必须遵守 ===",
+        "如果用户要求限制字数、格式或风格，你必须严格遵守。",
+      ];
+
+      // Story mode: no extra push needed — format rules are inline above
+
+  const baseRulesText = baseRules.join("\n");
 
   const messages = [
-    { role: "system", content: baseRules },
-    { role: "system", content: `Current in-scene NPCs: ${getSceneNpcs(session).map((item) => item.name).join(", ") || "none"}` },
+    { role: "system", content: baseRulesText },
+    { role: "system", content: `当前场景中在场的 NPC：${getSceneNpcs(session).map((item) => item.name).join("、")}。所有场内 NPC 始终一起待在当前场景中，不会因发言顺序而离开或入场。你们的对话视为同处一室的当面交谈。` },
     { role: "system", content: `全局设定：\n${session.globalPrompt}` },
-    { role: "system", content: `当前场内 NPC 名单：${session.npcs.map((item) => item.name).join("、")}` },
+    { role: "system", content: "以下 [DIRECTOR_MEMORY] 是本轮之前发生的关键事件摘要，仅作为背景参考。你据此了解已发生过的事情即可，不要重复叙述历史，不要替用户或不在当前场景中的角色说话。" },
+    ...buildDirectorMemorySystemMessage(session),
     ...buildNpcContextMessages(session, npc),
   ];
+  // Prompt-based thinking inhibition for models that don't support the thinking param
+  if (getModelThinkingState() === "disabled" && !supportsThinkingParam(npc.model)) {
+    messages.push({ role: "system", content: "直接输出，不要输出思考过程。" });
+  }
   targetMessage.estimatedUsage = {
     input: estimateChatMessagesTokens(messages),
     output: 0,
@@ -882,176 +1036,18 @@ async function callNpc(session, npc, npcInstructions = {}) {
   await streamChatCompletion(session, npc.name, npc.model, messages, npc.configId);
 }
 
-function buildChatHistory(session) {
-  return buildHistoryMessagesFromSlice(getVisibleHistoryMessages(session), "HISTORY");
-}
 
-function getVisibleHistoryMessages(session) {
-  return (session?.messages || []).filter((message) => {
-    if (!message || message.role === "system") {
-      return false;
-    }
-    if (message.role === "assistant" && !message.content && !message.pending && !message.streaming) {
-      return false;
-    }
-    return Boolean(message.content);
-  });
-}
 
-function buildHistoryLines(messages) {
-  const lines = [];
-  for (const message of messages || []) {
-    const line = formatHistoryLine(message);
-    if (!line) {
-      continue;
-    }
-    if (lines.length > 0 && lines[lines.length - 1] === line) {
-      continue;
-    }
-    lines.push(line);
-  }
-  return lines;
-}
 
-function buildHistoryMessagesFromSlice(messages, blockName = "HISTORY") {
-  const lines = buildHistoryLines(messages);
-  if (!lines.length) {
-    return [];
-  }
-  return [
-    {
-      role: "system",
-      content: `[${blockName}]\n${lines.join("\n")}\n[/${blockName}]`,
-    },
-  ];
-}
 
-function normalizeDirectorMemoryPayload(payload) {
-  return normalizeDirectorMemory(payload);
-}
 
-function buildDirectorMemoryBlock(sessionOrMemory) {
-  const rawMemory = sessionOrMemory?.directorMemory || sessionOrMemory;
-  const memory = normalizeDirectorMemoryPayload(rawMemory);
-  const sections = [];
 
-  if (memory.scene) {
-    sections.push(`场景：${memory.scene}`);
-  }
-  if (memory.relationships.length) {
-    sections.push(`人物关系：\n- ${memory.relationships.join("\n- ")}`);
-  }
-  if (memory.facts.length) {
-    sections.push(`关键事实：\n- ${memory.facts.join("\n- ")}`);
-  }
-  if (memory.tensions.length) {
-    sections.push(`当前冲突：\n- ${memory.tensions.join("\n- ")}`);
-  }
-  if (memory.openLoops.length) {
-    sections.push(`未解悬念：\n- ${memory.openLoops.join("\n- ")}`);
-  }
-  if (memory.npcState.length) {
-    sections.push(`人物状态：\n- ${memory.npcState.join("\n- ")}`);
-  }
-  if (memory.synopsis) {
-    sections.push(`总括：${memory.synopsis}`);
-  }
 
-  return sections.join("\n\n");
-}
 
-function buildDirectorMemorySystemMessage(sessionOrMemory) {
-  const block = buildDirectorMemoryBlock(sessionOrMemory);
-  if (!block) {
-    return [];
-  }
-  return [{
-    role: "system",
-    content: `[DIRECTOR_MEMORY]\n${block}\n[/DIRECTOR_MEMORY]`,
-  }];
-}
 
-function getDirectorMemoryTargetTokens(session, recentLimit = DIRECTOR_RECENT_HISTORY_LIMIT) {
-  const currentDirectorContext = [
-    { role: "system", content: getDirectorSystemPrompt(session) },
-    { role: "system", content: "固定 NPC 列表：" + JSON.stringify((session.npcs || []).map((npc) => npc.name)) },
-    { role: "system", content: "场内 NPC：" + JSON.stringify(getSceneNpcs(session).map((npc) => npc.name)) },
-    { role: "system", content: "NPC 资料：" + buildDirectorNpcRoster(session) },
-    { role: "system", content: "全局设定：" + session.globalPrompt },
-    ...buildDirectorMemorySystemMessage(session),
-    ...buildHistoryMessagesFromSlice(getDirectorRecentMessages(session, recentLimit), session?.directorMemory?.synopsis ? "RECENT_HISTORY" : "HISTORY"),
-  ];
-  const currentTokens = estimateChatMessagesTokens(currentDirectorContext);
-  return Math.max(
-    DIRECTOR_MEMORY_TARGET_MIN,
-    Math.min(DIRECTOR_MEMORY_TARGET_MAX, Math.round(currentTokens * 0.42))
-  );
-}
 
-function buildDirectorContextMessages(session) {
-  const contextMessages = [];
-  contextMessages.push(...buildDirectorMemorySystemMessage(session));
-  const recentMessages = getDirectorRecentMessages(session);
-  contextMessages.push(...buildHistoryMessagesFromSlice(recentMessages, contextMessages.length ? "RECENT_HISTORY" : "HISTORY"));
-  return contextMessages;
-}
 
-function buildDirectorNpcRoster(session) {
-  const fixedRoster = (session?.npcs || []).map((npc) => ({
-    name: npc.name || "",
-    model: npc.model || "",
-    prompt: npc.prompt || "",
-    transient: false,
-  }));
-  const transientRoster = (session?.transientNpcs || []).map((npc) => ({
-    name: npc.name || "",
-    model: npc.model || "",
-    prompt: npc.prompt || "",
-    transient: true,
-  }));
 
-  return JSON.stringify([...fixedRoster, ...transientRoster], null, 0);
-}
-
-function getDirectorRecentMessages(session, recentLimit = DIRECTOR_RECENT_HISTORY_LIMIT) {
-  const visibleMessages = getVisibleHistoryMessages(session);
-  if (!visibleMessages.length) {
-    return [];
-  }
-
-  const cutoffIndex = session?.compressedUntilMessageId
-    ? visibleMessages.findIndex((message) => message.id === session.compressedUntilMessageId)
-    : -1;
-  const unsummarized = cutoffIndex >= 0 ? visibleMessages.slice(cutoffIndex + 1) : visibleMessages;
-  return unsummarized.slice(-recentLimit);
-}
-
-function getCompressibleDirectorMessages(session, recentLimit = DIRECTOR_RECENT_HISTORY_LIMIT) {
-  const visibleMessages = getVisibleHistoryMessages(session);
-  if (visibleMessages.length <= recentLimit) {
-    return [];
-  }
-
-  const cutoffIndex = session?.compressedUntilMessageId
-    ? visibleMessages.findIndex((message) => message.id === session.compressedUntilMessageId)
-    : -1;
-  const unsummarized = cutoffIndex >= 0 ? visibleMessages.slice(cutoffIndex + 1) : visibleMessages;
-  if (unsummarized.length <= recentLimit) {
-    return [];
-  }
-
-  return unsummarized.slice(0, unsummarized.length - recentLimit);
-}
-
-function buildManualCompressSourceMessages(session, recentLimit = DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT) {
-  const recentMessages = getDirectorRecentMessages(session, recentLimit);
-  const recentHistoryBlock = buildHistoryMessagesFromSlice(recentMessages, "RECENT_HISTORY");
-  const sourceMessages = [];
-
-  sourceMessages.push(...buildDirectorMemorySystemMessage(session));
-  sourceMessages.push(...recentHistoryBlock);
-  return sourceMessages;
-}
 
 async function ensureDirectorSummary(session, options = {}) {
   if (!session) {
@@ -1211,28 +1207,6 @@ function ensureCompressMemoryPopover() {
   return popover;
 }
 
-function buildDirectorContextTokenMetrics(session) {
-  if (!session) {
-    return null;
-  }
-
-  const currentDirectorContext = [
-    { role: "system", content: getDirectorSystemPrompt(session) },
-    { role: "system", content: "固定 NPC 列表：" + JSON.stringify((session.npcs || []).map((npc) => npc.name)) },
-    { role: "system", content: "场内 NPC：" + JSON.stringify(getSceneNpcs(session).map((npc) => npc.name)) },
-    { role: "system", content: "NPC 资料：" + buildDirectorNpcRoster(session) },
-    { role: "system", content: "全局设定：" + session.globalPrompt },
-    ...buildDirectorContextMessages(session),
-  ];
-
-  const recentMessages = getDirectorRecentMessages(session);
-
-  return {
-    contextCurrent: estimateChatMessagesTokens(currentDirectorContext),
-    contextThreshold: state.settings?.session?.compressThreshold || DIRECTOR_AUTO_COMPRESS_THRESHOLD_DEFAULT,
-    recentCount: recentMessages.length,
-  };
-}
 
 function buildCompressMemoryPopoverMarkup(session) {
   const metrics = buildDirectorContextTokenMetrics(session);
@@ -1304,532 +1278,43 @@ function renderCompressMemoryPopover() {
   }
 }
 
-function normalizeUsage(rawUsage) {
-  if (!rawUsage || typeof rawUsage !== "object") {
-    return null;
-  }
-
-  const input = Number(rawUsage.prompt_tokens ?? rawUsage.input_tokens ?? rawUsage.input ?? 0) || 0;
-  const output = Number(rawUsage.completion_tokens ?? rawUsage.output_tokens ?? rawUsage.output ?? 0) || 0;
-  const total = Number(rawUsage.total_tokens ?? input + output) || 0;
-  if (!input && !output && !total) {
-    return null;
-  }
-
-  return { input, output, total };
+function updateModelThinkingBtn() {
+  if (!els.modelThinkingBtn) return;
+  const on = els.modelThinkingBtn.dataset.state === "enabled";
+  els.modelThinkingBtn.className = `secondary-btn model-thinking-btn ${on ? "state-enabled" : "state-disabled"}`;
+  els.modelThinkingBtn.textContent = on ? "思考·开启" : "思考·关闭";
 }
 
-function estimateTokens(text) {
-  const source = String(text || "");
-  if (!source.trim()) {
-    return 0;
-  }
-
-  const cjkMatches = source.match(/[\u3400-\u9FFF\uF900-\uFAFF]/g) || [];
-  const asciiWordMatches = source.match(/[A-Za-z0-9_]+/g) || [];
-  const asciiWordChars = asciiWordMatches.reduce((sum, chunk) => sum + chunk.length, 0);
-  const punctuationChars = (source.match(/[^\sA-Za-z0-9_\u3400-\u9FFF\uF900-\uFAFF]/g) || []).length;
-  const whitespaceChars = (source.match(/\s/g) || []).length;
-  const otherChars = Math.max(0, source.length - cjkMatches.length - asciiWordChars - punctuationChars - whitespaceChars);
-
-  return Math.max(
-    1,
-    Math.round(
-      cjkMatches.length * 0.85 +
-      asciiWordChars / 3.6 +
-      punctuationChars * 0.35 +
-      otherChars * 0.7
-    )
-  );
+function getModelThinkingState() {
+  return state.settings?.session?.modelThinking || "disabled";
 }
 
-function estimateChatMessagesTokens(messages) {
-  if (!Array.isArray(messages) || !messages.length) {
-    return 0;
-  }
-
-  let total = 0;
-  messages.forEach((message) => {
-    total += 4;
-    total += estimateTokens(message?.role || "");
-    total += estimateTokens(message?.name || "");
-    total += estimateTokens(message?.content || "");
-  });
-
-  return Math.max(1, total + 2);
-}
-
-function buildMessageTokenLabel(message) {
-  if (state.settings?.session?.showTokenDisplay === false) {
-    return "";
-  }
-  const usage = normalizeUsage(message?.usage);
-  const estimatedUsage = normalizeUsage(message?.estimatedUsage);
-  const tokenStats = usage || estimatedUsage;
-  if (!tokenStats) {
-    return "";
-  }
-  const prefix = usage ? "" : "~";
-
-  if (tokenStats.input && tokenStats.output) {
-    return `${prefix}${tokenStats.input} in · ${prefix}${tokenStats.output} out`;
-  }
-  if (tokenStats.total) {
-    return `${prefix}${tokenStats.total} total`;
-  }
-  if (tokenStats.input) {
-    return `${prefix}${tokenStats.input} in`;
-  }
-  return `${prefix}${tokenStats.output} out`;
-}
-
-function buildNpcContextMessages(session, npc) {
-  const scopedHistory = buildScopedNpcHistory(session, npc);
-  const visibilityNote = npc?.transient
-    ? [
-        "你是刚进入场景的临时 NPC。",
-        "你不知道登场前的大部分旧历史，也没有读过完整会话记录。",
-        "你只能依据上面的角色设定，以及下面提供的有限片段来判断现在该怎么回应。",
-        "如果上下文里没写到的事情，就当你并不知道，禁止装作自己早就见过或参与过。",
-      ].join("\n")
-    : [
-        "你不是全知旁观者。",
-        "你只能依据下面提供的局部上下文来回应，禁止假装知道未出现在上下文里的更早细节。",
-      ].join("\n");
-
-  return [
-    { role: "system", content: visibilityNote },
-    ...scopedHistory,
-  ];
-}
-
-function buildScopedNpcHistory(session, npc) {
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
-  const visibleMessages = messages.filter((message) => {
-    if (!message || message.role === "system") {
-      return false;
-    }
-    if (!message.content || message.pending) {
-      return false;
-    }
-    return true;
-  });
-
-  if (!visibleMessages.length) {
-    return [];
-  }
-
-  let scopedMessages;
-  if (npc?.transient) {
-    const spawnedAt = npc.spawnedAt ? new Date(npc.spawnedAt).getTime() : NaN;
-    const spawnedMessages = Number.isFinite(spawnedAt)
-      ? visibleMessages.filter((message) => new Date(message.createdAt || 0).getTime() >= spawnedAt)
-      : [];
-    const transientWindow = spawnedMessages.length ? spawnedMessages : visibleMessages.slice(-4);
-    scopedMessages = transientWindow.slice(-6);
-  } else {
-    const ownLastIndex = findLastNpcMessageIndex(visibleMessages, npc?.name);
-    const startIndex = ownLastIndex >= 0 ? Math.max(ownLastIndex, visibleMessages.length - 8) : Math.max(0, visibleMessages.length - 8);
-    scopedMessages = visibleMessages.slice(startIndex);
-  }
-
-  return scopedMessages.map((message) => {
-    if (message.uiType === "narration") {
-      return { role: "system", content: "[旁白] " + message.content };
-    }
-    if (message.role === "assistant") {
-      return { role: "assistant", content: (message.speaker || "") + ": " + message.content };
-    }
-    return { role: "user", content: message.content };
-  });
-}
-
-function findLastNpcMessageIndex(messages, speaker) {
-  if (!speaker) {
-    return -1;
-  }
-
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i];
-    if (message.role === "assistant" && message.speaker === speaker) {
-      return i;
-    }
-  }
-
-  return -1;
-}
-
-function formatHistoryLine(message) {
-  if (!message) {
-    return "";
-  }
-
-  if (message.uiType === "narration") {
-    return message.content ? "{narration} " + message.content : "";
-  }
-
-  if (!message.content) {
-    return "";
-  }
-
-  const tag = message.role === "user" ? "{user}" : "{npc}";
-  return tag + " " + message.speaker + ": " + message.content;
+function buildModelThinkingExtra(modelName) {
+  return buildThinkingExtra(modelName, getModelThinkingState());
 }
 
 
-function sanitizeNarrationText(content) {
-  const cleaned = String(content || "")
-    .split(/\r?\n/)
-    .map((line) => line.replace(/^旁白[：:]\s*/u, "").trim())
-    .filter(Boolean)
-    .join("\n")
-    .trim();
-
-  // 检测乱码：如果包含连续"io数字."模式（如 "光天化io2010.2010."），认为是模型生成异常
-  if (/[ioIO]\d+\.\d+/.test(cleaned)) {
-    throw new Error("导演旁白包含乱码/模型生成异常");
-  }
-
-  return cleaned;
-}
-
-function extractDirectorJson(content) {
-  const raw = String(content || "").trim();
-  if (!raw) {
-    return "";
-  }
-
-  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const source = (fenceMatch ? fenceMatch[1] : raw).trim();
-
-  if (source.startsWith("{") && source.endsWith("}")) {
-    return source;
-  }
-
-  let depth = 0;
-  let start = -1;
-  let inString = false;
-  let escaped = false;
-
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-
-    if (inString) {
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (char === "\\") {
-        escaped = true;
-        continue;
-      }
-      if (char === "\"") {
-        inString = false;
-      }
-      continue;
-    }
-
-    if (char === "\"") {
-      inString = true;
-      continue;
-    }
-
-    if (char === "{") {
-      if (depth === 0) {
-        start = index;
-      }
-      depth += 1;
-      continue;
-    }
-
-    if (char === "}") {
-      if (depth === 0) {
-        continue;
-      }
-      depth -= 1;
-      if (depth === 0 && start !== -1) {
-        return source.slice(start, index + 1).trim();
-      }
-    }
-  }
-
-  return "";
-}
-
-function buildDirectorJsonCandidates(jsonText) {
-  const base = String(jsonText || "").trim();
-  if (!base) {
-    return [];
-  }
-
-  const candidates = [];
-  const pushCandidate = (value) => {
-    const normalized = String(value || "").trim();
-    if (!normalized || candidates.includes(normalized)) {
-      return;
-    }
-    candidates.push(normalized);
-  };
-
-  pushCandidate(base);
-  pushCandidate(base.replace(/^\uFEFF/, "").replace(/[\u200B-\u200D\u2060]/g, ""));
-  pushCandidate(base.replace(/[“”]/g, "\"").replace(/[‘’]/g, "'"));
-  pushCandidate(
-    base
-      .replace(/^\uFEFF/, "")
-      .replace(/[\u200B-\u200D\u2060]/g, "")
-      .replace(/[“”]/g, "\"")
-      .replace(/[‘’]/g, "'")
-      .replace(/,\s*([}\]])/g, "$1")
-  );
-
-  return candidates;
-}
-
-function parseDirectorJsonLoose(jsonText) {
-  const candidates = buildDirectorJsonCandidates(jsonText);
-  let lastError = null;
-
-  for (const candidate of candidates) {
-    try {
-      return JSON.parse(candidate);
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  throw lastError || new Error("导演返回的 JSON 无法解析");
-}
-
-function parseDirectorMemoryPayload(content, session) {
-  const raw = String(content || "").trim();
-  if (!raw) {
-    return normalizeDirectorMemory({
-      synopsis: String(session?.directorSummary || "").trim(),
-    });
-  }
-
-  try {
-    const parsed = parseDirectorJsonLoose(raw);
-    return normalizeDirectorMemory(parsed);
-  } catch {
-    return normalizeDirectorMemory({
-      scene: "",
-      relationships: [],
-      facts: [],
-      tensions: [],
-      openLoops: [],
-      npcState: [],
-      synopsis: raw,
-    });
-  }
-}
-
-function parseDirectorDirective(content, session) {
-  const jsonText = extractDirectorJson(content);
-  if (!jsonText) {
-    throw new Error("导演没有返回 JSON");
-  }
-
-  let parsed;
-  try {
-    parsed = parseDirectorJsonLoose(jsonText);
-  } catch {
-    throw new Error("导演返回的 JSON 无法解析");
-  }
-  const narration = typeof parsed.narration === "string" ? parsed.narration.trim() : "";
-  const responders = Array.isArray(parsed.responders) ? parsed.responders.map((item) => String(item).trim()).filter(Boolean) : [];
-  const spawnNpcs = Array.isArray(parsed.spawn_npcs) ? parsed.spawn_npcs : [];
-  const npcInstructions = parsed.npc_instructions && typeof parsed.npc_instructions === "object" && !Array.isArray(parsed.npc_instructions)
-    ? parsed.npc_instructions
-    : {};
-  return sanitizeDirectorDirective(session, narration, responders, spawnNpcs, npcInstructions);
-}
-
-function sanitizeDirectorDirective(session, narration, responders, spawnNpcs = [], npcInstructions = {}) {
-  const existingNpcNames = getSceneNpcs(session).map((npc) => npc.name);
-  const spawnMap = new Map();
-
-  spawnNpcs.forEach((rawNpc) => {
-    const normalized = normalizeSpawnNpc(rawNpc);
-    if (normalized && !existingNpcNames.includes(normalized.name)) {
-      spawnMap.set(normalized.name, normalized);
-    }
-  });
-
-  const requestedSpawnNpcs = [...spawnMap.values()];
-  const knownNpcNames = [...existingNpcNames, ...requestedSpawnNpcs.map((npc) => npc.name)];
-  const normalizedResponders = [];
-  const seenResponders = new Set();
-  responders.forEach((name) => {
-    if (!knownNpcNames.includes(name) || seenResponders.has(name)) {
-      return;
-    }
-    seenResponders.add(name);
-    normalizedResponders.push(name);
-  });
-  const cleanedNarration = sanitizeNarrationText(narration);
-
-  if (responders.some((name) => name && !knownNpcNames.includes(name))) {
-    throw new Error("导演返回了未声明的 responder");
-  }
-
-  validateDirectorNarration(cleanedNarration, knownNpcNames);
-
-  // 过滤 npcInstructions，只保留针对已知 NPC 的指令
-  const filteredInstructions = {};
-  if (npcInstructions && typeof npcInstructions === "object" && !Array.isArray(npcInstructions)) {
-    for (const [npcName, instruction] of Object.entries(npcInstructions)) {
-      if (knownNpcNames.includes(npcName) && typeof instruction === "string" && instruction.trim()) {
-        filteredInstructions[npcName] = instruction.trim();
-      }
-    }
-  }
-
-  return {
-    narration: cleanedNarration,
-    responders: normalizedResponders,
-    spawnNpcs: requestedSpawnNpcs,
-    npcInstructions: filteredInstructions,
-  };
-}
-
-function validateDirectorNarration(narration, knownNpcNames) {
-  if (!narration) {
-    return;
-  }
-
-  if (/【?\s*新\s*NPC\s*登场\s*[：:]/u.test(narration)) {
-    throw new Error("导演把临时 NPC 声明写进了旁白");
-  }
-
-  for (const name of knownNpcNames) {
-    if (!name) {
-      continue;
-    }
-
-    const speakerLabelPattern = new RegExp(`(^|\\n|\\s)${escapeRegExp(name)}[：:]`, "u");
-    if (speakerLabelPattern.test(narration)) {
-      throw new Error(`导演把 ${name} 的台词写进了旁白`);
-    }
-  }
-}
-
-function normalizeSpawnNpc(raw) {
-  if (!raw) {
-    return null;
-  }
-
-  if (typeof raw === "string") {
-    const name = raw.trim();
-    return name ? { name, prompt: "" } : null;
-  }
-
-  const name = String(raw.name || "").trim();
-  const prompt = String(raw.prompt || raw.description || raw.notes || "").trim();
-  if (!name) {
-    return null;
-  }
-
-  return { name, prompt };
-}
-
-function pickTransientNpcModel(session) {
-  const pool = (session.npcs || []).filter((npc) => npc.model && npc.configId);
-  if (!pool.length) {
-    return {
-      model: session.directorModel || "",
-      configId: session.directorConfigId || session.configId || "",
-    };
-  }
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-function upsertTransientNpcs(session, requestedSpawnNpcs) {
-  const baseNames = new Set((session.npcs || []).map((npc) => npc.name));
-  const current = Array.isArray(session.transientNpcs) ? session.transientNpcs.map((npc) => ({ ...npc })) : [];
-
-  requestedSpawnNpcs.forEach((rawNpc) => {
-    const normalized = normalizeSpawnNpc(rawNpc);
-    if (!normalized || baseNames.has(normalized.name)) {
-      return;
-    }
-
-    const existing = current.find((npc) => npc.name === normalized.name);
-    if (existing) {
-      if (normalized.prompt) {
-        existing.prompt = normalized.prompt;
-      }
-      return;
-    }
-
-    const assignedModel = pickTransientNpcModel(session);
-    current.push({
-      name: normalized.name,
-      prompt: normalized.prompt,
-      model: assignedModel.model || session.directorModel || "",
-      configId: assignedModel.configId || session.directorConfigId || session.configId || "",
-      transient: true,
-      spawnedAt: new Date().toISOString(),
-    });
-  });
-
-  session.transientNpcs = current;
-  return current;
-}
-
-function getResponderNpcs(session, responderNames) {
-  const sceneNpcMap = new Map(getSceneNpcs(session).map((npc) => [npc.name, npc]));
-  const orderedResponders = [];
-  const seen = new Set();
-
-  responderNames.forEach((name) => {
-    if (!name || seen.has(name)) {
-      return;
-    }
-    const npc = sceneNpcMap.get(name);
-    if (!npc) {
-      return;
-    }
-    seen.add(name);
-    orderedResponders.push(npc);
-  });
-
-  return orderedResponders;
-}
 
 
-function findLatestAssistantMessage(session, speaker) {
-  for (let i = session.messages.length - 1; i >= 0; i -= 1) {
-    const item = session.messages[i];
-    if (item.role === "assistant" && item.speaker === speaker && (item.pending || item.streaming || !item.content)) {
-      return item;
-    }
-  }
-  return null;
-}
 
-function resolveModelConfig(configId, model, fallbackConfigId = "") {
-  const configs = state.settings.configs || [];
-  const directMatch = configs.find((config) => config.id === configId && config.host && config.key);
-  if (directMatch) {
-    return directMatch;
-  }
 
-  const byModel = configs.find((config) =>
-    config.host && config.key && Array.isArray(config.workModels) && config.workModels.includes(model)
-  );
-  if (byModel) {
-    return byModel;
-  }
 
-  const fallback = configs.find((config) => config.id === fallbackConfigId && config.host && config.key);
-  if (fallback) {
-    return fallback;
-  }
 
-  throw new Error(`未找到模型 ${model} 对应的接口配置`);
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 async function streamChatCompletion(session, speaker, model, messages, configId = "") {
   const targetMessage = findLatestAssistantMessage(session, speaker);
@@ -1852,10 +1337,14 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
       stream: true,
     };
     if (withTemp) {
-      body.temperature = 0.5;
+      body.temperature = isWeakModel(model) ? 0.1 : 0.5;
     }
     if (withUsage) {
       body.stream_options = { include_usage: true };
+    }
+    const thinkingExtra = buildModelThinkingExtra(model);
+    if (thinkingExtra.thinking) {
+      body.thinking = thinkingExtra.thinking;
     }
     return body;
   };
@@ -1913,6 +1402,10 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   if (!response.body) {
     const result = await readChatCompletionPayload(response, model);
     targetMessage.content = result.content;
+    if (speaker !== "导演 AI") {
+      targetMessage.content = stripThinkingLeakage(targetMessage.content);
+    }
+    targetMessage.thinking = result.thinking || "";
     targetMessage.usage = normalizeUsage(result.usage);
     targetMessage.streaming = false;
     touchSession(session);
@@ -1959,6 +1452,11 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
             targetMessage.content += delta;
             renderMessages({ stickToBottom: true });
           }
+          const thinkingDelta = data?.choices?.[0]?.delta?.reasoning_content ?? data?.choices?.[0]?.message?.reasoning_content ?? "";
+          if (thinkingDelta) {
+            targetMessage.thinking += thinkingDelta;
+            renderMessages({ stickToBottom: true });
+          }
         } catch {
           // Ignore incompatible keepalive chunks.
         }
@@ -1975,6 +1473,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     debugLog("npc", `${speaker} 首次调用返回空，正在重试...`, { sessionId: session.id });
     await wait(300);
 
+    targetMessage.thinking = "";
     const retryResponse = await doStreamFetch(shouldTrackUsage);
 
     if (retryResponse.ok && retryResponse.body) {
@@ -2008,6 +1507,11 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
                 targetMessage.content += delta;
                 renderMessages({ stickToBottom: true });
               }
+              const thinkingDelta = data?.choices?.[0]?.delta?.reasoning_content ?? "";
+              if (thinkingDelta) {
+                targetMessage.thinking += thinkingDelta;
+                renderMessages({ stickToBottom: true });
+              }
             } catch {}
           }
         }
@@ -2021,10 +1525,11 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
 
   if (speaker !== "导演 AI") {
     targetMessage.content = sanitizeNpcReplyStrict(session, speaker, targetMessage.content);
+    targetMessage.content = stripThinkingLeakage(targetMessage.content);
   }
 
   const estimatedInput = Number(targetMessage.estimatedUsage?.input || 0) || 0;
-  const estimatedOutput = estimateTokens(targetMessage.content);
+  const estimatedOutput = estimateTokens(targetMessage.content) + estimateTokens(targetMessage.thinking);
   targetMessage.estimatedUsage = {
     input: estimatedInput,
     output: estimatedOutput,
@@ -2037,271 +1542,17 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   renderMessages({ stickToBottom: true });
 }
 
-function sanitizeNpcReply(session, speaker, content) {
-  let cleaned = String(content || "").trim();
-  if (!cleaned) {
-    return cleaned;
-  }
 
-  const allNpcNames = getSceneNpcs(session).map((npc) => npc.name);
-  const labelPattern = new RegExp(`^(${allNpcNames.map(escapeRegExp).join("|")})[：:]\\s*`);
-  const lines = cleaned
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
 
-  const keptLines = [];
-  for (const line of lines) {
-    const match = line.match(labelPattern);
-    if (!match) {
-      keptLines.push(line);
-      continue;
-    }
 
-    const lineSpeaker = match[1];
-    if (lineSpeaker === speaker) {
-      keptLines.push(line.replace(labelPattern, "").trim());
-      continue;
-    }
 
-    if (keptLines.length > 0) {
-      break;
-    }
-  }
 
-  cleaned = keptLines.join("\n").trim() || cleaned.replace(labelPattern, "").trim();
 
-  const selfReplayPattern = new RegExp(`(?:^|\\n)${escapeRegExp(speaker)}[：:]`, "g");
-  const selfReplayCount = (cleaned.match(selfReplayPattern) || []).length;
-  if (selfReplayCount > 0) {
-    cleaned = cleaned.split(/\n/)[0].replace(labelPattern, "").trim();
-  }
 
-  return cleaned;
-}
 
-function sanitizeNpcReplyStrict(session, speaker, content) {
-  let cleaned = sanitizeNpcReply(session, speaker, content);
-  if (!cleaned) {
-    return cleaned;
-  }
 
-  cleaned = cleaned.replace(/^旁白[：:]\s*/u, "").trim();
-  const allNpcNames = getSceneNpcs(session).map((npc) => npc.name);
-  const labelPattern = new RegExp(`^(${allNpcNames.map(escapeRegExp).join("|")})[：:]\\s*`);
-  const lines = cleaned
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
 
-  const keptLines = [];
-  for (const line of lines) {
-    if (/^旁白[：:]/u.test(line)) {
-      if (keptLines.length > 0) {
-        break;
-      }
-      continue;
-    }
 
-    const match = line.match(labelPattern);
-    if (!match) {
-      keptLines.push(line);
-      continue;
-    }
-
-    if (match[1] === speaker) {
-      keptLines.push(line.replace(labelPattern, "").trim());
-      continue;
-    }
-
-    if (keptLines.length > 0) {
-      break;
-    }
-  }
-
-  cleaned = keptLines.join("\n").trim() || cleaned.replace(labelPattern, "").trim();
-  const selfReplayPattern = new RegExp(`(?:^|\\n)${escapeRegExp(speaker)}[：:]`, "g");
-  if ((cleaned.match(selfReplayPattern) || []).length > 0) {
-    cleaned = cleaned.split(/\n/)[0].replace(labelPattern, "").trim();
-  }
-
-  // 如果 NPC 输出中包含"你："的用户消息标签，截断丢弃（NPC 模拟了用户发言）
-  const userLabelIndex = cleaned.search(/\n你[：:]/u);
-  if (userLabelIndex !== -1) {
-    cleaned = cleaned.slice(0, userLabelIndex).trim();
-  }
-
-  const turnContext = getCurrentTurnNpcContext(session, speaker);
-  const latestPriorReply = turnContext.previousReplies[turnContext.previousReplies.length - 1]?.content || "";
-  if (latestPriorReply) {
-    const normalizedPrior = normalizeComparableText(latestPriorReply);
-    const normalizedCurrent = normalizeComparableText(cleaned);
-    if (normalizedPrior && normalizedCurrent.startsWith(normalizedPrior) && cleaned.length > latestPriorReply.length) {
-      cleaned = cleaned.slice(latestPriorReply.length).trim();
-    } else {
-      const overlapPrefix = findRepeatedPrefix(cleaned, latestPriorReply);
-      if (overlapPrefix && overlapPrefix.length >= 24) {
-        cleaned = cleaned.slice(overlapPrefix.length).trim();
-      }
-    }
-  }
-
-  return cleaned;
-}
-
-function getCurrentTurnNpcContext(session, speaker) {
-  const messages = Array.isArray(session?.messages) ? session.messages : [];
-  let lastUserIndex = -1;
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    if (messages[i].role === "user") {
-      lastUserIndex = i;
-      break;
-    }
-  }
-
-  const previousReplies = [];
-  for (let i = lastUserIndex + 1; i < messages.length; i += 1) {
-    const item = messages[i];
-    if (!item || item.role !== "assistant" || item.uiType === "narration" || item.speaker === speaker) {
-      continue;
-    }
-    if (!item.content || item.pending || item.streaming) {
-      continue;
-    }
-    previousReplies.push({
-      speaker: item.speaker,
-      content: item.content,
-    });
-  }
-
-  return {
-    previousReplies,
-    previousSpeakers: previousReplies.map((item) => item.speaker),
-  };
-}
-
-function normalizeComparableText(content) {
-  return String(content || "")
-    .replace(/\s+/g, "")
-    .replace(/[（）()\[\]【】"'“”、，。！？!?,.:：；;<>《》]/g, "")
-    .trim();
-}
-
-function findRepeatedPrefix(current, prior) {
-  const currentText = String(current || "");
-  const priorText = String(prior || "");
-  const maxLength = Math.min(currentText.length, priorText.length);
-  let matchedLength = 0;
-
-  for (let i = 0; i < maxLength; i += 1) {
-    if (currentText[i] !== priorText[i]) {
-      break;
-    }
-    matchedLength = i + 1;
-  }
-
-  return matchedLength > 0 ? currentText.slice(0, matchedLength) : "";
-}
-
-async function createChatCompletion(host, key, model, messages, stream = false, temperature = 0.7) {
-  const payload = await createChatCompletionPayload(host, key, model, messages, stream, temperature);
-  return payload.content;
-}
-
-async function createChatCompletionPayload(host, key, model, messages, stream = false, temperature = 0.7) {
-  const doPayloadFetch = (withTemp) => fetch(`${host}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      ...(withTemp ? { temperature, stream } : { stream }),
-    }),
-  });
-
-  let response = await doPayloadFetch(true);
-  let detail = "";
-
-  if (!response.ok) {
-    detail = await safeReadError(response);
-    if (/temperature|unsupported param|not support/i.test(detail)) {
-      console.warn("[MOYU] temperature not supported, retrying without it", { model, detail });
-      response = await doPayloadFetch(false);
-      detail = "";
-    }
-  }
-
-  if (!response.ok) {
-    if (!detail) {
-      detail = await safeReadError(response);
-    }
-    console.error("[MOYU] Create chat completion failed", {
-      model,
-      status: response.status,
-      detail,
-      host,
-      stream,
-    });
-    throw new Error(`模型 ${model} 调用失败：HTTP ${response.status}${detail ? ` ${detail}` : ""}`);
-  }
-
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content?.trim();
-  if (!content) {
-    throw new Error(`模型 ${model} 没有返回有效内容`);
-  }
-  return {
-    content,
-    usage: data?.usage || null,
-  };
-}
-
-async function readChatCompletionResponse(response, model) {
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content?.trim();
-  if (!content) {
-    throw new Error(`模型 ${model} 没有返回有效内容`);
-  }
-  return {
-    content,
-    usage: data?.usage || null,
-  };
-}
-
-async function readChatCompletionPayload(response, model) {
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content?.trim();
-  if (!content) {
-    throw new Error(`模型 ${model} 没有返回有效内容`);
-  }
-  return {
-    content,
-    usage: data?.usage || null,
-  };
-}
-
-async function streamLocalText(message, content) {
-  const text = message?.uiType === "narration" ? sanitizeNarrationText(content) : content.trim();
-  if (!text) {
-    message.streaming = false;
-    message.content = "";
-    renderMessages({ stickToBottom: true });
-    return;
-  }
-
-  const step = Math.max(2, Math.min(12, Math.floor(text.length / 24) || 2));
-  for (let index = 0; index < text.length; index += step) {
-    message.content = text.slice(0, index + step);
-    renderMessages({ stickToBottom: true });
-    await wait(28);
-  }
-  message.content = text;
-  message.streaming = false;
-  renderMessages({ stickToBottom: true });
-}
 
 function updateSuggestBtn() {
   const session = getCurrentSession();
@@ -2317,7 +1568,10 @@ function clearSuggestions() {
   const list = els.suggestionBar?.querySelector(".suggestion-list");
   if (list) list.innerHTML = "";
   els.suggestionBar?.classList.add("hidden");
-  if (els.chatMessages) els.chatMessages.style.paddingBottom = "";
+  if (els.chatMessages) {
+    var scrollEl = els.chatMessages.closest(".main");
+    if (scrollEl) scrollEl.style.scrollPaddingBottom = "";
+  }
 }
 
 function getSuggestionContextMessages(session) {
@@ -2410,8 +1664,11 @@ async function generateSuggestions() {
       list.appendChild(chip);
     });
     els.suggestionBar.classList.remove("hidden");
-    els.chatMessages.style.paddingBottom = "200px";
-    smoothScrollTo(els.chatMessages, els.chatMessages.scrollHeight);
+    var scrollEl = els.chatMessages.closest(".main");
+    if (scrollEl) {
+      scrollEl.style.scrollPaddingBottom = "200px";
+      smoothScrollTo(scrollEl, scrollEl.scrollHeight);
+    }
     setText(els.chatStatus, "选择一个推荐回复，或自行输入");
   } catch (err) {
     const msg = err.message === "invalid"

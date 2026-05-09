@@ -242,7 +242,13 @@ function syncNpcCardTitle(card, titleNode, rawName = "") {
     return;
   }
   const text = String(rawName || "").trim();
-  titleNode.textContent = text || t("npc.unnamed", { entityType: getEntityTerm(getSelectedMode()) });
+  if (text) {
+    titleNode.textContent = text;
+    titleNode.removeAttribute("data-i18n");
+  } else {
+    titleNode.textContent = t("npc.unnamed", { entityType: getEntityTerm(getSelectedMode()) });
+    titleNode.setAttribute("data-i18n", "npc.unnamed");
+  }
   card?.classList.toggle("is-unnamed", !text);
 }
 
