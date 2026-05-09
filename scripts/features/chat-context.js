@@ -881,7 +881,6 @@ function formatCodeBlock(lang, code) {
       window.removeEventListener("unhandledrejection", onReject);
       delete window[rejectKey];
     }
-    }
   }
 
   // Fallback: js-beautify for JS/HTML/CSS
