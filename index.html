@@ -8,13 +8,21 @@
   <title>MOYU - 模鱼空间</title>
   <script>window.APP_VERSION = "26.5.9";</script>
   <script>
-    // Suppress prettier parser rejections before any library loads
-    window.addEventListener("unhandledrejection", function (e) {
-      var msg = e.reason && (e.reason.message || String(e.reason));
-      if (/SyntaxError|Missing semicolon|Unexpected token|prettier/i.test(msg || "")) {
-        e.preventDefault();
-      }
-    });
+    // Suppress prettier parser errors — they log via console.error AND unhandledrejection
+    (function () {
+      var _origError = console.error;
+      console.error = function () {
+        var msg = Array.prototype.join.call(arguments, " ");
+        if (/SyntaxError|Missing semicolon|Unexpected token|babel\.js|prettier parser/i.test(msg)) return;
+        return _origError.apply(console, arguments);
+      };
+      window.addEventListener("unhandledrejection", function (e) {
+        var msg = e.reason && (e.reason.message || String(e.reason));
+        if (/SyntaxError|Missing semicolon|Unexpected token|prettier/i.test(msg || "")) {
+          e.preventDefault();
+        }
+      });
+    })();
   </script>
   <script>
     (function() {
