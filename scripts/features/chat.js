@@ -338,193 +338,251 @@ function applyUserMessageEdit(session, messageId, content) {
   session.transientNpcs = [];
 }
 
-function renderMessages(options = {}) {
-  const shouldStickToBottom = Boolean(options.stickToBottom);
-  const scrollEl = els.chatMessages.closest(".main") || els.chatMessages;
-  const previousScrollTop = scrollEl.scrollTop;
-  const previousScrollHeight = scrollEl.scrollHeight;
-  const session = getCurrentSession();
-  els.chatMessages.innerHTML = "";
-  if (!session) {
+// ---- Virtual scroll helpers ----
+var _vScroll = null;
+var _vScrollSessionId = null;
+var _vRenderPending = false;
+
+function _ensureVirtualizer(session) {
+  var scrollEl = els.chatMessages.closest(".main") || els.chatMessages;
+  if (_vScroll && _vScrollSessionId === session.id) {
+    _vScroll.setCount(session.messages.length);
     return;
   }
-
-  const sessionMode = session.mode || SESSION_MODE_STORY;
-
-  session.messages.forEach((message) => {
-    if (message.uiType === "system-notice") {
-      const notice = document.createElement("div");
-      notice.className = "system-notice";
-      notice.innerHTML = escapeHtml(message.content).replace(/\n/g, "<br>");
-      els.chatMessages.appendChild(notice);
-      return;
-    }
-
-    if (message.uiType === "narration") {
-      const narrationText = sanitizeNarrationText(message.content);
-      const tokenLabel = buildMessageTokenLabel(message);
-      const wrapper = document.createElement("article");
-      wrapper.className = `narration-block ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
-
-      const narration = document.createElement("div");
-      narration.className = `narration ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${!message.pending && !/[\r\n]/.test(narrationText) ? "single-line" : ""}`.trim();
-      narration.innerHTML = message.pending
-        ? `<span class="typing-row"><span></span><span></span><span></span></span>`
-        : escapeHtml(narrationText).replace(/\n/g, "<br>");
-      if (message.id && tokenLabel && isMobileTokenToggleMode()) {
-        narration.addEventListener("click", () => {
-          if (window.getSelection().toString().trim()) return;
-          state.openAgentTokenInfoId = state.openAgentTokenInfoId === message.id ? null : message.id;
-          renderMessages();
+  if (_vScroll) _vScroll.destroy();
+  _vScroll = createVirtualScroller({
+    scrollElement: scrollEl,
+    contentElement: els.chatMessages,
+    estimateHeight: 140,
+    overscan: 6,
+    onChange: function () {
+      if (!_vRenderPending) {
+        _vRenderPending = true;
+        requestAnimationFrame(function () {
+          _vRenderPending = false;
+          if (getCurrentSession()) renderMessages({});
         });
       }
-      wrapper.appendChild(narration);
+    },
+  });
+  _vScroll.setCount(session.messages.length);
+  _vScroll.attach();
+  _vScrollSessionId = session.id;
+}
 
-      if (message.id && !message.pending) {
-        const tokenBar = document.createElement("div");
-        tokenBar.className = `message-token-bar narration-token-bar ${tokenLabel ? "has-token" : ""}`.trim();
-        tokenBar.textContent = tokenLabel;
-        wrapper.appendChild(tokenBar);
-      }
+function _buildMessageElement(message, sessionMode) {
+  if (message.uiType === "system-notice") {
+    var notice = document.createElement("div");
+    notice.className = "system-notice";
+    notice.innerHTML = escapeHtml(message.content).replace(/\n/g, "<br>");
+    return notice;
+  }
 
-      els.chatMessages.appendChild(wrapper);
-      return;
-    }
+  if (message.uiType === "narration") {
+    var narrationText = sanitizeNarrationText(message.content);
+    var tokenLabel = buildMessageTokenLabel(message);
+    var wrapper = document.createElement("article");
+    wrapper.className = "narration-block " + (state.openAgentTokenInfoId === message.id ? "token-open" : "").trim();
 
-    const block = document.createElement("article");
-    block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
-
-    if (message.role === "assistant" || message.role === "user") {
-      const meta = document.createElement("div");
-      meta.className = "message-meta";
-      meta.innerHTML = `
-        <strong>${escapeHtml(message.speaker)}</strong>
-        <span>${new Date(message.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span>
-      `;
-      block.appendChild(meta);
-    }
-
-    const tokenLabel = message.role === "assistant" ? buildMessageTokenLabel(message) : "";
-
-    const isSingleLineMessage = !message.pending && !/[\r\n]/.test(message.content || "");
-    const isWorkAgent = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
-    const bubble = document.createElement("div");
-    bubble.className = `message ${message.role === "user" ? "user" : message.role === "system" ? "system" : "agent"} ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${isSingleLineMessage ? "single-line" : ""} ${isWorkAgent ? "agent-plain" : ""}`.trim();
-    if (message.pending) {
-      bubble.innerHTML = `<span class="typing-row"><span></span><span></span><span></span></span>`;
-    } else {
-      let html = "";
-      const thinkingText = (message.thinking || "").trim();
-      if (thinkingText) {
-        html += `<details class="thinking-section"${message.streaming ? " open" : ""}>`;
-        html += `<summary><span class="thinking-label">思考过程</span></summary>`;
-        html += `<div class="thinking-content">${escapeHtml(thinkingText).replace(/\n/g, "<br>")}</div>`;
-        html += `</details>`;
-      }
-      const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
-      if (enableMd) {
-        html += renderMarkdownContent(escapeHtml(message.content));
-      } else if (sessionMode === SESSION_MODE_STORY) {
-        html += renderStoryContent(escapeHtml(message.content));
-      } else {
-        html += escapeHtml(message.content).replace(/\n/g, "<br>");
-      }
-      bubble.innerHTML = html;
-      if (typeof hljs !== 'undefined' && enableMd) {
-        bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
-      }
-      if (sessionMode === SESSION_MODE_WORK) {
-        bubble.querySelectorAll('.code-copy-btn').forEach((btn) => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            var pre = btn.closest('.pre-code-block');
-            const code = pre ? pre.querySelector('code').textContent : '';
-            navigator.clipboard.writeText(code).then(() => {
-              btn.className = 'code-copy-btn copied';
-              btn.innerHTML = '<i class="bi bi-check"></i>';
-              setTimeout(() => {
-                btn.className = 'code-copy-btn';
-                btn.innerHTML = '<i class="bi bi-clipboard"></i>';
-              }, 1500);
-            }).catch(() => {});
-          });
-        });
-      }
-    }
-    if (message.role === "user" && message.id) {
-      bubble.addEventListener("click", () => {
-        if (window.getSelection().toString().trim()) return;
-        state.openUserMessageToolsId = state.openUserMessageToolsId === message.id ? null : message.id;
-        renderMessages();
-      });
-    }
-    if (message.role === "assistant" && message.id && isMobileTokenToggleMode()) {
-      bubble.addEventListener("click", () => {
+    var narration = document.createElement("div");
+    narration.className = "narration " + (message.pending ? "pending" : "") + " " + (message.streaming ? "streaming" : "") + " " + (!message.pending && !/[\r\n]/.test(narrationText) ? "single-line" : "").trim();
+    narration.innerHTML = message.pending
+      ? '<span class="typing-row"><span></span><span></span><span></span></span>'
+      : escapeHtml(narrationText).replace(/\n/g, "<br>");
+    if (message.id && tokenLabel && isMobileTokenToggleMode()) {
+      narration.addEventListener("click", function () {
         if (window.getSelection().toString().trim()) return;
         state.openAgentTokenInfoId = state.openAgentTokenInfoId === message.id ? null : message.id;
         renderMessages();
       });
     }
-    block.appendChild(bubble);
+    wrapper.appendChild(narration);
 
     if (message.id && !message.pending) {
-      const tools = document.createElement("div");
-      tools.className = "message-tools";
-      if (message.role === "user") {
-        tools.style.justifyContent = "flex-end";
-      } else if (message.role === "assistant") {
-        tools.style.justifyContent = "space-between";
-      }
-
-      if (message.role === "assistant" && tokenLabel) {
-        const tokenSpan = document.createElement("span");
-        tokenSpan.className = "message-token-label";
-        tokenSpan.textContent = tokenLabel;
-        tools.appendChild(tokenSpan);
-      }
-
-      const copyBtn = document.createElement("button");
-      copyBtn.type = "button";
-      copyBtn.className = "message-edit-btn";
-      copyBtn.title = t("chat.copy");
-      copyBtn.innerHTML = `
-        <i class="bi bi-copy message-edit-icon"></i>
-      `;
-      copyBtn.addEventListener("click", () => copyMessageContent(message.id));
-      tools.appendChild(copyBtn);
-
-      if (message.role === "user") {
-        const editBtn = document.createElement("button");
-        editBtn.type = "button";
-        editBtn.className = `message-edit-btn ${state.editingUserMessageId === message.id ? "active" : ""}`.trim();
-        editBtn.innerHTML = `
-          <i class="bi bi-pencil message-edit-icon"></i>
-        `;
-        editBtn.addEventListener("click", () => beginUserMessageEdit(message.id));
-        tools.appendChild(editBtn);
-
-        const retryBtn = document.createElement("button");
-        retryBtn.type = "button";
-        retryBtn.className = "message-edit-btn";
-        retryBtn.innerHTML = `
-          <i class="bi bi-arrow-counterclockwise message-edit-icon"></i>
-        `;
-        retryBtn.addEventListener("click", () => regenerateFromUserMessage(message.id));
-        tools.appendChild(retryBtn);
-      }
-      block.appendChild(tools);
-
-      els.chatMessages.appendChild(block);
+      var tokenBar = document.createElement("div");
+      tokenBar.className = "message-token-bar narration-token-bar " + (tokenLabel ? "has-token" : "").trim();
+      tokenBar.textContent = tokenLabel;
+      wrapper.appendChild(tokenBar);
     }
-  });
+    return wrapper;
+  }
 
-  if (shouldStickToBottom) {
-    scrollEl.scrollTop = scrollEl.scrollHeight;
+  var block = document.createElement("article");
+  block.className = "message-block " + (message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system") + " " + (state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : "") + " " + (state.openAgentTokenInfoId === message.id ? "token-open" : "").trim();
+
+  if (message.role === "assistant" || message.role === "user") {
+    var meta = document.createElement("div");
+    meta.className = "message-meta";
+    meta.innerHTML = '<strong>' + escapeHtml(message.speaker) + '</strong><span>' + new Date(message.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) + '</span>';
+    block.appendChild(meta);
+  }
+
+  var tokenLabel = message.role === "assistant" ? buildMessageTokenLabel(message) : "";
+  var isSingleLineMessage = !message.pending && !/[\r\n]/.test(message.content || "");
+  var isWorkAgent = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
+  var bubble = document.createElement("div");
+  bubble.className = "message " + (message.role === "user" ? "user" : message.role === "system" ? "system" : "agent") + " " + (message.pending ? "pending" : "") + " " + (message.streaming ? "streaming" : "") + " " + (isSingleLineMessage ? "single-line" : "") + " " + (isWorkAgent ? "agent-plain" : "").trim();
+
+  if (message.pending) {
+    bubble.innerHTML = '<span class="typing-row"><span></span><span></span><span></span></span>';
+  } else {
+    var html = "";
+    var thinkingText = (message.thinking || "").trim();
+    if (thinkingText) {
+      html += '<details class="thinking-section"' + (message.streaming ? " open" : "") + '>';
+      html += '<summary><span class="thinking-label">思考过程</span></summary>';
+      html += '<div class="thinking-content">' + escapeHtml(thinkingText).replace(/\n/g, "<br>") + '</div>';
+      html += '</details>';
+    }
+    var enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
+    if (enableMd) {
+      html += renderMarkdownContent(escapeHtml(message.content));
+    } else if (sessionMode === SESSION_MODE_STORY) {
+      html += renderStoryContent(escapeHtml(message.content));
+    } else {
+      html += escapeHtml(message.content).replace(/\n/g, "<br>");
+    }
+    bubble.innerHTML = html;
+    if (typeof hljs !== 'undefined' && enableMd) {
+      bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
+    }
+    if (sessionMode === SESSION_MODE_WORK) {
+      bubble.querySelectorAll('.code-copy-btn').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var pre = btn.closest('.pre-code-block');
+          var code = pre ? pre.querySelector('code').textContent : '';
+          navigator.clipboard.writeText(code).then(function () {
+            btn.className = 'code-copy-btn copied';
+            btn.innerHTML = '<i class="bi bi-check"></i>';
+            setTimeout(function () {
+              btn.className = 'code-copy-btn';
+              btn.innerHTML = '<i class="bi bi-clipboard"></i>';
+            }, 1500);
+          }).catch(function () {});
+        });
+      });
+    }
+  }
+
+  if (message.role === "user" && message.id) {
+    bubble.addEventListener("click", function () {
+      if (window.getSelection().toString().trim()) return;
+      state.openUserMessageToolsId = state.openUserMessageToolsId === message.id ? null : message.id;
+      renderMessages();
+    });
+  }
+  if (message.role === "assistant" && message.id && isMobileTokenToggleMode()) {
+    bubble.addEventListener("click", function () {
+      if (window.getSelection().toString().trim()) return;
+      state.openAgentTokenInfoId = state.openAgentTokenInfoId === message.id ? null : message.id;
+      renderMessages();
+    });
+  }
+  block.appendChild(bubble);
+
+  if (message.id && !message.pending) {
+    var tools = document.createElement("div");
+    tools.className = "message-tools";
+    if (message.role === "user") {
+      tools.style.justifyContent = "flex-end";
+    } else if (message.role === "assistant") {
+      tools.style.justifyContent = "space-between";
+    }
+    if (message.role === "assistant" && tokenLabel) {
+      var tokenSpan = document.createElement("span");
+      tokenSpan.className = "message-token-label";
+      tokenSpan.textContent = tokenLabel;
+      tools.appendChild(tokenSpan);
+    }
+    var copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "message-edit-btn";
+    copyBtn.title = t("chat.copy");
+    copyBtn.innerHTML = '<i class="bi bi-copy message-edit-icon"></i>';
+    copyBtn.addEventListener("click", function () { copyMessageContent(message.id); });
+    tools.appendChild(copyBtn);
+
+    if (message.role === "user") {
+      var editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "message-edit-btn " + (state.editingUserMessageId === message.id ? "active" : "").trim();
+      editBtn.innerHTML = '<i class="bi bi-pencil message-edit-icon"></i>';
+      editBtn.addEventListener("click", function () { beginUserMessageEdit(message.id); });
+      tools.appendChild(editBtn);
+
+      var retryBtn = document.createElement("button");
+      retryBtn.type = "button";
+      retryBtn.className = "message-edit-btn";
+      retryBtn.innerHTML = '<i class="bi bi-arrow-counterclockwise message-edit-icon"></i>';
+      retryBtn.addEventListener("click", function () { regenerateFromUserMessage(message.id); });
+      tools.appendChild(retryBtn);
+    }
+    block.appendChild(tools);
+  }
+
+  return block;
+}
+
+function _spacerDiv(height) {
+  var div = document.createElement("div");
+  div.setAttribute("aria-hidden", "true");
+  div.style.cssText = "height:" + Math.max(0, height) + "px;flex:0 0 auto;";
+  return div;
+}
+
+function renderMessages(options) {
+  options = options || {};
+  var shouldStickToBottom = Boolean(options.stickToBottom);
+  var scrollEl = els.chatMessages.closest(".main") || els.chatMessages;
+  var session = getCurrentSession();
+  els.chatMessages.innerHTML = "";
+  if (!session) {
+    if (_vScroll) { _vScroll.destroy(); _vScroll = null; _vScrollSessionId = null; }
     return;
   }
 
-  const heightDelta = scrollEl.scrollHeight - previousScrollHeight;
-  scrollEl.scrollTop = previousScrollTop + Math.max(0, heightDelta);
+  var sessionMode = session.mode || SESSION_MODE_STORY;
+  _ensureVirtualizer(session);
+
+  // If not a forced data-change render, just update range from scroll
+  var range = _vScroll.getVisibleRange();
+  if (session.messages.length === 0) return;
+
+  var startI = range.startIndex;
+  var endI = range.endIndex;
+  var totalH = range.totalHeight;
+  var topOffset = range.topOffset;
+
+  // Top spacer
+  if (topOffset > 0) {
+    els.chatMessages.appendChild(_spacerDiv(topOffset));
+  }
+
+  // Render visible messages
+  var renderedH = 0;
+  for (var i = startI; i <= endI; i++) {
+    var msg = session.messages[i];
+    var el = _buildMessageElement(msg, sessionMode);
+    el.setAttribute("data-vi", i);
+    els.chatMessages.appendChild(el);
+    // Observe for height tracking
+    if (_vScroll) _vScroll.observeElement(el, i);
+    // Track approximate rendered height for bottom spacer
+    renderedH += _vScroll.getHeight(i);
+  }
+
+  // Bottom spacer
+  var bottomH = totalH - topOffset - renderedH;
+  if (bottomH > 0) {
+    els.chatMessages.appendChild(_spacerDiv(bottomH));
+  }
+
+  if (shouldStickToBottom) {
+    requestAnimationFrame(function () {
+      scrollEl.scrollTop = scrollEl.scrollHeight;
+    });
+  }
 }
 
 async function sendUserMessage() {
