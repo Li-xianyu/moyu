@@ -1,8 +1,16 @@
 ﻿function renderSession() {
-  const session = getCurrentSession();
+  var session = getCurrentSession();
   renderChatListMenu();
+
+  // Welcome page: don't load session content
+  if (state.showWelcomeHome) {
+    if (els.chatStage) els.chatStage.classList.add("empty-state");
+    els.chatMessages.innerHTML = "";
+    return;
+  }
+
   if (els.chatStage) {
-    els.chatStage.classList.toggle("empty-state", state.showWelcomeHome || !session);
+    els.chatStage.classList.toggle("empty-state", !session);
   }
 
   if (!session) {

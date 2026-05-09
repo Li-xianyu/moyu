@@ -1,11 +1,3 @@
-// Silently swallow prettier parser rejections (babel/ts plugins throw on invalid code)
-window.addEventListener("unhandledrejection", function (event) {
-  var msg = event.reason && (event.reason.message || String(event.reason));
-  if (typeof msg === "string" && /SyntaxError|Missing semicolon|Unexpected token|prettier/i.test(msg)) {
-    event.preventDefault();
-  }
-});
-
 function buildChatHistory(session) {
   return buildHistoryMessagesFromSlice(getVisibleHistoryMessages(session), "HISTORY");
 }
