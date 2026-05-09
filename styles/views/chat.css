@@ -261,7 +261,7 @@
   padding: 0 0 4px;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 18px;
   min-height: 0;
   padding-bottom: max(4px, env(safe-area-inset-bottom));
 }
@@ -336,7 +336,6 @@
 .message-block {
   display: grid;
   gap: 4px;
-  margin-bottom: 18px;
 }
 
 .message-block.user {
@@ -779,7 +778,6 @@
   display: grid;
   justify-items: center;
   gap: 4px;
-  margin-bottom: 18px;
 }
 
 .narration-token-bar {
