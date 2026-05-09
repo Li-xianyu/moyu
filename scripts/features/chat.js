@@ -578,9 +578,13 @@ function renderMessages(options) {
     els.chatMessages.appendChild(_spacerDiv(bottomH));
   }
 
-  if (shouldStickToBottom) {
+  // Pin to bottom if explicitly requested or if already near bottom (< 200px)
+  var nearBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 200;
+  if (shouldStickToBottom || nearBottom) {
     requestAnimationFrame(function () {
-      scrollEl.scrollTop = scrollEl.scrollHeight;
+      requestAnimationFrame(function () {
+        scrollEl.scrollTop = scrollEl.scrollHeight;
+      });
     });
   }
 }
