@@ -1,3 +1,11 @@
+// Silently swallow prettier parser rejections (babel/ts plugins throw on invalid code)
+window.addEventListener("unhandledrejection", function (event) {
+  var msg = event.reason && (event.reason.message || String(event.reason));
+  if (typeof msg === "string" && /SyntaxError|Missing semicolon|Unexpected token|prettier/i.test(msg)) {
+    event.preventDefault();
+  }
+});
+
 function buildChatHistory(session) {
   return buildHistoryMessagesFromSlice(getVisibleHistoryMessages(session), "HISTORY");
 }
@@ -849,16 +857,6 @@ function formatCodeBlock(lang, code) {
     };
     var parser = parserMap[lower];
     if (parser) {
-      var rejectKey = "__moyu_prettier_reject_" + Math.random().toString(36).slice(2);
-      var onReject = function (event) {
-        if (event.reason && typeof event.reason.message === "string" &&
-            /^(prettier|SyntaxError|Missing semicolon|Unexpected token)/i.test(event.reason.message)) {
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          window[rejectKey] = true;
-        }
-      };
-      window.addEventListener("unhandledrejection", onReject);
       try {
         var formatFn = typeof prettier.formatSync === "function" ? prettier.formatSync : prettier.format;
         var result = formatFn(code, {
@@ -872,14 +870,8 @@ function formatCodeBlock(lang, code) {
         if (result && typeof result.then === "function") {
           throw new Error("prettier returned Promise");
         }
-        if (!window[rejectKey] && typeof result === "string") {
-          window.removeEventListener("unhandledrejection", onReject);
-          delete window[rejectKey];
-          return result;
-        }
+        if (typeof result === "string") return result;
       } catch (e) {}
-      window.removeEventListener("unhandledrejection", onReject);
-      delete window[rejectKey];
     }
   }
 
