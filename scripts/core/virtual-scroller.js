@@ -83,11 +83,7 @@ function createVirtualScroller(options) {
 
   function notifyIfChanged() {
     var range = computeRange();
-    var prev = prevRange;
-    if (prev.startIndex !== range.startIndex ||
-        prev.endIndex !== range.endIndex ||
-        Math.abs((prev.totalHeight || 0) - range.totalHeight) > 4 ||
-        Math.abs((prev.topOffset || 0) - range.topOffset) > 4) {
+    if (range.startIndex !== prevRange.startIndex || range.endIndex !== prevRange.endIndex) {
       prevRange = range;
       onChange(range);
     }
@@ -115,8 +111,7 @@ function createVirtualScroller(options) {
           var el = entries[i].target;
           var index = parseInt(el.dataset.virtualIndex, 10);
           if (isNaN(index) || index < 0 || index >= totalCount) continue;
-          var mb = parseFloat(window.getComputedStyle(el).marginBottom) || 0;
-          var newH = el.offsetHeight + mb;
+          var newH = el.offsetHeight;
           if (newH > 0 && itemHeights[index] !== newH) {
             itemHeights[index] = newH;
             changed = true;
@@ -131,9 +126,8 @@ function createVirtualScroller(options) {
     if (resizeObserver && el) {
       el.dataset.virtualIndex = index;
       resizeObserver.observe(el);
-      // Set initial height synchronously (include margin-bottom)
-      var mb = parseFloat(window.getComputedStyle(el).marginBottom) || 0;
-      var h = el.offsetHeight + mb;
+      // Set initial height synchronously
+      var h = el.offsetHeight;
       if (h > 0 && itemHeights[index] !== h) {
         itemHeights[index] = h;
       }
