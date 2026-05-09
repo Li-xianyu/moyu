@@ -835,39 +835,7 @@ function unescapeHtml(text) {
 function formatCodeBlock(lang, code) {
   var lower = (lang || "").toLowerCase();
 
-  // Prettier v3 — formatSync is the synchronous API (format() returns Promise in v3)
-  if (typeof prettier !== "undefined" && typeof prettierPlugins !== "undefined") {
-    var parserMap = {
-      javascript: "babel", js: "babel", jsx: "babel", cjs: "babel", mjs: "babel",
-      typescript: "typescript", ts: "typescript", tsx: "typescript",
-      json: "json", jsonc: "json", json5: "json",
-      css: "css", scss: "css", less: "css",
-      html: "html", xml: "html", svg: "html", htm: "html", xhtml: "html",
-      markdown: "markdown", md: "markdown", mdx: "markdown",
-      graphql: "graphql", gql: "graphql",
-      yaml: "yaml", yml: "yaml",
-    };
-    var parser = parserMap[lower];
-    if (parser) {
-      try {
-        var formatFn = typeof prettier.formatSync === "function" ? prettier.formatSync : prettier.format;
-        var result = formatFn(code, {
-          parser: parser,
-          plugins: prettierPlugins,
-          semi: true,
-          tabWidth: 2,
-          printWidth: 80,
-          singleQuote: false,
-        });
-        if (result && typeof result.then === "function") {
-          throw new Error("prettier returned Promise");
-        }
-        if (typeof result === "string") return result;
-      } catch (e) {}
-    }
-  }
-
-  // Fallback: js-beautify for JS/HTML/CSS
+  // js-beautify for JS/HTML/CSS
   if (typeof js_beautify !== "undefined") {
     try {
       var jsLangs = { js: 1, javascript: 1, jsx: 1, ts: 1, typescript: 1, tsx: 1, json: 1, jsonc: 1, cjs: 1, mjs: 1 };

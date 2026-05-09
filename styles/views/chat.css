@@ -351,6 +351,7 @@
 .message-block.agent {
   justify-items: start;
   align-self: flex-start;
+  width: 100%;
 }
 
 .message-meta {
@@ -460,12 +461,20 @@
   justify-self: stretch;
 }
 /* Work mode: agent messages without bubble (plain text like ChatGPT) */
-.message.agent-plain {
+.message.agent.agent-plain {
   background: transparent;
   border-color: transparent;
   padding: 0;
   border-radius: 0;
   line-height: 1.65;
+  width: min(62%, 560px);
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+  justify-self: center;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  box-sizing: border-box;
 }
 
 .message.user.single-line {
@@ -615,7 +624,8 @@
 .pre-code-block {
   display: block;
   width: 100%;
-  min-width: 360px;
+  max-width: 100%;
+  min-width: 100%;
   box-sizing: border-box;
   position: relative;
   margin: 8px 0;
@@ -638,6 +648,8 @@
   overflow-x: auto;
   overflow-y: auto;
   max-height: inherit;
+  max-width: 100%;
+  box-sizing: border-box;
   white-space: pre;
   word-wrap: normal;
   scrollbar-width: thin;
@@ -661,6 +673,8 @@
   text-transform: lowercase;
   letter-spacing: 0.03em;
   user-select: none;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 /* Copy button — in header bar, always visible */
 .code-copy-btn {
@@ -776,12 +790,16 @@
   padding: 2px 0;
   width: min(62%, 560px);
   max-width: 100%;
+  min-width: 0;
   margin: 0 auto;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .narration-block {
-  display: grid;
-  justify-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 4px;
 }
 
@@ -1478,6 +1496,7 @@
     border-left: 0;
     border-right: 0;
   }
+
 }
 
 /* ----- mode selector (create view) ----- */

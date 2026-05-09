@@ -360,6 +360,8 @@
     width: min(88%, 480px);
     font-size: 13px;
     line-height: 1.7;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
   }
 
   .system-notice {
@@ -425,6 +427,11 @@
   .memory-compress-popover {
     left: 0;
     width: min(232px, calc(100vw - 24px));
+  }
+
+  /* Work mode: agent reply container */
+  .message.agent.agent-plain {
+    width: min(88%, 560px);
   }
 }
 
@@ -528,6 +535,12 @@
 
   .narration {
     width: min(92%, 420px);
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+
+  .message.agent.agent-plain {
+    width: min(92%, 560px);
   }
 
   .composer-shell {

@@ -6,21 +6,14 @@
   <meta name="theme-color" content="#1e1e1e">
   <meta name="color-scheme" content="dark">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "26.5.9";</script>
+  <script>window.APP_VERSION = "26.5.10";</script>
   <script>
-    // Suppress prettier parser errors — they log via console.error AND unhandledrejection
+    // Suppress unhandled rejections from third-party CDN scripts
     (function () {
-      var _origError = console.error;
-      console.error = function () {
-        var msg = Array.prototype.join.call(arguments, " ");
-        if (/SyntaxError|Missing semicolon|Unexpected token|babel\.js|prettier parser/i.test(msg)) return;
-        return _origError.apply(console, arguments);
-      };
       window.addEventListener("unhandledrejection", function (e) {
         var msg = e.reason && (e.reason.message || String(e.reason));
-        if (/SyntaxError|Missing semicolon|Unexpected token|prettier/i.test(msg || "")) {
-          e.preventDefault();
-        }
+        if (!msg) return;
+        if (/SyntaxError/i.test(msg)) e.preventDefault();
       });
     })();
   </script>
@@ -579,9 +572,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-css.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-html.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/standalone.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/estree.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/babel.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/html.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/postcss.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/markdown.js"></script>
