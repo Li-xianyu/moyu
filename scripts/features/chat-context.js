@@ -849,12 +849,17 @@ function formatCodeBlock(lang, code) {
     };
     var parser = parserMap[lower];
     if (parser) {
-      try {
-        // Check syntactic validity first to avoid console noise from prettier parsers
-        var checkFn = typeof prettier.checkSync === "function" ? prettier.checkSync : prettier.check;
-        if (checkFn && !checkFn(code, { parser: parser, plugins: prettierPlugins })) {
-          throw new Error("prettier check failed");
+      var rejectKey = "__moyu_prettier_reject_" + Math.random().toString(36).slice(2);
+      var onReject = function (event) {
+        if (event.reason && typeof event.reason.message === "string" &&
+            /^(prettier|SyntaxError|Missing semicolon|Unexpected token)/i.test(event.reason.message)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          window[rejectKey] = true;
         }
+      };
+      window.addEventListener("unhandledrejection", onReject);
+      try {
         var formatFn = typeof prettier.formatSync === "function" ? prettier.formatSync : prettier.format;
         var result = formatFn(code, {
           parser: parser,
@@ -864,12 +869,18 @@ function formatCodeBlock(lang, code) {
           printWidth: 80,
           singleQuote: false,
         });
-        // Guard: prettier v3 format() returns Promise; if thenable, discard
         if (result && typeof result.then === "function") {
           throw new Error("prettier returned Promise");
         }
-        return typeof result === "string" ? result : code;
-      } catch {}
+        if (!window[rejectKey] && typeof result === "string") {
+          window.removeEventListener("unhandledrejection", onReject);
+          delete window[rejectKey];
+          return result;
+        }
+      } catch (e) {}
+      window.removeEventListener("unhandledrejection", onReject);
+      delete window[rejectKey];
+    }
     }
   }
 
