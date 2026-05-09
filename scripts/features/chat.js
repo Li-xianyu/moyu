@@ -473,6 +473,47 @@ async function runSessionTurn(session) {
     return;
   }
 
+  const isNoDirector = session.mode === SESSION_MODE_WORK && !session.directorModel && session.npcs.length === 1;
+
+  if (isNoDirector) {
+    try {
+      const npc = session.npcs[0];
+      setText(els.chatStatus, `${npc.name} 正在回复...`);
+      await callNpc(session, npc, {});
+      touchSession(session);
+      persistSessions();
+      renderMessages({ stickToBottom: true });
+      renderChatListMenu();
+      setText(els.chatStatus, `${npc.name} 已回复`);
+    } catch (error) {
+      debugLog("turn", "Turn failed", {
+        sessionId: session.id,
+        error: error.message,
+      });
+      console.error("[MOYU] Session turn failed", {
+        sessionId: session.id,
+        error: error.message,
+        host: session.host,
+      });
+      session.messages.push({
+        role: "system",
+        speaker: "系统",
+        content: `本轮生成失败：${error.message}`,
+        createdAt: new Date().toISOString(),
+      });
+      renderMessages({ stickToBottom: true });
+      persistSessions();
+      setText(els.chatStatus, "本轮回复失败");
+    } finally {
+      state.isSending = false;
+      els.sendBtn.disabled = false;
+      els.chatInput.disabled = false;
+      autoResizeChatInput();
+      updateComposerMode();
+    }
+    return;
+  }
+
   try {
     debugLog("turn", "Director turn started", {
       sessionId: session.id,
@@ -738,8 +779,11 @@ async function generateSessionTitle(session) {
       },
     ];
 
-    const directorConfig = resolveModelConfig(session.directorConfigId, session.directorModel, session.configId);
-    const content = await createChatCompletion(directorConfig.host, directorConfig.key, session.directorModel, messages, false);
+    const isNoDirector = !session.directorModel;
+    const titleModel = isNoDirector ? (session.npcs[0]?.model || "") : session.directorModel;
+    const titleConfigId = isNoDirector ? (session.npcs[0]?.configId || "") : session.directorConfigId;
+    const directorConfig = resolveModelConfig(titleConfigId, titleModel, session.configId);
+    const content = await createChatCompletion(directorConfig.host, directorConfig.key, titleModel, messages, false);
     const title = sanitizeGeneratedTitle(content);
     if (!title) {
       return;
@@ -809,7 +853,7 @@ async function callNpc(session, npc, npcInstructions = {}) {
     directiveSection,
     "",
     "=== 绝对禁止 ===",
-    "1. 禁止重复！如果你的上一轮发言（见 [HISTORY] 中 {npc} 标签下你自己的内容）与你要说的话有 40% 以上词语重合，这是严重违规。",
+    "1. 禁止重复！检查历史中你自己的上一条回复，如果与你要说的话有 40% 以上词语重合，这是严重违规。",
     "   每轮必须用全新的措辞、不同的比喻、不同的角度来回应。宁可说一句全新的话，也不准改写旧内容。",
     "2. 禁止模拟别的 NPC、禁止替别人补充、禁止自问自答、禁止连续写多轮对话。",
     `3. 禁止输出"${npc.name}："这种说话人标签，直接输出内容本身。`,
@@ -1389,22 +1433,15 @@ function buildScopedNpcHistory(session, npc) {
     scopedMessages = visibleMessages.slice(startIndex);
   }
 
-  const historyLines = scopedMessages
-    .map((message) => formatHistoryLine(message))
-    .filter(Boolean);
-
-  if (!historyLines.length) {
-    return [];
-  }
-
-  return [
-    {
-      role: "system",
-      content: npc?.transient
-        ? "[LIMITED_HISTORY]\n" + historyLines.join("\n") + "\n[/LIMITED_HISTORY]"
-        : "[LOCAL_HISTORY]\n" + historyLines.join("\n") + "\n[/LOCAL_HISTORY]",
-    },
-  ];
+  return scopedMessages.map((message) => {
+    if (message.uiType === "narration") {
+      return { role: "system", content: "[旁白] " + message.content };
+    }
+    if (message.role === "assistant") {
+      return { role: "assistant", content: (message.speaker || "") + ": " + message.content };
+    }
+    return { role: "user", content: message.content };
+  });
 }
 
 function findLastNpcMessageIndex(messages, speaker) {
@@ -1806,37 +1843,71 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   targetMessage.streaming = true;
   renderMessages({ stickToBottom: true });
 
-  const response = await fetch(`${targetConfig.host}/chat/completions`, {
+  const shouldTrackUsage = state.settings?.session?.showTokenDisplay !== false;
+
+  const buildStreamBody = (withUsage, withTemp = true) => {
+    const body = {
+      model,
+      messages,
+      stream: true,
+    };
+    if (withTemp) {
+      body.temperature = 0.5;
+    }
+    if (withUsage) {
+      body.stream_options = { include_usage: true };
+    }
+    return body;
+  };
+
+  const doStreamFetch = (withUsage, withTemp = true) => fetch(`${targetConfig.host}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${targetConfig.key}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.5,
-      stream: true,
-      stream_options: {
-        include_usage: true,
-      },
-    }),
+    body: JSON.stringify(buildStreamBody(withUsage, withTemp)),
   });
 
+  let response = shouldTrackUsage ? await doStreamFetch(true) : await doStreamFetch(false);
+  let errorDetail = "";
+
   if (!response.ok) {
-    const detail = await safeReadError(response);
+    errorDetail = await safeReadError(response);
+    const isUsageError = shouldTrackUsage && /stream_options|include_usage/i.test(errorDetail);
+    const isTempError = /temperature|unsupported param/i.test(errorDetail);
+
+    if (isUsageError && isTempError) {
+      console.warn("[MOYU] stream_options and temperature rejected, retrying without both", { model, detail: errorDetail });
+      response = await doStreamFetch(false, false);
+      errorDetail = "";
+    } else if (isUsageError) {
+      console.warn("[MOYU] stream_options rejected, retrying without it", { model, detail: errorDetail });
+      response = await doStreamFetch(false);
+      errorDetail = "";
+    } else if (isTempError) {
+      console.warn("[MOYU] temperature not supported, retrying without it", { model, detail: errorDetail });
+      response = await doStreamFetch(shouldTrackUsage, false);
+      errorDetail = "";
+    }
+  }
+
+  if (!response.ok) {
+    if (!errorDetail) {
+      errorDetail = await safeReadError(response);
+    }
     console.error("[MOYU] Stream chat completion failed", {
       speaker,
       model,
       status: response.status,
-      detail,
+      detail: errorDetail,
     });
     targetMessage.streaming = false;
-    targetMessage.content = `生成失败：模型 ${model} 调用失败：HTTP ${response.status}${detail ? ` ${detail}` : ""}`;
+    targetMessage.content = `生成失败：模型 ${model} 调用失败：HTTP ${response.status}${errorDetail ? ` ${errorDetail}` : ""}`;
     touchSession(session);
     persistSessions();
     renderMessages({ stickToBottom: true });
-    throw new Error(`模型 ${model} 调用失败：HTTP ${response.status}${detail ? ` ${detail}` : ""}`);
+    throw new Error(`模型 ${model} 调用失败：HTTP ${response.status}${errorDetail ? ` ${errorDetail}` : ""}`);
   }
 
   if (!response.body) {
@@ -1904,22 +1975,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     debugLog("npc", `${speaker} 首次调用返回空，正在重试...`, { sessionId: session.id });
     await wait(300);
 
-    const retryResponse = await fetch(`${session.host}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${targetConfig.key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: 0.5,
-        stream: true,
-        stream_options: {
-          include_usage: true,
-        },
-      }),
-    });
+    const retryResponse = await doStreamFetch(shouldTrackUsage);
 
     if (retryResponse.ok && retryResponse.body) {
       targetMessage.pending = false;
@@ -2153,7 +2209,7 @@ async function createChatCompletion(host, key, model, messages, stream = false, 
 }
 
 async function createChatCompletionPayload(host, key, model, messages, stream = false, temperature = 0.7) {
-  const response = await fetch(`${host}/chat/completions`, {
+  const doPayloadFetch = (withTemp) => fetch(`${host}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${key}`,
@@ -2162,13 +2218,26 @@ async function createChatCompletionPayload(host, key, model, messages, stream = 
     body: JSON.stringify({
       model,
       messages,
-      temperature,
-      stream,
+      ...(withTemp ? { temperature, stream } : { stream }),
     }),
   });
 
+  let response = await doPayloadFetch(true);
+  let detail = "";
+
   if (!response.ok) {
-    const detail = await safeReadError(response);
+    detail = await safeReadError(response);
+    if (/temperature|unsupported param|not support/i.test(detail)) {
+      console.warn("[MOYU] temperature not supported, retrying without it", { model, detail });
+      response = await doPayloadFetch(false);
+      detail = "";
+    }
+  }
+
+  if (!response.ok) {
+    if (!detail) {
+      detail = await safeReadError(response);
+    }
     console.error("[MOYU] Create chat completion failed", {
       model,
       status: response.status,

@@ -136,6 +136,12 @@ function showToast(message, type = "error", duration = 4000) {
   }, duration);
 }
 
+function scrollChatToBottom() {
+  if (els.chatMessages) {
+    smoothScrollTo(els.chatMessages, els.chatMessages.scrollHeight);
+  }
+}
+
 function maskKey(key) {
   if (key.length <= 8) {
     return "*".repeat(Math.max(key.length, 4));

@@ -1,23 +1,72 @@
+function getEntityTerm(mode) {
+  return mode === SESSION_MODE_WORK ? "AI" : "NPC";
+}
+
+function updateEntityTerms() {
+  const mode = getSelectedMode();
+  const term = getEntityTerm(mode);
+  const entityKeys = [
+    "create.subtitle", "create.editSubtitle", "create.newSubtitle",
+    "create.statusMaxNpc", "create.statusNpcAdded", "create.statusMinNpc",
+    "create.statusNpcDeleted", "create.statusNpcCount", "create.errorNpcCount",
+    "create.errorNpcModel", "create.npcTitle", "create.npcSubtitle",
+    "create.addNpc", "create.noDirectorHint", "create.noGlobalPromptHint",
+    "npc.unnamed", "npc.nameLabel", "npc.promptLabel", "npc.footer",
+  ];
+
+  entityKeys.forEach((key) => {
+    document.querySelectorAll(`[data-i18n="${key}"]`).forEach((node) => {
+      node.textContent = t(key, { entityType: term });
+    });
+  });
+}
+
+function setCreateStatus(message, tone = "") {
+  if (!els.createStatus) return;
+  els.createStatus.textContent = message;
+  els.createStatus.dataset.tone = tone;
+}
+
+function getNpcCountHint() {
+  const min = getModeMinNpcs();
+  return t("create.statusNpcCount", { min: String(min), max: "5", entityType: getEntityTerm(getSelectedMode()) });
+}
+
+function getMinNpcWarning() {
+  return t("create.statusMinNpc", { n: String(getModeMinNpcs()), entityType: getEntityTerm(getSelectedMode()) });
+}
+
 function bindCreateFlow() {
+  document.querySelectorAll('input[name="sessionMode"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (radio.checked) {
+        syncSessionModePresentation(Boolean(state.editingSessionId), radio.value);
+        setCreateStatus(getNpcCountHint(), "");
+      }
+    });
+  });
+
   els.addNpcBtn.addEventListener("click", () => {
     if (els.npcList.children.length >= 5) {
-      setText(els.createStatus, t("create.statusMaxNpc"));
+      setCreateStatus(t("create.statusMaxNpc", { entityType: getEntityTerm(getSelectedMode()) }), "warning");
       return;
     }
     addNpcCard();
-    setText(els.createStatus, t("create.statusNpcAdded"));
+    updateSingleNpcVisibility();
+    updateEntityTerms();
+    setCreateStatus(t("create.statusNpcAdded", { entityType: getEntityTerm(getSelectedMode()) }), "success");
   });
 
   els.createChatBtn.addEventListener("click", () => {
     const payload = collectSessionDraft();
     if (!payload.ok) {
-      setText(els.createStatus, payload.message);
+      setCreateStatus(payload.message, "error");
       return;
     }
 
     const activeConfig = getActiveConfig();
     if (!activeConfig) {
-      setText(els.createStatus, t("create.errorSelectConfig"));
+      setCreateStatus(t("create.errorSelectConfig"), "error");
       return;
     }
 
@@ -26,25 +75,27 @@ function bindCreateFlow() {
       return;
     }
 
-    const directorConfig = getConfigById(payload.directorConfigId);
-    if (!directorConfig?.host || !directorConfig?.key) {
-      setText(els.createStatus, t("create.statusDirectorUnavailable"));
+    const isSingleNpc = payload.mode === SESSION_MODE_WORK && payload.npcs.length <= 1;
+    const directorConfig = isSingleNpc ? null : getConfigById(payload.directorConfigId);
+    if (!isSingleNpc && (!directorConfig?.host || !directorConfig?.key)) {
+      setCreateStatus(t("create.statusDirectorUnavailable"), "error");
       return;
     }
 
+    const npcConfig = isSingleNpc ? getConfigById(payload.npcs[0].configId) : null;
     const session = {
       id: `session-${Date.now()}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      configId: directorConfig.id,
-      host: directorConfig.host,
-      key: directorConfig.key,
+      configId: isSingleNpc ? (npcConfig?.id || "") : (directorConfig?.id || ""),
+      host: isSingleNpc ? (npcConfig?.host || "") : (directorConfig?.host || ""),
+      key: isSingleNpc ? (npcConfig?.key || "") : (directorConfig?.key || ""),
       title: t("chat.generatingTitle"),
       titleSource: "auto",
       globalPrompt: payload.globalPrompt,
       mode: payload.mode,
-      directorModel: payload.directorModel,
-      directorConfigId: payload.directorConfigId,
+      directorModel: payload.directorModel || "",
+      directorConfigId: payload.directorConfigId || "",
       npcs: payload.npcs,
       transientNpcs: [],
       directorMemory: normalizeDirectorMemory(null),
@@ -68,19 +119,73 @@ function bindCreateFlow() {
     persistSessions();
     renderSession();
     switchView("chat");
-    setText(els.createStatus, t("create.statusCreated"));
+    setCreateStatus(t("create.statusCreated"), "success");
     setText(els.chatStatus, t("chat.readyAfterCreate"));
     void generateSessionTitle(session);
     void generateSuggestionGuide(session);
   });
 }
 
+function getSelectedMode() {
+  const radio = document.querySelector('input[name="sessionMode"]:checked');
+  return radio ? radio.value : SESSION_MODE_STORY;
+}
+
+function getModeMinNpcs() {
+  return getSelectedMode() === SESSION_MODE_WORK ? 1 : 2;
+}
+
+function updateSingleNpcVisibility() {
+  const directorField = document.getElementById("directorField");
+  const noDirectorHint = document.getElementById("noDirectorHint");
+  const globalPromptField = document.getElementById("globalPromptField");
+  const noGlobalPromptHint = document.getElementById("noGlobalPromptHint");
+  if (!directorField) return;
+  const isWorkModeSingleNpc = getSelectedMode() === SESSION_MODE_WORK && els.npcList.children.length <= 1;
+  directorField.hidden = isWorkModeSingleNpc;
+  if (noDirectorHint) {
+    noDirectorHint.hidden = !isWorkModeSingleNpc;
+  }
+  if (globalPromptField) {
+    globalPromptField.hidden = isWorkModeSingleNpc;
+  }
+  if (noGlobalPromptHint) {
+    noGlobalPromptHint.hidden = !isWorkModeSingleNpc;
+  }
+}
+
 function ensureMinimumNpcs() {
-  while (els.npcList.children.length < 2) {
+  const min = getModeMinNpcs();
+  while (els.npcList.children.length < min) {
     addNpcCard();
   }
   refreshModelSelectors();
   ensureSingleExpandedNpc();
+  updateSingleNpcVisibility();
+  updateEntityTerms();
+}
+
+function ensureModeMinNpcs() {
+  const min = getModeMinNpcs();
+  while (els.npcList.children.length < min) {
+    addNpcCard();
+  }
+  const cards = [...els.npcList.querySelectorAll(".npc-card")];
+  while (cards.length > min) {
+    const card = cards.pop();
+    const name = card.querySelector(".npc-name")?.value?.trim() || "";
+    const model = card.querySelector(".npc-model")?.value?.trim() || "";
+    const prompt = card.querySelector(".npc-prompt")?.value?.trim() || "";
+    if (!name && !model && !prompt) {
+      card.remove();
+    } else {
+      break;
+    }
+  }
+  refreshModelSelectors();
+  ensureSingleExpandedNpc();
+  updateSingleNpcVisibility();
+  updateEntityTerms();
 }
 
 function addNpcCard(prefill = {}) {
@@ -109,13 +214,15 @@ function addNpcCard(prefill = {}) {
   }
 
   removeBtn.addEventListener("click", () => {
-    if (els.npcList.children.length <= 2) {
-      setText(els.createStatus, t("create.statusMinNpc"));
+    if (els.npcList.children.length <= getModeMinNpcs()) {
+      setCreateStatus(getMinNpcWarning(), "warning");
       return;
     }
     card.remove();
     ensureSingleExpandedNpc();
-    setText(els.createStatus, t("create.statusNpcDeleted"));
+    updateSingleNpcVisibility();
+    updateEntityTerms();
+    setCreateStatus(t("create.statusNpcDeleted", { entityType: getEntityTerm(getSelectedMode()) }), "success");
   });
 
   els.npcList.appendChild(fragment);
@@ -135,7 +242,7 @@ function syncNpcCardTitle(card, titleNode, rawName = "") {
     return;
   }
   const text = String(rawName || "").trim();
-  titleNode.textContent = text || t("npc.unnamed");
+  titleNode.textContent = text || t("npc.unnamed", { entityType: getEntityTerm(getSelectedMode()) });
   card?.classList.toggle("is-unnamed", !text);
 }
 
@@ -328,20 +435,24 @@ function collectSessionDraft() {
   const modeRadio = document.querySelector('input[name="sessionMode"]:checked');
   const mode = modeRadio ? modeRadio.value : SESSION_MODE_STORY;
 
-  if (!globalPrompt) {
+  const minNpcs = mode === SESSION_MODE_WORK ? 1 : 2;
+  const isWorkModeSingleNpc = mode === SESSION_MODE_WORK && npcCards.length <= 1;
+
+  if (!globalPrompt && !isWorkModeSingleNpc) {
     return { ok: false, message: t("create.errorGlobalPrompt") };
   }
 
-  if (!directorSelection.model || !directorSelection.configId) {
+  if (npcCards.length < minNpcs || npcCards.length > 5) {
+    return { ok: false, message: t("create.errorNpcCount", { entityType: getEntityTerm(mode), min: String(minNpcs), max: "5" }) };
+  }
+
+  if (!isWorkModeSingleNpc && (!directorSelection.model || !directorSelection.configId)) {
     return { ok: false, message: t("create.errorDirector") };
   }
 
-  if (npcCards.length < 2 || npcCards.length > 5) {
-    return { ok: false, message: t("create.errorNpcCount") };
-  }
-
   const npcs = npcCards.map((card, index) => {
-    const name = card.querySelector(".npc-name").value.trim() || `NPC ${index + 1}`;
+    const prefix = getEntityTerm(mode);
+    const name = card.querySelector(".npc-name").value.trim() || `${prefix} ${index + 1}`;
     const modelSelection = parseModelOptionValue(card.querySelector(".npc-model").value);
     const prompt = card.querySelector(".npc-prompt").value.trim();
     return {
@@ -353,7 +464,7 @@ function collectSessionDraft() {
   });
 
   if (npcs.some((npc) => !npc.model || !npc.configId)) {
-    return { ok: false, message: t("create.errorNpcModel") };
+    return { ok: false, message: t("create.errorNpcModel", { entityType: getEntityTerm(mode) }) };
   }
 
   return {
@@ -403,8 +514,9 @@ function openSessionEditor(sessionId) {
   (session.npcs || []).forEach((npc) => addNpcCard(npc));
   ensureMinimumNpcs();
   updateCreateViewMode();
+  updateEntityTerms();
   switchView("create");
-  setText(els.createStatus, t("create.statusEditing"));
+  setCreateStatus(t("create.statusEditing"), "");
 }
 
 function prepareCreateViewForNewSession() {
@@ -416,7 +528,8 @@ function prepareCreateViewForNewSession() {
   ensureMinimumNpcs();
   refreshModelSelectors();
   updateCreateViewMode();
-  setText(els.createStatus, t("create.statusNpcCount"));
+  updateEntityTerms();
+  setCreateStatus(getNpcCountHint(), "");
 }
 
 function setSessionModeEditable(editable) {
@@ -441,6 +554,10 @@ function syncSessionModePresentation(isEditing, sessionMode) {
   if (hint) {
     hint.textContent = isEditing ? t("create.modeLockedHint") : t("create.modeHint");
   }
+
+  ensureModeMinNpcs();
+  updateSingleNpcVisibility();
+  updateEntityTerms();
 }
 
 function updateCreateViewMode() {
@@ -448,20 +565,26 @@ function updateCreateViewMode() {
   if (els.createViewTitle) {
     els.createViewTitle.textContent = isEditing ? t("create.editTitle") : t("create.title");
   }
-  if (els.createViewSubtitle) {
-    els.createViewSubtitle.textContent = isEditing
-      ? t("create.editSubtitle")
-      : t("create.newSubtitle");
-  }
-  els.createChatBtn.textContent = isEditing ? t("create.saveBtn") : t("create.submit");
-
-  setSessionModeEditable(!isEditing);
   let sessionMode = SESSION_MODE_STORY;
   if (isEditing) {
     const session = state.sessions.find((item) => item.id === state.editingSessionId);
     if (session && session.mode) {
       sessionMode = session.mode;
     }
+  } else {
+    sessionMode = getSelectedMode();
+  }
+  const term = getEntityTerm(sessionMode);
+  if (els.createViewSubtitle) {
+    els.createViewSubtitle.textContent = isEditing
+      ? t("create.editSubtitle", { entityType: term })
+      : t("create.newSubtitle", { entityType: term });
+  }
+  els.createChatBtn.textContent = isEditing ? t("create.saveBtn") : t("create.submit");
+
+  setSessionModeEditable(!isEditing);
+  if (!isEditing) {
+    sessionMode = getSelectedMode();
   }
   const modeRadio = document.querySelector(`input[name="sessionMode"][value="${sessionMode}"]`);
   if (modeRadio) {
@@ -475,22 +598,29 @@ function saveSessionEdits(payload, activeConfig) {
   if (!session) {
     state.editingSessionId = null;
     updateCreateViewMode();
-    setText(els.createStatus, t("create.statusNotFound"));
+    setCreateStatus(t("create.statusNotFound"), "error");
     return;
   }
 
-  const directorConfig = getConfigById(payload.directorConfigId);
-  if (!directorConfig?.host || !directorConfig?.key) {
-    setText(els.createStatus, t("create.statusDirectorUnavailable"));
-    return;
+  const isSingleNpc = payload.mode === SESSION_MODE_WORK && payload.npcs.length <= 1;
+
+  if (!isSingleNpc) {
+    const directorConfig = getConfigById(payload.directorConfigId);
+    if (!directorConfig?.host || !directorConfig?.key) {
+      setCreateStatus(t("create.statusDirectorUnavailable"), "error");
+      return;
+    }
+    session.directorModel = payload.directorModel;
+    session.directorConfigId = payload.directorConfigId;
+    session.configId = payload.directorConfigId;
+    session.host = directorConfig.host;
+    session.key = directorConfig.key;
+  } else {
+    session.directorModel = "";
+    session.directorConfigId = "";
   }
 
-  session.configId = payload.directorConfigId;
-  session.host = directorConfig.host;
-  session.key = directorConfig.key;
   session.globalPrompt = payload.globalPrompt;
-  session.directorModel = payload.directorModel;
-  session.directorConfigId = payload.directorConfigId;
   session.npcs = payload.npcs.map((npc) => ({ ...npc }));
   session.transientNpcs = (session.transientNpcs || []).filter((npc) => !session.npcs.some((baseNpc) => baseNpc.name === npc.name));
   session.directorMemory = normalizeDirectorMemory(null);
@@ -505,7 +635,7 @@ function saveSessionEdits(payload, activeConfig) {
   updateCreateViewMode();
   renderSession();
   switchView("chat");
-  setText(els.createStatus, t("create.statusSaved"));
+  setCreateStatus(t("create.statusSaved"), "success");
   setText(els.chatStatus, state.isSending ? t("create.statusProcessing") : t("chat.readyAfterCreate"));
   if (session.titleSource !== "manual") {
     void generateSessionTitle(session);

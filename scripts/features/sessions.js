@@ -31,7 +31,7 @@
   els.chatInput.disabled = false;
   els.sendBtn.disabled = false;
   if (els.compressMemoryBtn) {
-    els.compressMemoryBtn.disabled = state.isSending;
+    els.compressMemoryBtn.disabled = state.isSending || !session.directorModel;
   }
   if (els.editSessionBtn) {
     els.editSessionBtn.disabled = false;
@@ -39,13 +39,15 @@
   updateComposerMode();
   autoResizeChatInput();
   renderMessages();
+  scrollChatToBottom();
 }
 
 function renderChatMetaMarkup(session) {
+  const entityType = getEntityTerm(session.mode || SESSION_MODE_STORY);
   const npcCards = (session.npcs || []).map((npc) => `
     <div class="chat-meta-npc-item">
       <div class="chat-meta-npc-head">
-        <div class="chat-meta-npc-name">${escapeHtml(npc.name || t("npc.unnamed"))}</div>
+        <div class="chat-meta-npc-name">${escapeHtml(npc.name || t("npc.unnamed", { entityType }))}</div>
         <div class="chat-meta-npc-model">${escapeHtml(npc.model || t("npc.noModel"))}</div>
       </div>
       ${npc.prompt ? renderCollapsibleMetaText(npc.prompt, {
@@ -65,12 +67,12 @@ function renderChatMetaMarkup(session) {
         kind: "global-prompt",
       })}
     </section>
-    <section class="chat-meta-section compact">
+    ${session.directorModel ? `<section class="chat-meta-section compact">
       <div class="chat-meta-label">${escapeHtml(t("create.directorLabel"))}</div>
-      <div class="chat-meta-chip">${escapeHtml(session.directorModel || t("chat.directorEmpty"))}</div>
-    </section>
+      <div class="chat-meta-chip">${escapeHtml(session.directorModel)}</div>
+    </section>` : ""}
     <section class="chat-meta-section">
-      <div class="chat-meta-label">${escapeHtml(t("create.npcTitle"))}</div>
+      <div class="chat-meta-label">${escapeHtml(t("create.npcTitle", { entityType }))}</div>
       <div class="chat-meta-npc-list">${npcCards || `<div class="chat-meta-empty">${escapeHtml(t("chat.noNpcs"))}</div>`}</div>
     </section>
   `;
@@ -176,6 +178,7 @@ function renderChatListMenu() {
       persistSessions();
       renderSession();
       switchView("chat");
+      scrollChatToBottom();
     });
 
     const main = document.createElement("div");

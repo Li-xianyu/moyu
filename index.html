@@ -374,16 +374,11 @@
           <div class="panel-head">
             <div>
               <h2 data-i18n="create.title">创建新聊天</h2>
-              <p data-i18n="create.subtitle">先填写全局设定，再指定导演模型和 2-5 个 NPC。</p>
+              <p data-i18n="create.subtitle">先选择会话模式，再填写设定和 NPC 配置。</p>
             </div>
           </div>
 
           <div class="stack">
-            <label class="field">
-              <span data-i18n="create.globalPromptLabel">全局 Prompt</span>
-              <textarea id="globalPromptInput" rows="5" data-i18n-placeholder="create.globalPromptPlaceholder" placeholder="描述这个聊天是做什么的、世界观是什么、所有 AI 都应该知道什么。"></textarea>
-            </label>
-
             <div class="field">
               <span data-i18n="create.modeLabel">会话模式</span>
               <div id="sessionModeSelector" class="mode-selector">
@@ -405,12 +400,23 @@
               <small id="sessionModeHint" class="hint-text" data-i18n="create.modeHint">创建时选择会话模式；创建后模式会锁定。两种模式都由导演调度，只是调度目标不同。</small>
             </div>
 
-            <label class="field">
-              <span data-i18n="create.directorLabel">导演模型</span>
-              <select id="directorModelSelect">
-                <option value="">请先在设置中勾选工作模型</option>
-              </select>
-            </label>
+            <div id="globalPromptField">
+              <label class="field">
+                <span data-i18n="create.globalPromptLabel">全局 Prompt</span>
+                <textarea id="globalPromptInput" rows="5" data-i18n-placeholder="create.globalPromptPlaceholder" placeholder="描述这个聊天是做什么的、世界观是什么、所有 AI 都应该知道什么。"></textarea>
+              </label>
+            </div>
+
+            <div id="directorField">
+              <label class="field">
+                <span data-i18n="create.directorLabel">导演模型</span>
+                <select id="directorModelSelect">
+                  <option value="">请先在设置中勾选工作模型</option>
+                </select>
+              </label>
+            </div>
+            <div id="noDirectorHint" class="hint-text" data-i18n="create.noDirectorHint" hidden></div>
+            <div id="noGlobalPromptHint" class="hint-text" data-i18n="create.noGlobalPromptHint" hidden></div>
 
             <div class="npc-header">
               <div>

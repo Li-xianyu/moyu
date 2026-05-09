@@ -205,13 +205,23 @@ function migrateLegacySessions() {
   persistSessions();
 }
 
-function t(key) {
-  return i18n[state.locale]?.[key] || key;
+function t(key, params = {}) {
+  let text = i18n[state.locale]?.[key] || key;
+  if (params && typeof params === "object") {
+    for (const [k, v] of Object.entries(params)) {
+      text = text.replace(new RegExp(`\\$\\{${k}\\}`, "g"), v);
+    }
+  }
+  return text;
 }
 
 function applyI18n() {
+  const mode = typeof getSelectedMode === "function" ? getSelectedMode() : SESSION_MODE_STORY;
+  const entityType = mode === SESSION_MODE_WORK ? "AI" : "NPC";
+  const defaultParams = { entityType };
+
   document.querySelectorAll("[data-i18n]").forEach((node) => {
-    node.textContent = t(node.dataset.i18n);
+    node.textContent = t(node.dataset.i18n, defaultParams);
     if (node.id === "chatStatus" && typeof getChatStatusTone === "function") {
       node.dataset.tone = getChatStatusTone(node.textContent);
     }

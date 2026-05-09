@@ -133,6 +133,26 @@ textarea {
   font-size: 13px;
 }
 
+#createStatus[data-tone="success"] {
+  color: #73c991;
+}
+
+#createStatus[data-tone="error"] {
+  color: #f48771;
+}
+
+#createStatus[data-tone="warning"] {
+  color: #dcdcaa;
+}
+
+#noDirectorHint,
+#noGlobalPromptHint {
+  color: #9cdcfe;
+  font-weight: 600;
+  font-style: italic;
+  margin-top: 4px;
+}
+
 .settings-work-models-panel .hint-text {
   width: 100%;
   line-height: 1.65;
