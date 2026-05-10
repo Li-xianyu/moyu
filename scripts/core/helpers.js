@@ -274,16 +274,27 @@ function debugLog(scope, message, payload) {
     return;
   }
 
+  const SCOPE_COLORS = {
+    director: "#9b59b6",
+    turn: "#27ae60",
+    compress: "#e67e22",
+    npc: "#1abc9c",
+    settings: "#7f8c8d",
+    bootstrap: "#2980b9",
+    stripThinking: "#e74c3c",
+  };
+
   const time = new Date().toLocaleTimeString("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   });
-  const prefix = `%c[MOYU DEBUG]%c ${time} %c${scope}%c ${message}`;
+  const scopeLabel = t("debug.scope." + scope) || scope;
+  const bg = SCOPE_COLORS[scope] || "#007acc";
+  const prefix = `%c${scopeLabel}%c ${time} %c${message}`;
   const styles = [
-    "color:#ffffff;background:#007acc;padding:2px 6px;border-radius:999px;font-weight:700;",
-    "color:inherit;background:transparent;",
-    "color:#4fc1ff;font-weight:700;",
+    `color:#fff;background:${bg};padding:2px 8px;border-radius:999px;font-weight:700;font-size:11px;`,
+    "color:#888;",
     "color:inherit;",
   ];
 
@@ -292,7 +303,7 @@ function debugLog(scope, message, payload) {
     return;
   }
 
-  console.groupCollapsed(prefix, ...styles);
+  console.group(prefix, ...styles);
   console.log(payload);
   console.groupEnd();
 }

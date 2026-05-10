@@ -110,7 +110,7 @@ function syncMobileDebugConsole() {
           height: window.visualViewport?.height || window.innerHeight,
         },
       });
-      debugLog("bootstrap", "Mobile debug console enabled", {
+      debugLog("bootstrap", t("debug.msg.mobileDebugConsole"), {
         href: location.href,
         viewportWidth: window.visualViewport?.width || window.innerWidth,
         viewportHeight: window.visualViewport?.height || window.innerHeight,

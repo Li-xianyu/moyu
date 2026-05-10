@@ -433,6 +433,10 @@
   .message.agent.agent-plain {
     width: min(88%, 560px);
   }
+  .message-block.agent-plain-block .message-meta,
+  .message-block.agent-plain-block .message-tools {
+    width: min(88%, 560px);
+  }
 }
 
 @media (max-width: 640px) {
@@ -540,6 +544,10 @@
   }
 
   .message.agent.agent-plain {
+    width: min(92%, 560px);
+  }
+  .message-block.agent-plain-block .message-meta,
+  .message-block.agent-plain-block .message-tools {
     width: min(92%, 560px);
   }
 

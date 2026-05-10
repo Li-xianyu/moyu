@@ -506,6 +506,7 @@ button,
 
 .app-shell.sidebar-collapsed .main {
   transform: translateX(-280px);
+  width: calc(100% + 280px);
 }
 .main {
   transition: transform 0.22s ease;

@@ -44,7 +44,7 @@ function bindSettings() {
     state.settings.developer = state.settings.developer || {};
     state.settings.developer.debugMode = Boolean(els.debugModeToggle.checked);
     persistSettings();
-    debugLog("settings", "Debug mode toggled", {
+    debugLog("settings", t("debug.msg.debugModeToggled"), {
       enabled: state.settings.developer.debugMode,
     });
   });

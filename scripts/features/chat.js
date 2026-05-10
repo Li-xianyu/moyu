@@ -35,14 +35,14 @@ function bindChat() {
   if (els.compressMemoryBtn) {
     ensureCompressMemoryPopover();
     els.compressMemoryBtn.addEventListener("pointerdown", (event) => {
-      debugLog("compress", "Toolbar icon pointerdown", {
+      debugLog("compress", t("debug.msg.toolbarIconPointerdown"), {
         disabled: Boolean(els.compressMemoryBtn?.disabled),
         open: state.openCompressMemoryInfo,
       });
       event.preventDefault();
     });
     els.compressMemoryBtn.addEventListener("click", (event) => {
-      debugLog("compress", "Toolbar icon click", {
+      debugLog("compress", t("debug.msg.toolbarIconClick"), {
         disabled: Boolean(els.compressMemoryBtn?.disabled),
         openBefore: state.openCompressMemoryInfo,
       });
@@ -111,17 +111,15 @@ function bindChat() {
   }
   els.chatInput.addEventListener("input", autoResizeChatInput);
   els.chatMessages.addEventListener("click", (event) => {
-    if (!event.target.closest(".message.user")) {
-      if (state.openUserMessageToolsId) {
-        state.openUserMessageToolsId = null;
-        renderMessages();
-      }
+    if (!event.target.closest(".message.user") && state.openUserMessageToolsId) {
+      const block = els.chatMessages.querySelector(`[data-message-id="${state.openUserMessageToolsId}"]`);
+      if (block) block.classList.remove("tools-open");
+      state.openUserMessageToolsId = null;
     }
-    if (!event.target.closest(".message.agent")) {
-      if (state.openAgentTokenInfoId) {
-        state.openAgentTokenInfoId = null;
-        renderMessages();
-      }
+    if (!event.target.closest(".message.agent") && state.openAgentTokenInfoId) {
+      const block = els.chatMessages.querySelector(`[data-message-id="${state.openAgentTokenInfoId}"]`);
+      if (block) block.classList.remove("tools-open", "token-open");
+      state.openAgentTokenInfoId = null;
     }
   });
   document.addEventListener("click", (event) => {
@@ -131,12 +129,21 @@ function bindChat() {
     if (event.target.closest("#compressMemoryBtn") || event.target.closest(".memory-compress-popover")) {
       return;
     }
-    debugLog("compress", "Popover closed by outside click");
+    debugLog("compress", t("debug.msg.popoverClosedOutside"));
     state.openCompressMemoryInfo = false;
     renderCompressMemoryPopover();
   });
   window.addEventListener("resize", autoResizeChatInput);
   autoResizeChatInput();
+
+  // 滚动跟踪：检测用户是否主动离开底部
+  const scrollEl = els.chatMessages.closest(".main") || els.chatMessages;
+  if (scrollEl) {
+    scrollEl.addEventListener("scroll", () => {
+      const distFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+      state.userScrolledAway = distFromBottom > 100;
+    }, { passive: true });
+  }
 }
 
 function autoResizeChatInput() {
@@ -306,15 +313,28 @@ async function regenerateFromUserMessage(messageId) {
   updateComposerMode();
   clearUserMessageEdit();
   applyUserMessageEdit(session, messageId, target.content || "");
-  debugLog("turn", "Regenerate from user message", {
+  debugLog("turn", t("debug.msg.regenerate"), {
     sessionId: session.id,
     messageId,
     content: target.content || "",
   });
   touchSession(session);
   persistSessions();
-  renderMessages({ stickToBottom: true });
+  renderMessages();
   renderChatListMenu();
+  const userBlocks = els.chatMessages.querySelectorAll('.message-block.user');
+  const lastUser = userBlocks[userBlocks.length - 1];
+  if (lastUser) {
+    els.chatMessages.classList.add('hide-before');
+    if (!els.chatMessages.querySelector('.scroll-spacer')) {
+      const spacer = document.createElement('div');
+      spacer.className = 'scroll-spacer';
+      spacer.style.cssText = 'flex:0 0 auto;pointer-events:none;height:100vh;min-height:600px;';
+      els.chatMessages.appendChild(spacer);
+    }
+    lastUser.scrollIntoView({ block: "start" });
+    state.userScrolledAway = true;
+  }
   await runSessionTurn(session);
 }
 
@@ -338,193 +358,420 @@ function applyUserMessageEdit(session, messageId, content) {
   session.transientNpcs = [];
 }
 
+function buildBubbleContent(message) {
+  const session = getCurrentSession();
+  const sessionMode = session?.mode || SESSION_MODE_STORY;
+  let html = "";
+  const thinkingText = (message.thinking || "").trim();
+  if (thinkingText) {
+    html += `<details class="thinking-section"${message.streaming ? " open" : ""}>`;
+    html += `<summary><span class="thinking-label">思考过程</span></summary>`;
+    html += `<div class="thinking-content">${escapeHtml(thinkingText).replace(/\n/g, "<br>")}</div>`;
+    html += `</details>`;
+  }
+  const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
+  if (enableMd) {
+    html += renderMarkdownContent(escapeHtml(message.content));
+  } else if (sessionMode === SESSION_MODE_STORY) {
+    html += renderStoryContent(escapeHtml(message.content));
+  } else {
+    html += escapeHtml(message.content).replace(/\n/g, "<br>");
+  }
+  return html;
+}
+
+function updateStreamingBubble(targetMessage) {
+  const article = targetMessage.id ? els.chatMessages.querySelector(`[data-message-id="${targetMessage.id}"]`) : null;
+  if (!article) {
+    renderMessages({ stickToBottom: true });
+    return;
+  }
+
+  const isNarration = targetMessage.uiType === "narration";
+  const bubble = isNarration ? article.querySelector('.narration') : article.querySelector('.message');
+  if (!bubble) {
+    renderMessages({ stickToBottom: true });
+    return;
+  }
+
+  if (isNarration) {
+    const narrationText = sanitizeNarrationText(targetMessage.content);
+    bubble.innerHTML = escapeHtml(narrationText).replace(/\n/g, "<br>");
+    const isSingleLine = !targetMessage.pending && !/[\r\n]/.test(narrationText);
+    bubble.classList.toggle('single-line', isSingleLine);
+  } else {
+    // FLIP: capture old code block heights for smooth expansion
+    const oldPreHeights = Array.from(bubble.querySelectorAll('.pre-code-block'), pre => pre.offsetHeight);
+
+    bubble.innerHTML = buildBubbleContent(targetMessage);
+
+    // Animate code block height transitions
+    if (oldPreHeights.length) {
+      requestAnimationFrame(() => {
+        const newPres = bubble.querySelectorAll('.pre-code-block');
+        newPres.forEach((pre, i) => {
+          const oldH = i < oldPreHeights.length ? oldPreHeights[i] : 0;
+          if (oldH > 0) {
+            const newH = pre.scrollHeight;
+            if (newH > oldH) {
+              pre.style.height = oldH + 'px';
+              pre.style.overflow = 'hidden';
+              pre.style.transition = 'height 0.12s ease';
+              requestAnimationFrame(() => {
+                pre.style.height = newH + 'px';
+                setTimeout(() => {
+                  pre.style.height = '';
+                  pre.style.overflow = '';
+                  pre.style.transition = '';
+                }, 150);
+              });
+            }
+          }
+        });
+      });
+    }
+
+    const session = getCurrentSession();
+    const sessionMode = session?.mode || SESSION_MODE_STORY;
+    const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
+    if (typeof hljs !== 'undefined' && enableMd) {
+      bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
+    }
+    if (sessionMode === SESSION_MODE_WORK) {
+      bubble.querySelectorAll('.code-copy-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          var pre = btn.closest('.pre-code-block');
+          const code = pre ? pre.querySelector('code').textContent : '';
+          navigator.clipboard.writeText(code).then(() => {
+            btn.className = 'code-copy-btn copied';
+            btn.innerHTML = '<i class="bi bi-check"></i>';
+            setTimeout(() => {
+              btn.className = 'code-copy-btn';
+              btn.innerHTML = '<i class="bi bi-clipboard"></i>';
+            }, 1500);
+          }).catch(() => {});
+        });
+      });
+    }
+    const isSingleLine = !targetMessage.pending && !/[\r\n]/.test(targetMessage.content || "");
+    bubble.classList.toggle('single-line', isSingleLine);
+  }
+
+  // streaming 过程中用户消息钉在视口顶部
+  if (state.userScrolledAway) {
+    const userBlock = els.chatMessages.querySelector('.message-block.user:last-child');
+    if (userBlock) {
+      userBlock.scrollIntoView({ block: "start" });
+    }
+  }
+}
+
 function renderMessages(options = {}) {
   const shouldStickToBottom = Boolean(options.stickToBottom);
   const scrollEl = els.chatMessages.closest(".main") || els.chatMessages;
   const previousScrollTop = scrollEl.scrollTop;
   const previousScrollHeight = scrollEl.scrollHeight;
   const session = getCurrentSession();
-  els.chatMessages.innerHTML = "";
+
   if (!session) {
+    els.chatMessages.innerHTML = "";
     return;
   }
 
   const sessionMode = session.mode || SESSION_MODE_STORY;
+  const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
+
+  // Index existing DOM by messageId — avoid destroying/recreating unchanged nodes
+  const oldNodes = new Map();
+  for (const child of els.chatMessages.children) {
+    if (child.dataset?.messageId) oldNodes.set(child.dataset.messageId, child);
+  }
+
+  const fragment = document.createDocumentFragment();
 
   session.messages.forEach((message) => {
+    // system-notice: no stable ID, always rebuild (rare, not worth diffing)
     if (message.uiType === "system-notice") {
       const notice = document.createElement("div");
       notice.className = "system-notice";
       notice.innerHTML = escapeHtml(message.content).replace(/\n/g, "<br>");
-      els.chatMessages.appendChild(notice);
+      fragment.appendChild(notice);
       return;
     }
 
     if (message.uiType === "narration") {
-      const narrationText = sanitizeNarrationText(message.content);
-      const tokenLabel = buildMessageTokenLabel(message);
-      const wrapper = document.createElement("article");
-      wrapper.className = `narration-block ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
-
-      const narration = document.createElement("div");
-      narration.className = `narration ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${!message.pending && !/[\r\n]/.test(narrationText) ? "single-line" : ""}`.trim();
-      narration.innerHTML = message.pending
-        ? `<span class="typing-row"><span></span><span></span><span></span></span>`
-        : escapeHtml(narrationText).replace(/\n/g, "<br>");
-      if (message.id && tokenLabel && isMobileTokenToggleMode()) {
-        narration.addEventListener("click", () => {
-          if (window.getSelection().toString().trim()) return;
-          state.openAgentTokenInfoId = state.openAgentTokenInfoId === message.id ? null : message.id;
-          renderMessages();
-        });
+      const existing = message.id ? oldNodes.get(message.id) : null;
+      if (existing) {
+        oldNodes.delete(message.id);
+        refreshNarrationNode(existing, message);
+        fragment.appendChild(existing);
+      } else {
+        const node = buildNarrationNode(message);
+        if (node) fragment.appendChild(node);
       }
-      wrapper.appendChild(narration);
-
-      if (message.id && !message.pending) {
-        const tokenBar = document.createElement("div");
-        tokenBar.className = `message-token-bar narration-token-bar ${tokenLabel ? "has-token" : ""}`.trim();
-        tokenBar.textContent = tokenLabel;
-        wrapper.appendChild(tokenBar);
-      }
-
-      els.chatMessages.appendChild(wrapper);
       return;
     }
 
-    const block = document.createElement("article");
-    block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
-
-    if (message.role === "assistant" || message.role === "user") {
-      const meta = document.createElement("div");
-      meta.className = "message-meta";
-      meta.innerHTML = `
-        <strong>${escapeHtml(message.speaker)}</strong>
-        <span>${new Date(message.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span>
-      `;
-      block.appendChild(meta);
-    }
-
-    const tokenLabel = message.role === "assistant" ? buildMessageTokenLabel(message) : "";
-
-    const isSingleLineMessage = !message.pending && !/[\r\n]/.test(message.content || "");
-    const isWorkAgent = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
-    const bubble = document.createElement("div");
-    bubble.className = `message ${message.role === "user" ? "user" : message.role === "system" ? "system" : "agent"} ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${isSingleLineMessage ? "single-line" : ""} ${isWorkAgent ? "agent-plain" : ""}`.trim();
-    if (message.pending) {
-      bubble.innerHTML = `<span class="typing-row"><span></span><span></span><span></span></span>`;
+    // Regular user / assistant message
+    const existing = message.id ? oldNodes.get(message.id) : null;
+    if (existing) {
+      oldNodes.delete(message.id);
+      refreshMessageBlock(existing, message, sessionMode, enableMd);
+      fragment.appendChild(existing);
     } else {
-      let html = "";
-      const thinkingText = (message.thinking || "").trim();
-      if (thinkingText) {
-        html += `<details class="thinking-section"${message.streaming ? " open" : ""}>`;
-        html += `<summary><span class="thinking-label">思考过程</span></summary>`;
-        html += `<div class="thinking-content">${escapeHtml(thinkingText).replace(/\n/g, "<br>")}</div>`;
-        html += `</details>`;
-      }
-      const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
-      if (enableMd) {
-        html += renderMarkdownContent(escapeHtml(message.content));
-      } else if (sessionMode === SESSION_MODE_STORY) {
-        html += renderStoryContent(escapeHtml(message.content));
-      } else {
-        html += escapeHtml(message.content).replace(/\n/g, "<br>");
-      }
-      bubble.innerHTML = html;
-      if (typeof hljs !== 'undefined' && enableMd) {
-        bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
-      }
-      if (sessionMode === SESSION_MODE_WORK) {
-        bubble.querySelectorAll('.code-copy-btn').forEach((btn) => {
-          btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            var pre = btn.closest('.pre-code-block');
-            const code = pre ? pre.querySelector('code').textContent : '';
-            navigator.clipboard.writeText(code).then(() => {
-              btn.className = 'code-copy-btn copied';
-              btn.innerHTML = '<i class="bi bi-check"></i>';
-              setTimeout(() => {
-                btn.className = 'code-copy-btn';
-                btn.innerHTML = '<i class="bi bi-clipboard"></i>';
-              }, 1500);
-            }).catch(() => {});
-          });
-        });
-      }
-    }
-    if (message.role === "user" && message.id) {
-      bubble.addEventListener("click", () => {
-        if (window.getSelection().toString().trim()) return;
-        state.openUserMessageToolsId = state.openUserMessageToolsId === message.id ? null : message.id;
-        renderMessages();
-      });
-    }
-    if (message.role === "assistant" && message.id && isMobileTokenToggleMode()) {
-      bubble.addEventListener("click", () => {
-        if (window.getSelection().toString().trim()) return;
-        state.openAgentTokenInfoId = state.openAgentTokenInfoId === message.id ? null : message.id;
-        renderMessages();
-      });
-    }
-    block.appendChild(bubble);
-
-    if (message.id && !message.pending) {
-      const tools = document.createElement("div");
-      tools.className = "message-tools";
-      if (message.role === "user") {
-        tools.style.justifyContent = "flex-end";
-      } else if (message.role === "assistant") {
-        tools.style.justifyContent = "space-between";
-      }
-
-      if (message.role === "assistant" && tokenLabel) {
-        const tokenSpan = document.createElement("span");
-        tokenSpan.className = "message-token-label";
-        tokenSpan.textContent = tokenLabel;
-        tools.appendChild(tokenSpan);
-      }
-
-      const copyBtn = document.createElement("button");
-      copyBtn.type = "button";
-      copyBtn.className = "message-edit-btn";
-      copyBtn.title = t("chat.copy");
-      copyBtn.innerHTML = `
-        <i class="bi bi-copy message-edit-icon"></i>
-      `;
-      copyBtn.addEventListener("click", () => copyMessageContent(message.id));
-      tools.appendChild(copyBtn);
-
-      if (message.role === "user") {
-        const editBtn = document.createElement("button");
-        editBtn.type = "button";
-        editBtn.className = `message-edit-btn ${state.editingUserMessageId === message.id ? "active" : ""}`.trim();
-        editBtn.innerHTML = `
-          <i class="bi bi-pencil message-edit-icon"></i>
-        `;
-        editBtn.addEventListener("click", () => beginUserMessageEdit(message.id));
-        tools.appendChild(editBtn);
-
-        const retryBtn = document.createElement("button");
-        retryBtn.type = "button";
-        retryBtn.className = "message-edit-btn";
-        retryBtn.innerHTML = `
-          <i class="bi bi-arrow-counterclockwise message-edit-icon"></i>
-        `;
-        retryBtn.addEventListener("click", () => regenerateFromUserMessage(message.id));
-        tools.appendChild(retryBtn);
-      }
-      block.appendChild(tools);
-
-      els.chatMessages.appendChild(block);
+      const block = buildMessageBlock(message, sessionMode, enableMd);
+      if (block) fragment.appendChild(block);
     }
   });
 
+  // Remove stale nodes (truncated or replaced messages)
+  for (const [, node] of oldNodes) node.remove();
+
+  // Replace children — existing nodes are MOVED, not destroyed
+  els.chatMessages.replaceChildren(fragment);
+
+  // --- Scroll handling (unchanged) ---
   if (shouldStickToBottom) {
-    scrollEl.scrollTop = scrollEl.scrollHeight;
+    if (!state.userScrolledAway) {
+      scrollEl.scrollTop = scrollEl.scrollHeight;
+      state.userScrolledAway = false;
+    } else {
+      els.chatMessages.classList.add('hide-before');
+      if (!els.chatMessages.querySelector('.scroll-spacer')) {
+        const spacer = document.createElement('div');
+        spacer.className = 'scroll-spacer';
+        spacer.style.cssText = 'flex:0 0 auto;pointer-events:none;height:100vh;min-height:600px;';
+        els.chatMessages.appendChild(spacer);
+      }
+      const userBlock = els.chatMessages.querySelector('.message-block.user:last-child');
+      if (userBlock) {
+        userBlock.scrollIntoView({ block: "start" });
+      }
+    }
     return;
   }
 
   const heightDelta = scrollEl.scrollHeight - previousScrollHeight;
   scrollEl.scrollTop = previousScrollTop + Math.max(0, heightDelta);
+}
+
+/* ---- Narration helpers ---- */
+function buildNarrationNode(message) {
+  const narrationText = sanitizeNarrationText(message.content);
+  const tokenLabel = buildMessageTokenLabel(message);
+  const wrapper = document.createElement("article");
+  wrapper.className = `narration-block ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
+  if (message.id) wrapper.dataset.messageId = message.id;
+  const narration = document.createElement("div");
+  narration.className = `narration ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${!message.pending && !/[\r\n]/.test(narrationText) ? "single-line" : ""}`.trim();
+  narration.innerHTML = message.pending
+    ? `<span class="typing-row"><span></span><span></span><span></span></span>`
+    : escapeHtml(narrationText).replace(/\n/g, "<br>");
+  if (message.id && tokenLabel && isMobileTokenToggleMode()) {
+    narration.addEventListener("click", () => {
+      if (window.getSelection().toString().trim()) return;
+      const wasOpen = state.openAgentTokenInfoId === message.id;
+      state.openAgentTokenInfoId = wasOpen ? null : message.id;
+      wrapper.classList.toggle("token-open", !wasOpen);
+    });
+  }
+  wrapper.appendChild(narration);
+  if (message.id && !message.pending) {
+    const tokenBar = document.createElement("div");
+    tokenBar.className = `message-token-bar narration-token-bar ${tokenLabel ? "has-token" : ""}`.trim();
+    tokenBar.textContent = tokenLabel;
+    wrapper.appendChild(tokenBar);
+  }
+  return wrapper;
+}
+
+function refreshNarrationNode(wrapper, message) {
+  const narrationText = sanitizeNarrationText(message.content);
+  const tokenLabel = buildMessageTokenLabel(message);
+  wrapper.className = `narration-block ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
+  const bubble = wrapper.querySelector('.narration');
+  if (bubble) {
+    bubble.className = `narration ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${!message.pending && !/[\r\n]/.test(narrationText) ? "single-line" : ""}`.trim();
+    const body = message.pending
+      ? `<span class="typing-row"><span></span><span></span><span></span></span>`
+      : escapeHtml(narrationText).replace(/\n/g, "<br>");
+    if (bubble.innerHTML !== body) bubble.innerHTML = body;
+  }
+  const tokenBar = wrapper.querySelector('.message-token-bar');
+  if (tokenBar) {
+    tokenBar.className = `message-token-bar narration-token-bar ${tokenLabel ? "has-token" : ""}`.trim();
+    tokenBar.textContent = tokenLabel;
+  }
+}
+
+/* ---- Message block helpers ---- */
+function buildMessageBlock(message, sessionMode, enableMd) {
+  const block = document.createElement("article");
+  const isAgentPlainBlock = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
+  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
+  if (message.id) block.dataset.messageId = message.id;
+
+  if (message.role === "assistant" || message.role === "user") {
+    const meta = document.createElement("div");
+    meta.className = "message-meta";
+    meta.innerHTML = `\n        <strong>${escapeHtml(message.speaker)}</strong>\n        <span>${new Date(message.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span>\n      `;
+    block.appendChild(meta);
+  }
+
+  const isSingleLineMessage = !message.pending && !/[\r\n]/.test(message.content || "");
+  const isWorkAgent = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
+  const bubble = document.createElement("div");
+  bubble.className = `message ${message.role === "user" ? "user" : message.role === "system" ? "system" : "agent"} ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${isSingleLineMessage ? "single-line" : ""} ${isWorkAgent ? "agent-plain" : ""}`.trim();
+
+  if (message.pending) {
+    bubble.innerHTML = `<span class="typing-row"><span></span><span></span><span></span></span>`;
+  } else {
+    bubble.innerHTML = buildBubbleContent(message);
+    if (typeof hljs !== 'undefined' && enableMd) {
+      bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
+    }
+    if (sessionMode === SESSION_MODE_WORK) {
+      bubble.querySelectorAll('.code-copy-btn').forEach(bindCodeCopyBtn);
+    }
+  }
+
+  if (message.role === "user" && message.id) {
+    bubble.addEventListener("click", () => {
+      if (window.getSelection().toString().trim()) return;
+      if (!block.parentNode) return;
+      const wasOpen = state.openUserMessageToolsId === message.id;
+      if (state.openAgentTokenInfoId) {
+        const agentBlock = els.chatMessages.querySelector(`[data-message-id="${state.openAgentTokenInfoId}"]`);
+        if (agentBlock) agentBlock.classList.remove("tools-open", "token-open");
+        state.openAgentTokenInfoId = null;
+      }
+      state.openUserMessageToolsId = wasOpen ? null : message.id;
+      block.classList.toggle("tools-open", !wasOpen);
+    });
+  }
+  if (message.role === "assistant" && message.id && isMobileTokenToggleMode()) {
+    bubble.addEventListener("click", () => {
+      if (window.getSelection().toString().trim()) return;
+      if (!block.parentNode) return;
+      const wasOpen = state.openAgentTokenInfoId === message.id;
+      if (state.openUserMessageToolsId) {
+        const userBlock = els.chatMessages.querySelector(`[data-message-id="${state.openUserMessageToolsId}"]`);
+        if (userBlock) userBlock.classList.remove("tools-open");
+        state.openUserMessageToolsId = null;
+      }
+      state.openAgentTokenInfoId = wasOpen ? null : message.id;
+      block.classList.toggle("tools-open", !wasOpen);
+      block.classList.toggle("token-open", !wasOpen);
+    });
+  }
+  block.appendChild(bubble);
+
+  if (message.id && !message.pending) {
+    block.appendChild(buildMessageTools(message));
+  }
+
+  return block;
+}
+
+function refreshMessageBlock(block, message, sessionMode, enableMd) {
+  // 1. Update block-level className
+  const isAgentPlainBlock = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
+  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
+
+  // 2. Update bubble className + content
+  const bubble = block.querySelector('.message');
+  if (!bubble) return;
+
+  const isSingleLineMessage = !message.pending && !/[\r\n]/.test(message.content || "");
+  const isWorkAgent = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
+  bubble.className = `message ${message.role === "user" ? "user" : message.role === "system" ? "system" : "agent"} ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${isSingleLineMessage ? "single-line" : ""} ${isWorkAgent ? "agent-plain" : ""}`.trim();
+
+  if (message.pending) {
+    bubble.innerHTML = `<span class="typing-row"><span></span><span></span><span></span></span>`;
+  } else {
+    const newContent = buildBubbleContent(message);
+    if (bubble.innerHTML !== newContent) {
+      bubble.innerHTML = newContent;
+      if (typeof hljs !== 'undefined' && enableMd) {
+        bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
+      }
+      if (sessionMode === SESSION_MODE_WORK) {
+        bubble.querySelectorAll('.code-copy-btn').forEach(bindCodeCopyBtn);
+      }
+    }
+  }
+
+  // 3. Build tools section if it doesn't exist yet (pending → done transition)
+  const existingTools = block.querySelector('.message-tools');
+  if (message.id && !message.pending) {
+    if (!existingTools) {
+      const tools = buildMessageTools(message);
+      block.appendChild(tools);
+    } else if (message.role === "assistant") {
+      const tokenSpan = existingTools.querySelector('.message-token-label');
+      if (tokenSpan) tokenSpan.textContent = buildMessageTokenLabel(message);
+    }
+  } else if (existingTools && message.pending) {
+    existingTools.remove();
+  }
+}
+
+function buildMessageTools(message) {
+  const tools = document.createElement("div");
+  tools.className = "message-tools";
+  tools.style.justifyContent = message.role === "user" ? "flex-end" : "space-between";
+
+  const tokenLabel = message.role === "assistant" ? buildMessageTokenLabel(message) : "";
+  if (message.role === "assistant" && tokenLabel) {
+    const tokenSpan = document.createElement("span");
+    tokenSpan.className = "message-token-label";
+    tokenSpan.textContent = tokenLabel;
+    tools.appendChild(tokenSpan);
+  }
+
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.className = "message-edit-btn";
+  copyBtn.title = t("chat.copy");
+  copyBtn.innerHTML = `<i class="bi bi-copy message-edit-icon"></i>`;
+  copyBtn.addEventListener("click", () => copyMessageContent(message.id));
+  tools.appendChild(copyBtn);
+
+  if (message.role === "user") {
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = `message-edit-btn ${state.editingUserMessageId === message.id ? "active" : ""}`.trim();
+    editBtn.innerHTML = `<i class="bi bi-pencil message-edit-icon"></i>`;
+    editBtn.addEventListener("click", () => beginUserMessageEdit(message.id));
+    tools.appendChild(editBtn);
+
+    const retryBtn = document.createElement("button");
+    retryBtn.type = "button";
+    retryBtn.className = "message-edit-btn";
+    retryBtn.innerHTML = `<i class="bi bi-arrow-counterclockwise message-edit-icon"></i>`;
+    retryBtn.addEventListener("click", () => regenerateFromUserMessage(message.id));
+    tools.appendChild(retryBtn);
+  }
+
+  return tools;
+}
+
+/* Shared copy-button handler */
+function bindCodeCopyBtn(btn) {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    var pre = btn.closest('.pre-code-block');
+    const code = pre ? pre.querySelector('code').textContent : '';
+    navigator.clipboard.writeText(code).then(() => {
+      btn.className = 'code-copy-btn copied';
+      btn.innerHTML = '<i class="bi bi-check"></i>';
+      setTimeout(() => {
+        btn.className = 'code-copy-btn';
+        btn.innerHTML = '<i class="bi bi-clipboard"></i>';
+      }, 1500);
+    }).catch(() => {});
+  });
 }
 
 async function sendUserMessage() {
@@ -566,11 +813,23 @@ async function sendUserMessage() {
 
   touchSession(session);
   persistSessions();
-  renderMessages({ stickToBottom: true });
-  renderChatListMenu();
   els.chatInput.value = "";
   autoResizeChatInput();
-  debugLog("turn", "User message submitted", {
+  renderMessages();
+  renderChatListMenu();
+  // 用户消息固定到视口顶部 + 底部垫片供 AI 展开
+  const userBlocks = els.chatMessages.querySelectorAll('.message-block.user');
+  const lastUser = userBlocks[userBlocks.length - 1];
+  if (lastUser) {
+    els.chatMessages.classList.add('hide-before');
+    const spacer = document.createElement('div');
+    spacer.className = 'scroll-spacer';
+    spacer.style.cssText = 'flex:0 0 auto;pointer-events:none;height:100vh;min-height:600px;';
+    els.chatMessages.appendChild(spacer);
+    lastUser.scrollIntoView({ block: "start" });
+    state.userScrolledAway = true;
+  }
+  debugLog("turn", t("debug.msg.userMessageSubmitted"), {
     sessionId: session.id,
     editingMessageId: state.editingUserMessageId,
     content,
@@ -597,7 +856,7 @@ async function runSessionTurn(session) {
       renderChatListMenu();
       setText(els.chatStatus, `${npc.name} 已回复`);
     } catch (error) {
-      debugLog("turn", "Turn failed", {
+      debugLog("turn", t("debug.msg.turnFailed"), {
         sessionId: session.id,
         error: error.message,
       });
@@ -621,22 +880,24 @@ async function runSessionTurn(session) {
       els.chatInput.disabled = false;
       autoResizeChatInput();
       updateComposerMode();
-      queueMicrotask(() => els.chatInput.focus());
+      if (!window.matchMedia?.("(pointer: coarse)").matches) {
+        queueMicrotask(() => els.chatInput.focus());
+      }
     }
     return;
   }
 
   try {
-    debugLog("turn", "Director turn started", {
+    debugLog("turn", t("debug.msg.directorTurnStarted"), {
       sessionId: session.id,
       messageCount: session.messages.length,
       transientNpcCount: (session.transientNpcs || []).length,
     });
     const directive = await callDirector(session);
-    debugLog("director", "Directive accepted", directive);
+    debugLog("director", t("debug.msg.directiveAccepted"), directive);
     if (directive.spawnNpcs?.length) {
       upsertTransientNpcs(session, directive.spawnNpcs);
-      debugLog("director", "Transient NPCs updated", session.transientNpcs || []);
+      debugLog("director", t("debug.msg.transientNpcsUpdated"), session.transientNpcs || []);
       touchSession(session);
       persistSessions();
     }
@@ -674,7 +935,7 @@ async function runSessionTurn(session) {
     }
 
     const responders = getResponderNpcs(session, directive.responders);
-    debugLog("director", "Responders resolved", responders.map((npc) => ({
+    debugLog("director", t("debug.msg.respondersResolved"), responders.map((npc) => ({
       name: npc.name,
       model: npc.model,
       transient: Boolean(npc.transient),
@@ -685,7 +946,7 @@ async function runSessionTurn(session) {
       for (const npc of responders) {
         await callNpc(session, npc, directive.npcInstructions);
       }
-      debugLog("turn", "NPC replies completed", responders.map((npc) => npc.name));
+      debugLog("turn", t("debug.msg.npcRepliesCompleted"), responders.map((npc) => npc.name));
       setText(els.chatStatus, "本轮回复已完成");
     }
 
@@ -694,7 +955,7 @@ async function runSessionTurn(session) {
     renderMessages({ stickToBottom: true });
     renderChatListMenu();
   } catch (error) {
-    debugLog("turn", "Turn failed", {
+    debugLog("turn", t("debug.msg.turnFailed"), {
       sessionId: session.id,
       error: error.message,
     });
@@ -721,7 +982,9 @@ async function runSessionTurn(session) {
     els.chatInput.disabled = false;
     autoResizeChatInput();
     updateComposerMode();
-    queueMicrotask(() => els.chatInput.focus());
+    if (!window.matchMedia?.("(pointer: coarse)").matches) {
+      queueMicrotask(() => els.chatInput.focus());
+    }
   }
 }
 
@@ -744,7 +1007,7 @@ async function callDirector(session) {
   }
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    debugLog("director", "Request attempt", {
+    debugLog("director", t("debug.msg.requestAttempt"), {
       sessionId: session.id,
       attempt: attempt + 1,
       model: session.directorModel,
@@ -776,7 +1039,7 @@ async function callDirector(session) {
       : requestMessages;
     const payload = await createChatCompletionPayload(directorConfig.host, directorConfig.key, session.directorModel, promptMessages, false, 0.5, directorExtra);
     const content = payload.content;
-    debugLog("director", "Raw response received", {
+    debugLog("director", t("debug.msg.rawResponseReceived"), {
       attempt: attempt + 1,
       content,
     });
@@ -790,7 +1053,7 @@ async function callDirector(session) {
       };
       return directive;
     } catch (jsonError) {
-      debugLog("director", "Invalid response, retrying", {
+      debugLog("director", t("debug.msg.invalidResponseRetrying"), {
         attempt: attempt + 1,
         error: jsonError.message,
         content,
@@ -799,10 +1062,10 @@ async function callDirector(session) {
       if (attempt >= 1) {
         try {
           const repaired = await repairDirectorDirective(session, messages, content, attempt + 1);
-          debugLog("director", "Repair response accepted", repaired);
+          debugLog("director", t("debug.msg.repairResponseAccepted"), repaired);
           return repaired;
         } catch (repairError) {
-          debugLog("director", "Repair response failed", {
+          debugLog("director", t("debug.msg.repairResponseFailed"), {
             attempt: attempt + 1,
             error: repairError.message,
           });
@@ -853,7 +1116,7 @@ async function repairDirectorDirective(session, baseMessages, invalidContent, at
     },
   ];
 
-  debugLog("director", "Repair attempt", {
+  debugLog("director", t("debug.msg.repairAttempt"), {
     sessionId: session.id,
     attempt,
     invalidContent,
@@ -862,7 +1125,7 @@ async function repairDirectorDirective(session, baseMessages, invalidContent, at
   const directorConfig = resolveModelConfig(session.directorConfigId, session.directorModel, session.configId);
   const repairedPayload = await createChatCompletionPayload(directorConfig.host, directorConfig.key, session.directorModel, repairMessages, false, 0.5);
   const repairedContent = repairedPayload.content;
-  debugLog("director", "Repair raw response received", {
+  debugLog("director", t("debug.msg.repairRawResponse"), {
     attempt,
     content: repairedContent,
   });
@@ -1129,13 +1392,13 @@ async function ensureDirectorSummary(session, options = {}) {
 async function triggerManualDirectorCompression() {
   const session = getCurrentSession();
   let finalStatusText = "";
-  debugLog("compress", "Compression requested", {
+  debugLog("compress", t("debug.msg.compressionRequested"), {
     hasSession: Boolean(session),
     isSending: state.isSending,
     openPopover: state.openCompressMemoryInfo,
   });
   if (!session || state.isSending) {
-    debugLog("compress", "Compression aborted before start", {
+    debugLog("compress", t("debug.msg.compressionAborted"), {
       reason: !session ? "missing-session" : "sending-in-progress",
     });
     return;
@@ -1148,7 +1411,7 @@ async function triggerManualDirectorCompression() {
   }
   updateComposerMode();
   setText(els.chatStatus, "正在压缩导演记忆...");
-  debugLog("compress", "Compression started", {
+  debugLog("compress", t("debug.msg.compressionStarted"), {
     sessionId: session.id,
     recentLimit: DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT,
   });
@@ -1159,7 +1422,7 @@ async function triggerManualDirectorCompression() {
       mode: "manual",
       recentLimit: DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT,
     });
-    debugLog("compress", "Compression finished", {
+    debugLog("compress", t("debug.msg.compressionFinished"), {
       changed,
       summaryLength: String(session.directorSummary || "").length,
       compressedUntilMessageId: session.compressedUntilMessageId || "",
@@ -1172,7 +1435,7 @@ async function triggerManualDirectorCompression() {
       setText(els.chatStatus, finalStatusText);
     }
   } catch (error) {
-    debugLog("compress", "Compression failed", {
+    debugLog("compress", t("debug.msg.compressionFailed"), {
       message: error?.message || String(error),
     });
     finalStatusText = `压缩失败：${error.message}`;
@@ -1191,7 +1454,7 @@ function isMobileTokenToggleMode() {
 
 function ensureCompressMemoryPopover() {
   if (!els.compressMemoryBtn || !els.composerFooter) {
-    debugLog("compress", "Popover mount skipped", {
+    debugLog("compress", t("debug.msg.popoverMountSkipped"), {
       hasButton: Boolean(els.compressMemoryBtn),
       hasFooter: Boolean(els.composerFooter),
     });
@@ -1201,7 +1464,7 @@ function ensureCompressMemoryPopover() {
   if (!popover) {
     popover = document.createElement("div");
     popover.className = "memory-compress-popover hidden";
-    debugLog("compress", "Popover mounted");
+    debugLog("compress", t("debug.msg.popoverMounted"));
     els.compressMemoryBtn.insertAdjacentElement("afterend", popover);
   }
   return popover;
@@ -1232,7 +1495,7 @@ function buildCompressMemoryPopoverMarkup(session) {
 function renderCompressMemoryPopover() {
   const popover = ensureCompressMemoryPopover();
   if (!popover || !els.compressMemoryBtn) {
-    debugLog("compress", "Popover render skipped", {
+    debugLog("compress", t("debug.msg.popoverRenderSkipped"), {
       hasPopover: Boolean(popover),
       hasButton: Boolean(els.compressMemoryBtn),
     });
@@ -1244,7 +1507,7 @@ function renderCompressMemoryPopover() {
   popover.innerHTML = hasSession ? buildCompressMemoryPopoverMarkup(session) : "";
   popover.classList.toggle("hidden", !hasSession);
   els.compressMemoryBtn.classList.toggle("info-open", state.openCompressMemoryInfo && hasSession);
-  debugLog("compress", "Popover rendered", {
+  debugLog("compress", t("debug.msg.popoverRendered"), {
     hasSession,
     open: state.openCompressMemoryInfo,
     sending: state.isSending,
@@ -1254,14 +1517,14 @@ function renderCompressMemoryPopover() {
   if (actionBtn) {
     actionBtn.disabled = state.isSending || !hasSession;
     actionBtn.onpointerdown = (event) => {
-      debugLog("compress", "Popover action pointerdown", {
+      debugLog("compress", t("debug.msg.popoverActionPointerdown"), {
         disabled: actionBtn.disabled,
       });
       event.preventDefault();
       event.stopPropagation();
     };
     actionBtn.onclick = (event) => {
-      debugLog("compress", "Popover action click", {
+      debugLog("compress", t("debug.msg.popoverActionClick"), {
         disabled: actionBtn.disabled,
         hasSession,
         sending: state.isSending,
@@ -1270,11 +1533,11 @@ function renderCompressMemoryPopover() {
       event.stopPropagation();
       void triggerManualDirectorCompression();
     };
-    debugLog("compress", "Popover action bound", {
+    debugLog("compress", t("debug.msg.popoverActionBound"), {
       disabled: actionBtn.disabled,
     });
   } else {
-    debugLog("compress", "Popover action missing after render");
+    debugLog("compress", t("debug.msg.popoverActionMissing"));
   }
 }
 
@@ -1324,9 +1587,9 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
 
   const targetConfig = resolveModelConfig(configId, model, session.configId);
 
-  targetMessage.pending = false;
-  targetMessage.streaming = true;
-  renderMessages({ stickToBottom: true });
+  // Defer reveal: buffer initial stream content, show meta + first chunk together
+  let streamRevealed = false;
+  let initialBuffer = "";
 
   const shouldTrackUsage = state.settings?.session?.showTokenDisplay !== false;
 
@@ -1395,6 +1658,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     targetMessage.content = `生成失败：模型 ${model} 调用失败：HTTP ${response.status}${errorDetail ? ` ${errorDetail}` : ""}`;
     touchSession(session);
     persistSessions();
+    state.userScrolledAway = false;
     renderMessages({ stickToBottom: true });
     throw new Error(`模型 ${model} 调用失败：HTTP ${response.status}${errorDetail ? ` ${errorDetail}` : ""}`);
   }
@@ -1410,6 +1674,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     targetMessage.streaming = false;
     touchSession(session);
     persistSessions();
+    state.userScrolledAway = false;
     renderMessages({ stickToBottom: true });
     return;
   }
@@ -1448,14 +1713,25 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
             targetMessage.usage = usage;
           }
           const delta = data?.choices?.[0]?.delta?.content ?? data?.choices?.[0]?.message?.content ?? "";
-          if (delta) {
-            targetMessage.content += delta;
-            renderMessages({ stickToBottom: true });
-          }
           const thinkingDelta = data?.choices?.[0]?.delta?.reasoning_content ?? data?.choices?.[0]?.message?.reasoning_content ?? "";
           if (thinkingDelta) {
             targetMessage.thinking += thinkingDelta;
-            renderMessages({ stickToBottom: true });
+            if (streamRevealed) updateStreamingBubble(targetMessage);
+          }
+          if (delta) {
+            if (!streamRevealed) {
+              initialBuffer += delta;
+              if (initialBuffer.length >= 25) {
+                targetMessage.content = initialBuffer;
+                targetMessage.pending = false;
+                targetMessage.streaming = true;
+                renderMessages({ stickToBottom: true });
+                streamRevealed = true;
+              }
+            } else {
+              targetMessage.content += delta;
+              updateStreamingBubble(targetMessage);
+            }
           }
         } catch {
           // Ignore incompatible keepalive chunks.
@@ -1464,22 +1740,31 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     }
   }
 
+  // Flush any buffered content that didn't reach the threshold
+  if (!streamRevealed && initialBuffer) {
+    targetMessage.content = initialBuffer;
+    targetMessage.pending = false;
+    targetMessage.streaming = true;
+    renderMessages({ stickToBottom: true });
+    streamRevealed = true;
+  }
+
   if (!targetMessage.content.trim()) {
     targetMessage.streaming = false;
     targetMessage.pending = true;
     touchSession(session);
     persistSessions();
+    state.userScrolledAway = false;
     renderMessages({ stickToBottom: true });
-    debugLog("npc", `${speaker} 首次调用返回空，正在重试...`, { sessionId: session.id });
+    debugLog("npc", t("debug.msg.npcRetry", { speaker }), { sessionId: session.id });
     await wait(300);
 
     targetMessage.thinking = "";
     const retryResponse = await doStreamFetch(shouldTrackUsage);
 
     if (retryResponse.ok && retryResponse.body) {
-      targetMessage.pending = false;
-      targetMessage.streaming = true;
-      renderMessages({ stickToBottom: true });
+      let retryRevealed = false;
+      let retryInitialBuffer = "";
       const retryReader = retryResponse.body.getReader();
       const retryDecoder = new TextDecoder("utf-8");
       let retryBuffer = "";
@@ -1503,18 +1788,37 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
                 targetMessage.usage = usage;
               }
               const delta = data?.choices?.[0]?.delta?.content ?? "";
-              if (delta) {
-                targetMessage.content += delta;
-                renderMessages({ stickToBottom: true });
-              }
               const thinkingDelta = data?.choices?.[0]?.delta?.reasoning_content ?? "";
               if (thinkingDelta) {
                 targetMessage.thinking += thinkingDelta;
-                renderMessages({ stickToBottom: true });
+                if (retryRevealed) updateStreamingBubble(targetMessage);
+              }
+              if (delta) {
+                if (!retryRevealed) {
+                  retryInitialBuffer += delta;
+                  if (retryInitialBuffer.length >= 25) {
+                    targetMessage.content = retryInitialBuffer;
+                    targetMessage.pending = false;
+                    targetMessage.streaming = true;
+                    renderMessages({ stickToBottom: true });
+                    retryRevealed = true;
+                  }
+                } else {
+                  targetMessage.content += delta;
+                  updateStreamingBubble(targetMessage);
+                }
               }
             } catch {}
           }
         }
+      }
+
+      if (!retryRevealed && retryInitialBuffer) {
+        targetMessage.content = retryInitialBuffer;
+        targetMessage.pending = false;
+        targetMessage.streaming = true;
+        renderMessages({ stickToBottom: true });
+        retryRevealed = true;
       }
     }
 
@@ -1539,6 +1843,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   targetMessage.streaming = false;
   touchSession(session);
   persistSessions();
+  state.userScrolledAway = false;
   renderMessages({ stickToBottom: true });
 }
 

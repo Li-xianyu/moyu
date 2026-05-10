@@ -721,7 +721,7 @@ function stripThinkingLeakage(content) {
   }
 
   if (debugMode && cleaned !== beforeLines) {
-    debugLog("stripThinking", "Stripped repeated blocks", {
+    debugLog("stripThinking", t("debug.msg.strippedRepeatedBlocks"), {
       before: beforeLines,
       after: cleaned,
     });
@@ -1055,9 +1055,22 @@ function renderMarkdownContent(text) {
   flushTable();
   flushPara();
 
-  // Close unclosed code block
+  // Close unclosed code block — same treatment as closed but without formatting
   if (inCodeBlock && codeBuffer.length) {
-    fragments.push("<pre><code>" + codeBuffer.join("\n") + "</code></pre>");
+    const langMatch = openingFence?.match(/^`+\s*(\w*)/);
+    const lang = (langMatch && langMatch[1]) || "";
+    const langAttr = lang ? ` class="language-${lang}"` : "";
+    const copyBtnHtml = "<button class=\"code-copy-btn\" type=\"button\" title=\"复制代码\"><i class=\"bi bi-clipboard\"></i></button>";
+    const langLabelHtml = lang
+      ? `<div class="code-block-header"><span>${escapeHtml(lang)}</span>${copyBtnHtml}</div>`
+      : `<div class="code-block-header no-lang">${copyBtnHtml}</div>`;
+    const rawCode = unescapeHtml(codeBuffer.join("\n"));
+    const escapedCode = escapeHtml(rawCode);
+    fragments.push(
+      "<pre class=\"pre-code-block\">" +
+      langLabelHtml +
+      "<code" + langAttr + ">" + escapedCode + "</code></pre>"
+    );
   }
 
   let html = fragments.join("\n");

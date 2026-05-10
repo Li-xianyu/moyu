@@ -21,6 +21,7 @@
   deleteConfirmSessionId: null,
   deleteConfirmConfigId: null,
   chatSearchQuery: "",
+  userScrolledAway: false,
 };
 
 const els = {
