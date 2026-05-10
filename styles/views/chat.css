@@ -642,7 +642,8 @@
 }
 /* Code block container */
 .pre-code-block {
-  display: block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 100%;
   min-width: 100%;
@@ -669,7 +670,9 @@
   border-radius: inherit;
   overflow-x: auto;
   overflow-y: auto;
-  max-height: inherit;
+  flex: 1;
+  min-height: 0;
+  max-height: none;
   max-width: 100%;
   box-sizing: border-box;
   white-space: pre;
