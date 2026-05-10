@@ -270,6 +270,7 @@ button,
   color: var(--text);
   font-size: 13px;
   outline: none;
+  border-radius: 0;
   transition: border-color 0.15s ease;
 }
 
@@ -554,6 +555,7 @@ button,
 
 .view-with-shell-offset {
   padding-top: 52px;
+  box-sizing: border-box;
 }
 
 .app-shell.sidebar-collapsed .shell-toggle-btn {

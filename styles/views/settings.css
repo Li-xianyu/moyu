@@ -1,6 +1,9 @@
 #settingsView {
   overflow: hidden;
 }
+.main:has(#settingsView.active) {
+  overflow: hidden !important;
+}
 
 .settings-stage {
   height: 100%;
@@ -8,6 +11,7 @@
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 0;
+  overflow: hidden;
 }
 
 .settings-list-panel,

@@ -175,6 +175,12 @@ function init() {
   renderSession();
   updateMobileViewportFix();
   syncMobileDebugConsole();
+
+  var loadingEl = document.getElementById('loadingScreen');
+  if (loadingEl) {
+    loadingEl.classList.add('loading-screen--fade-out');
+    setTimeout(function() { loadingEl.style.display = 'none'; }, 400);
+  }
 }
 
 migrateLegacySessions();

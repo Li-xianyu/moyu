@@ -274,16 +274,16 @@
   }
 
   .info-btn.floating {
-    top: 2px;
-    right: 0;
+    top: 10px;
+    right: 10px;
   }
 
   .info-btn.floating.session-edit-btn {
-    right: 40px;
+    right: 48px;
   }
 
   .chat-info-popover {
-    top: 40px;
+    top: 36px;
     left: 8px;
     right: 8px;
   }
@@ -517,12 +517,10 @@
     padding-bottom: 4px;
   }
 
-  .message.user {
-    padding-top: 3px;
-    padding-bottom: 3px;
-    padding-left: 9px;
-    padding-right: 9px;
-    line-height: 1.28;
+  .message-block.user .message.user {
+    max-width: calc(100vw - 32px);
+    padding: 6px 12px;
+    line-height: 1.38;
   }
 
   .message.user.single-line {
@@ -655,6 +653,7 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+    overflow: visible;
   }
 
   .nav-btn-settings {
@@ -696,6 +695,15 @@
 
   .app-shell:not(.sidebar-drawer-open) .shell-toggle-btn {
     left: 8px;
+  }
+
+  .info-btn.floating {
+    top: 8px;
+    right: 8px;
+  }
+
+  .info-btn.floating.session-edit-btn {
+    right: 46px;
   }
 }
 
