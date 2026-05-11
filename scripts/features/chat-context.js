@@ -877,19 +877,10 @@ function normalizeCodeIndent(code) {
   }).join("\n");
 }
 
-function renderMarkdownContent(text, showLineNumbers) {
+function renderMarkdownContent(text) {
   // Input is already HTML-escaped — safe from XSS
   // Converts markdown to safe HTML for work mode chat bubbles
   if (!text) return "";
-
-  function addLineNumbers(code) {
-    var codeLines = code.split('\n');
-    var out = [];
-    for (var i = 0; i < codeLines.length; i++) {
-      out.push('<span class="code-line">' + codeLines[i] + '</span>');
-    }
-    return out.join('\n');
-  }
 
   const lines = text.split("\n");
   const fragments = [];
@@ -977,10 +968,7 @@ function renderMarkdownContent(text, showLineNumbers) {
           // Unescape → format → re-escape for proper indentation
           const rawCode = unescapeHtml(codeBuffer.join("\n"));
           const formattedCode = formatCodeBlock(lang, rawCode);
-          let escapedCode = escapeHtml(formattedCode);
-          if (showLineNumbers) {
-            escapedCode = addLineNumbers(escapedCode);
-          }
+          const escapedCode = escapeHtml(formattedCode);
           fragments.push(
             "<pre class=\"pre-code-block\">" +
             langLabelHtml +
@@ -1077,10 +1065,7 @@ function renderMarkdownContent(text, showLineNumbers) {
       ? `<div class="code-block-header"><span>${escapeHtml(lang.toUpperCase())}</span>${copyBtnHtml}</div>`
       : `<div class="code-block-header no-lang">${copyBtnHtml}</div>`;
     const rawCode = unescapeHtml(codeBuffer.join("\n"));
-    let escapedCode = escapeHtml(rawCode);
-    if (showLineNumbers) {
-      escapedCode = addLineNumbers(escapedCode);
-    }
+    const escapedCode = escapeHtml(rawCode);
     fragments.push(
       "<pre class=\"pre-code-block\">" +
       langLabelHtml +

@@ -370,15 +370,27 @@ function buildBubbleContent(message) {
     html += `</details>`;
   }
   const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
-  const showLineNumbers = state.settings?.session?.showLineNumbers === true;
   if (enableMd) {
-    html += renderMarkdownContent(escapeHtml(message.content), showLineNumbers);
+    html += renderMarkdownContent(escapeHtml(message.content));
   } else if (sessionMode === SESSION_MODE_STORY) {
     html += renderStoryContent(escapeHtml(message.content));
   } else {
     html += escapeHtml(message.content).replace(/\n/g, "<br>");
   }
   return html;
+}
+
+function wrapCodeLines(el) {
+  if (state.settings?.session?.showLineNumbers !== true) return;
+  var codes = el.tagName === 'CODE' ? [el] : el.querySelectorAll('pre code');
+  Array.from(codes).forEach(function (code) {
+    var lines = code.innerHTML.split('\n');
+    if (lines.length > 1 || (lines.length === 1 && lines[0] !== '')) {
+      code.innerHTML = lines.map(function (line) {
+        return '<span class="code-line">' + line + '</span>';
+      }).join('\n');
+    }
+  });
 }
 
 function updateStreamingBubble(targetMessage) {
@@ -432,6 +444,7 @@ function updateStreamingBubble(targetMessage) {
             }
             if (typeof hljs !== 'undefined') {
               hljs.highlightElement(existingCode);
+              wrapCodeLines(existingCode);
             }
             return;
           }
@@ -487,6 +500,7 @@ function updateStreamingBubble(targetMessage) {
     const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
     if (typeof hljs !== 'undefined' && enableMd) {
       bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
+      wrapCodeLines(bubble);
     }
     if (sessionMode === SESSION_MODE_WORK) {
       bubble.querySelectorAll('.code-copy-btn').forEach((btn) => {
@@ -681,6 +695,7 @@ function buildMessageBlock(message, sessionMode, enableMd) {
     bubble.innerHTML = buildBubbleContent(message);
     if (typeof hljs !== 'undefined' && enableMd) {
       bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
+      wrapCodeLines(bubble);
     }
     if (sessionMode === SESSION_MODE_WORK) {
       bubble.querySelectorAll('.code-copy-btn').forEach(bindCodeCopyBtn);
@@ -746,6 +761,7 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
       bubble.innerHTML = newContent;
       if (typeof hljs !== 'undefined' && enableMd) {
         bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
+        wrapCodeLines(bubble);
       }
       if (sessionMode === SESSION_MODE_WORK) {
         bubble.querySelectorAll('.code-copy-btn').forEach(bindCodeCopyBtn);
