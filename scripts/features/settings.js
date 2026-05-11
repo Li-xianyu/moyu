@@ -106,6 +106,18 @@ function bindSettings() {
     });
   }
 
+  const showLineNumbersToggle = document.getElementById("showLineNumbersToggle");
+  if (showLineNumbersToggle) {
+    showLineNumbersToggle.addEventListener("change", () => {
+      state.settings.session = state.settings.session || {};
+      state.settings.session.showLineNumbers = Boolean(showLineNumbersToggle.checked);
+      persistSettings();
+      if (typeof renderMessages === "function") {
+        renderMessages({ stickToBottom: true });
+      }
+    });
+  }
+
   els.addConfigBtn.addEventListener("click", () => {
     const config = createEmptyConfig();
     state.settings.configs.unshift(config);
@@ -295,6 +307,10 @@ function hydrateSettingsInputs() {
   const markdownRenderToggle = document.getElementById("markdownRenderToggle");
   if (markdownRenderToggle) {
     markdownRenderToggle.checked = state.settings?.session?.markdownRender !== false;
+  }
+  const showLineNumbersToggle = document.getElementById("showLineNumbersToggle");
+  if (showLineNumbersToggle) {
+    showLineNumbersToggle.checked = state.settings?.session?.showLineNumbers === true;
   }
   els.configNameInput.value = activeConfig?.name || "";
   els.apiHostInput.value = activeConfig?.host || "";

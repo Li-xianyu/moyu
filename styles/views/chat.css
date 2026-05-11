@@ -659,6 +659,7 @@
   padding: 0;
   interpolate-size: allow-keywords;
   transition: height 0.12s ease;
+  counter-reset: line;
 }
 .pre-code-block:hover {
   border-color: rgba(255, 255, 255, 0.12);
@@ -683,6 +684,21 @@
 }
 .pre-code-block code.hljs {
   background: transparent;
+}
+/* Code line-number spans (enabled via settings → session) */
+.code-line {
+  display: block;
+}
+.code-line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 3ch;
+  margin-right: 12px;
+  text-align: right;
+  color: #555;
+  user-select: none;
+  flex-shrink: 0;
 }
 /* Language header bar */
 .code-block-header {

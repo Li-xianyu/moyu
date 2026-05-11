@@ -370,8 +370,9 @@ function buildBubbleContent(message) {
     html += `</details>`;
   }
   const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
+  const showLineNumbers = state.settings?.session?.showLineNumbers === true;
   if (enableMd) {
-    html += renderMarkdownContent(escapeHtml(message.content));
+    html += renderMarkdownContent(escapeHtml(message.content), showLineNumbers);
   } else if (sessionMode === SESSION_MODE_STORY) {
     html += renderStoryContent(escapeHtml(message.content));
   } else {
@@ -402,7 +403,7 @@ function updateStreamingBubble(targetMessage) {
   } else {
     // Streaming incremental: inside an unclosed code block → update text
     // only, avoiding DOM destruction (fixes mobile scroll during streaming).
-    if (targetMessage.streaming) {
+    if (targetMessage.streaming && state.settings?.session?.showLineNumbers !== true) {
       const c = targetMessage.content;
       var fenceRe = /^`{3,}/gm;
       var fenceMatches = c.match(fenceRe);

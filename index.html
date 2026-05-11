@@ -357,6 +357,22 @@
                 <section class="settings-global-section">
                   <div class="sub-panel-head">
                     <div>
+                      <h3 data-i18n="settings.showLineNumbersLabel">代码块行号</h3>
+                      <p class="hint-text" data-i18n="settings.showLineNumbersHint">在代码左侧显示行号。</p>
+                    </div>
+                  </div>
+                  <label class="settings-toggle-row" for="showLineNumbersToggle">
+                    <div class="settings-toggle-copy">
+                      <span data-i18n="settings.showLineNumbersLabel">代码块行号</span>
+                    </div>
+                    <input id="showLineNumbersToggle" class="settings-toggle-input" type="checkbox">
+                    <span class="settings-toggle-ui" aria-hidden="true"></span>
+                  </label>
+                </section>
+
+                <section class="settings-global-section">
+                  <div class="sub-panel-head">
+                    <div>
                       <h3 data-i18n="settings.exportSessionsTitle">导出会话</h3>
                       <p class="hint-text" data-i18n="settings.exportSessionsHint">将所有会话导出为 JSON 文件。</p>
                     </div>
