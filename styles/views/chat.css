@@ -686,19 +686,26 @@
   background: transparent;
 }
 /* Code line-number spans (enabled via settings → session) */
+.pre-code-block {
+  counter-reset: line;
+}
 .code-line {
   display: block;
+  position: relative;
+  padding-left: calc(4ch + 12px);
 }
 .code-line::before {
   counter-increment: line;
   content: counter(line);
-  display: inline-block;
-  width: 3ch;
-  margin-right: 12px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4ch;
   text-align: right;
   color: #555;
   user-select: none;
-  flex-shrink: 0;
+  padding-right: 12px;
+  box-sizing: border-box;
 }
 /* Language header bar */
 .code-block-header {
