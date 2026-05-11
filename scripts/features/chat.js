@@ -400,6 +400,43 @@ function updateStreamingBubble(targetMessage) {
     const isSingleLine = !targetMessage.pending && !/[\r\n]/.test(narrationText);
     bubble.classList.toggle('single-line', isSingleLine);
   } else {
+    // Streaming incremental: inside an unclosed code block → update text
+    // only, avoiding DOM destruction (fixes mobile scroll during streaming).
+    if (targetMessage.streaming) {
+      const c = targetMessage.content;
+      var fenceRe = /^`{3,}/gm;
+      var fenceMatches = c.match(fenceRe);
+      if (fenceMatches && fenceMatches.length % 2 === 1) {
+        var allCodes = bubble.querySelectorAll('.pre-code-block code');
+        var existingCode = allCodes.length > 0 ? allCodes[allCodes.length - 1] : null;
+        if (existingCode) {
+          var lines = c.split('\n');
+          var fenceCount = 0;
+          var codeStartLine = -1;
+          for (var j = 0; j < lines.length; j++) {
+            if (/^`{3,}/.test(lines[j])) {
+              fenceCount++;
+              if (fenceCount === fenceMatches.length) {
+                codeStartLine = j;
+                break;
+              }
+            }
+          }
+          if (codeStartLine >= 0) {
+            var rawCode = lines.slice(codeStartLine + 1).join('\n');
+            var atBottom = existingCode.scrollHeight - existingCode.scrollTop - existingCode.clientHeight < 30;
+            existingCode.textContent = escapeHtml(rawCode);
+            if (atBottom) {
+              existingCode.scrollTop = existingCode.scrollHeight;
+            }
+            if (typeof hljs !== 'undefined') {
+              hljs.highlightElement(existingCode);
+            }
+            return;
+          }
+        }
+      }
+    }
     // FLIP: capture old code block heights for smooth expansion
     const oldPreHeights = Array.from(bubble.querySelectorAll('.pre-code-block'), pre => pre.offsetHeight);
     // Save code element scroll positions for streaming continuity
@@ -410,14 +447,12 @@ function updateStreamingBubble(targetMessage) {
 
     bubble.innerHTML = buildBubbleContent(targetMessage);
 
-    // Restore code element scroll positions after content replacement
-    requestAnimationFrame(() => {
-      const newCodes = bubble.querySelectorAll('.pre-code-block code');
-      newCodes.forEach((code, i) => {
-        if (i < oldCodeScrolls.length) {
-          code.scrollTop = oldCodeScrolls[i].atBottom ? code.scrollHeight : oldCodeScrolls[i].top;
-        }
-      });
+    // Restore code element scroll positions synchronously after content replacement
+    const newCodes = bubble.querySelectorAll('.pre-code-block code');
+    newCodes.forEach((code, i) => {
+      if (i < oldCodeScrolls.length) {
+        code.scrollTop = oldCodeScrolls[i].atBottom ? code.scrollHeight : oldCodeScrolls[i].top;
+      }
     });
 
     // Animate code block height transitions
