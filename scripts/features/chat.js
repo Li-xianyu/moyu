@@ -402,8 +402,23 @@ function updateStreamingBubble(targetMessage) {
   } else {
     // FLIP: capture old code block heights for smooth expansion
     const oldPreHeights = Array.from(bubble.querySelectorAll('.pre-code-block'), pre => pre.offsetHeight);
+    // Save code element scroll positions for streaming continuity
+    const oldCodeScrolls = Array.from(bubble.querySelectorAll('.pre-code-block code'), code => ({
+      top: code.scrollTop,
+      atBottom: code.scrollHeight - code.scrollTop - code.clientHeight < 30,
+    }));
 
     bubble.innerHTML = buildBubbleContent(targetMessage);
+
+    // Restore code element scroll positions after content replacement
+    requestAnimationFrame(() => {
+      const newCodes = bubble.querySelectorAll('.pre-code-block code');
+      newCodes.forEach((code, i) => {
+        if (i < oldCodeScrolls.length) {
+          code.scrollTop = oldCodeScrolls[i].atBottom ? code.scrollHeight : oldCodeScrolls[i].top;
+        }
+      });
+    });
 
     // Animate code block height transitions
     if (oldPreHeights.length) {
