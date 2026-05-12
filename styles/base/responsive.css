@@ -412,9 +412,13 @@
   }
 
   .composer-cancel-btn,
-  .memory-compress-btn,
-  .send-inside-btn {
+  .memory-compress-btn {
     min-width: 84px;
+    min-height: 38px;
+  }
+
+  .send-inside-btn {
+    min-width: 38px;
     min-height: 38px;
   }
 
