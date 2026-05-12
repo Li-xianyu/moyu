@@ -1,3 +1,26 @@
+const _scriptState = {};
+
+function _loadScript(src) {
+  if (_scriptState[src] === "loaded") return Promise.resolve();
+  if (_scriptState[src] === "loading") {
+    return new Promise((resolve) => {
+      const check = () => {
+        if (_scriptState[src] === "loaded") resolve();
+        else setTimeout(check, 16);
+      };
+      check();
+    });
+  }
+  _scriptState[src] = "loading";
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src + "?v=" + (window.APP_VERSION || "");
+    s.onload = () => { _scriptState[src] = "loaded"; resolve(); };
+    s.onerror = () => { _scriptState[src] = "error"; reject(new Error("Script load failed: " + src)); };
+    document.body.appendChild(s);
+  });
+}
+
 function bindNav() {
   if (els.sidebarToggleBtn) {
     els.sidebarToggleBtn.addEventListener("click", () => {
@@ -26,16 +49,44 @@ function bindNav() {
   });
 
   els.navButtons.forEach((button) => {
-    button.addEventListener("click", () => {
-      if (button.dataset.view === "create") {
+    button.addEventListener("click", async () => {
+      const view = button.dataset.view;
+      if (view === "create") {
+        await _loadScript("./scripts/features/create.js");
+        initCreateView();
         prepareCreateViewForNewSession();
+      } else if (view === "settings") {
+        await _loadScript("./scripts/features/settings.js");
+        initSettingsView();
       }
-      switchView(button.dataset.view);
+      switchView(view);
     });
   });
 
   applySidebarState();
 }
+
+let _settingsInited = false;
+let _createInited = false;
+
+function initSettingsView() {
+  if (_settingsInited) return;
+  _settingsInited = true;
+  bindSettings();
+  bindSettingsResize();
+  hydrateSettingsInputs();
+  renderSavedConfigs();
+  renderModelCache();
+  renderWorkModels();
+}
+
+function initCreateView() {
+  if (_createInited) return;
+  _createInited = true;
+  bindCreateFlow();
+}
+
+window._loadScript = _loadScript;
 
 function isMobileViewport() {
   return window.matchMedia("(max-width: 960px)").matches;
@@ -193,12 +244,14 @@ function mountSessionEditButton() {
   button.className = "info-btn floating session-edit-btn icon-only-btn";
   button.setAttribute("aria-label", "编辑当前会话");
   button.innerHTML = `<i class="bi bi-gear nav-icon-svg"></i>`;
-  button.addEventListener("click", () => {
+  button.addEventListener("click", async () => {
     if (state.isSending) {
       return;
     }
     const session = getCurrentSession();
     if (session) {
+      await _loadScript("./scripts/features/create.js");
+      await _loadScript("./scripts/features/settings.js");
       openSessionEditor(session.id);
     }
   });

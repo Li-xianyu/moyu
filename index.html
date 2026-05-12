@@ -575,20 +575,26 @@
               <button id="suggestBtn" class="suggest-btn" type="button" disabled title="推荐回复">
                 <i class="bi bi-magic"></i>
               </button>
-              <div id="chatStatus" class="status-text" data-i18n="chat.readyAfterCreate" data-tone="success">创建会话后即可聊天</div>
+              <div id="chatStatus" class="status-text" data-i18n="chat.readyAfterCreate" data-tone="success">所有单位已就绪</div>
             </div>
             <div class="composer">
               <textarea id="chatInput" rows="3" data-i18n-placeholder="chat.inputPlaceholder" placeholder="输入你想说的话..." disabled></textarea>
               <div class="composer-footer">
                 <div class="composer-footer-left">
-                  <button id="compressMemoryBtn" class="secondary-btn memory-compress-btn" type="button" disabled>压缩记忆</button>
+                  <button id="compressMemoryBtn" class="secondary-btn memory-compress-btn" type="button" disabled aria-label="压缩记忆">
+                    <span class="memory-compress-ring" aria-hidden="true">
+                      <span class="memory-compress-ring-inner">
+                        <span class="memory-compress-glyph"></span>
+                      </span>
+                    </span>
+                  </button>
                   <button id="thinkingToggleBtn" class="thinking-toggle-btn" type="button">思考设置</button>
                   <div id="thinkingPopover" class="thinking-popover hidden">
                     <button id="directorThinkingBtn" class="secondary-btn director-thinking-btn" type="button" disabled data-i18n="chat.directorThinking">导演思考</button>
-                    <button id="modelThinkingBtn" class="secondary-btn model-thinking-btn" type="button" disabled data-state="disabled">思考</button>
+                    <button id="modelThinkingBtn" class="secondary-btn model-thinking-btn" type="button" disabled data-state="disabled">Agent思考</button>
                   </div>
                 </div>
-                <button id="sendBtn" class="primary-btn send-inside-btn" data-i18n="chat.send" disabled>发送</button>
+                <button id="sendBtn" class="primary-btn send-inside-btn" disabled aria-label="发送"><i class="bi bi-arrow-up"></i></button>
               </div>
             </div>
           </div>
@@ -636,6 +642,71 @@
   </template>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script>
+    // Load ALL highlight.js language modules from CDN for full language support
+    (function() {
+      if (typeof hljs === 'undefined') return;
+
+      var base = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/';
+      var loadingLangs = {};
+
+      // Wrap highlightElement to auto-load missing languages on-demand.
+      // When a code block targets a language not yet registered, kick off a
+      // CDN fetch and skip highlighting — the registerLanguage interceptor
+      // below will re-highlight it once the language module arrives.
+      var origHighlight = hljs.highlightElement;
+      hljs.highlightElement = function(el) {
+        var m = (el.className || '').match(/\blanguage-(\S+)/);
+        if (m && !hljs.getLanguage(m[1])) {
+          if (!loadingLangs[m[1]]) {
+            loadingLangs[m[1]] = true;
+            el.classList.remove('hljs');
+            var s = document.createElement('script');
+            s.src = base + m[1] + '.min.js';
+            s.async = true;
+            document.head.appendChild(s);
+          }
+          // Language not registered yet (in-flight or not started) → skip hljs.
+          // registerLanguage interceptor will re-highlight when it arrives.
+          return;
+        }
+        delete el.dataset.highlighted;
+        origHighlight.call(hljs, el);
+      };
+
+      // Hook into registerLanguage so newly loaded languages auto-rehighlight
+      // existing code blocks with that language in the DOM
+      var origRegister = hljs.registerLanguage;
+      hljs.registerLanguage = function(name, def) {
+        origRegister.call(hljs, name, def);
+        document.querySelectorAll('code.language-' + name + ':not(.hljs)').forEach(function(el) {
+          delete el.dataset.highlighted;
+          hljs.highlightElement(el);
+        });
+      };
+
+      var all = ["1c","abnf","accesslog","actionscript","ada","angelscript","apache","applescript","arcade","arduino","armasm","asciidoc","aspectj","autohotkey","autoit","avrasm","awk","axapta","bash","basic","bnf","brainfuck","c","cal","capnproto","ceylon","clean","clojure","clojure-repl","cmake","coffeescript","coq","cos","cpp","crmsh","crystal","csharp","csp","css","d","dart","delphi","diff","django","dns","dockerfile","dos","dsconfig","dts","dust","ebnf","elixir","elm","erb","erlang","erlang-repl","excel","fix","flix","fortran","fsharp","gams","gauss","gcode","gherkin","glsl","gml","go","golo","gradle","graphql","groovy","haml","handlebars","haskell","haxe","hsp","http","hy","inform7","ini","irpf90","isbl","java","javascript","jboss-cli","json","julia","julia-repl","kotlin","lasso","latex","ldif","leaf","less","lisp","livecodeserver","livescript","llvm","lsl","lua","makefile","markdown","mathematica","matlab","maxima","mel","mercury","mipsasm","mizar","mojolicious","monkey","moonscript","n1ql","nestedtext","nginx","nim","nix","node-repl","nsis","objectivec","ocaml","openscad","oxygene","parser3","perl","pf","pgsql","php","php-template","plaintext","pony","powershell","processing","profile","prolog","properties","protobuf","puppet","purebasic","python","python-repl","q","qml","r","reasonml","rib","roboconf","routeros","rsl","ruby","ruleslanguage","rust","sas","scala","scheme","scilab","scss","shell","smali","smalltalk","sml","sqf","sql","stan","stata","step21","stylus","subunit","swift","taggerscript","tap","tcl","thrift","tp","twig","typescript","vala","vbnet","vbscript","vbscript-html","verilog","vhdl","vim","wasm","wren","x86asm","xl","xml","xquery","yaml","zephir","zig"];
+      // Pre-mark all bulk languages so the dynamic wrapper doesn't re-request them
+      all.forEach(function(lang) { loadingLangs[lang] = true; });
+      // Only load languages not already in the core bundle (skip duplicates)
+      var missing = all.filter(function(lang) { return !hljs.getLanguage(lang); });
+      // Load in batches to avoid overwhelming the browser
+      var batchSize = 20;
+      function loadBatch(start) {
+        var end = Math.min(start + batchSize, missing.length);
+        for (var i = start; i < end; i++) {
+          var s = document.createElement('script');
+          s.src = base + missing[i] + '.min.js';
+          s.async = true;
+          document.head.appendChild(s);
+        }
+        if (end < missing.length) {
+          setTimeout(function() { loadBatch(end); }, 50);
+        }
+      }
+      loadBatch(0);
+    })();
+  </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-css.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-html.min.js"></script>
@@ -652,8 +723,6 @@
         "./scripts/core/helpers.js",
         "./scripts/core/state.js",
         "./scripts/features/navigation.js",
-        "./scripts/features/settings.js",
-        "./scripts/features/create.js",
         "./scripts/features/sessions.js",
         "./scripts/features/filedrop.js",
         "./scripts/features/chat-context.js",

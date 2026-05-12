@@ -96,12 +96,51 @@ function bindChat() {
     }
   });
   els.chatInput.addEventListener("keydown", (event) => {
+    // @mention popup navigation takes priority
+    if (mentionState) {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        const items = getMentionItems();
+        if (items.length > 0) {
+          const name = items[mentionState.selectedIndex]?.dataset?.name;
+          if (name) insertMention(name);
+        }
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        const items = getMentionItems();
+        if (!items.length) return;
+        mentionState.selectedIndex = mentionState.selectedIndex > 0
+          ? mentionState.selectedIndex - 1
+          : items.length - 1;
+        updateMentionSelection(items);
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        const items = getMentionItems();
+        if (!items.length) return;
+        mentionState.selectedIndex = mentionState.selectedIndex < items.length - 1
+          ? mentionState.selectedIndex + 1
+          : 0;
+        updateMentionSelection(items);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        hideMentionPopup();
+        return;
+      }
+    }
+
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       sendUserMessage();
     }
   });
   els.chatInput.addEventListener("input", clearSuggestions);
+  els.chatInput.addEventListener("input", handleMentionInput);
   if (els.suggestBtn) {
     els.suggestBtn.addEventListener("click", generateSuggestions);
   }
@@ -136,6 +175,13 @@ function bindChat() {
   window.addEventListener("resize", autoResizeChatInput);
   autoResizeChatInput();
 
+  // Close @mention popup on click outside
+  document.addEventListener("pointerdown", (event) => {
+    if (mentionState && !event.target.closest(".mention-popup") && event.target !== els.chatInput) {
+      hideMentionPopup();
+    }
+  });
+
   // 滚动跟踪：检测用户是否主动离开底部
   const scrollEl = els.chatMessages.closest(".main") || els.chatMessages;
   if (scrollEl) {
@@ -144,6 +190,73 @@ function bindChat() {
       state.userScrolledAway = distFromBottom > 100;
     }, { passive: true });
   }
+
+  // 输入框占位符轮播提示
+  startPlaceholderRotation();
+}
+
+function startPlaceholderRotation() {
+  const SPEED_TYPING = 50;
+  const SPEED_DELETING = 40;
+  const DISPLAY_MS = 6000;
+
+  function buildTips() {
+    const session = getCurrentSession();
+    const isStory = session?.mode === SESSION_MODE_STORY;
+    const tips = [
+      "输入你想说的话...",
+      "点击输入框左上角 ✨ 生成推荐回复",
+      "Shift+Enter 换行，Enter 发送",
+      "支持 Markdown 格式和代码块高亮",
+    ];
+    if (!isStory) {
+      tips.splice(1, 0, "在输入中键入 @ 可快速调用 Agent");
+    }
+    return tips;
+  }
+
+  let recentIndices = [];
+
+  function pickTip(tips) {
+    const available = tips
+      .map((_, i) => i)
+      .filter(i => !recentIndices.includes(i));
+    if (available.length === 0) recentIndices = [];
+    const pool = available.length > 0 ? available : tips.map((_, i) => i);
+    const idx = pool[Math.floor(Math.random() * pool.length)];
+    recentIndices.push(idx);
+    if (recentIndices.length > 2) recentIndices.shift();
+    return idx;
+  }
+
+  function startType() {
+    const tips = buildTips();
+    const idx = pickTip(tips);
+    const text = tips[idx];
+    typeText(text, 0);
+  }
+
+  function typeText(text, i) {
+    if (i < text.length) {
+      els.chatInput.placeholder = text.slice(0, i + 1) + "_";
+      setTimeout(() => typeText(text, i + 1), SPEED_TYPING);
+    } else {
+      els.chatInput.placeholder = text;
+      setTimeout(() => deleteText(text, text.length), DISPLAY_MS);
+    }
+  }
+
+  function deleteText(text, i) {
+    if (i > 0) {
+      els.chatInput.placeholder = text.slice(0, i - 1) + "_";
+      setTimeout(() => deleteText(text, i - 1), SPEED_DELETING);
+    } else {
+      startType();
+    }
+  }
+
+  els.chatInput.placeholder = "_";
+  setTimeout(startType, 400);
 }
 
 function autoResizeChatInput() {
@@ -174,7 +287,7 @@ function updateComposerMode() {
   const composerShell = els.chatInput?.closest(".composer-shell");
   const currentSession = getCurrentSession();
   if (state.editingUserMessageId) {
-    els.sendBtn.textContent = "确定修改";
+    els.sendBtn.innerHTML = '<i class="bi bi-check-lg"></i> 确定修改';
     els.chatInput.classList.add("editing");
     if (composer) {
       composer.classList.add("editing");
@@ -221,8 +334,8 @@ function updateComposerMode() {
     updateModelThinkingBtn();
   }
   renderCompressMemoryPopover();
-  els.sendBtn.textContent = t("chat.send");
-  setText(els.chatStatus, state.isSending ? "正在处理中..." : "可以开始聊天了");
+  els.sendBtn.innerHTML = '<i class="bi bi-arrow-up"></i>';
+  setText(els.chatStatus, state.isSending ? "正在处理中..." : "所有单位已就绪");
   updateSuggestBtn();
 }
 
@@ -438,11 +551,12 @@ function updateStreamingBubble(targetMessage) {
           if (codeStartLine >= 0) {
             var rawCode = lines.slice(codeStartLine + 1).join('\n');
             var atBottom = existingCode.scrollHeight - existingCode.scrollTop - existingCode.clientHeight < 30;
-            existingCode.textContent = escapeHtml(rawCode);
+            existingCode.textContent = rawCode;
             if (atBottom) {
               existingCode.scrollTop = existingCode.scrollHeight;
             }
             if (typeof hljs !== 'undefined') {
+              delete existingCode.dataset.highlighted;
               hljs.highlightElement(existingCode);
               wrapCodeLines(existingCode);
             }
@@ -530,6 +644,81 @@ function updateStreamingBubble(targetMessage) {
       userBlock.scrollIntoView({ block: "start" });
     }
   }
+}
+
+function createStreamBatchController(targetMessage, revealFn, updateFn) {
+  const CHAR_THRESHOLD = 18;
+  const THINKING_THRESHOLD = 16;
+  const TIME_THRESHOLD_MS = 45;
+  let pendingContent = "";
+  let pendingThinking = "";
+  let timer = null;
+
+  function clearTimer() {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  }
+
+  function flush() {
+    clearTimer();
+    if (!pendingContent && !pendingThinking) return false;
+    const contentChunk = pendingContent;
+    const thinkingChunk = pendingThinking;
+    pendingContent = "";
+    pendingThinking = "";
+    if (thinkingChunk) {
+      targetMessage.thinking += thinkingChunk;
+    }
+    if (contentChunk) {
+      targetMessage.content += contentChunk;
+    }
+    updateFn();
+    return true;
+  }
+
+  function schedule() {
+    if (!timer) {
+      timer = setTimeout(flush, TIME_THRESHOLD_MS);
+    }
+  }
+
+  return {
+    queue(delta, thinkingDelta, isRevealed) {
+      if (!isRevealed) {
+        return false;
+      }
+      if (delta) pendingContent += delta;
+      if (thinkingDelta) pendingThinking += thinkingDelta;
+      if (pendingContent.length >= CHAR_THRESHOLD || pendingThinking.length >= THINKING_THRESHOLD) {
+        flush();
+        return true;
+      }
+      schedule();
+      return false;
+    },
+    revealWithInitial(content, thinking) {
+      clearTimer();
+      pendingContent = "";
+      pendingThinking = "";
+      if (thinking) {
+        targetMessage.thinking += thinking;
+      }
+      if (content) {
+        targetMessage.content = content;
+      }
+      revealFn();
+    },
+    flushFinal() {
+      flush();
+    },
+    reset() {
+      clearTimer();
+      pendingContent = "";
+      pendingThinking = "";
+    }
+  };
 }
 
 function renderMessages(options = {}) {
@@ -908,6 +1097,60 @@ async function sendUserMessage() {
 async function runSessionTurn(session) {
   if (!session) {
     return;
+  }
+
+  // @mention direct routing — skip director, hand off to the named NPC
+  if (session.mode === SESSION_MODE_WORK) {
+    const userMsgs = session.messages.filter((m) => m.role === "user");
+    const lastUser = userMsgs[userMsgs.length - 1];
+    if (lastUser) {
+      const mention = resolveDirectMentionTarget(session, lastUser.content);
+      if (mention?.npc) {
+        const targetNpc = mention.npc;
+        const before = lastUser.content.slice(0, mention.atPos);
+        const after = lastUser.content.slice(mention.endPos);
+        const strippedContent = `${before} ${after}`.replace(/\s+/g, " ").trim();
+        lastUser.content = strippedContent || lastUser.content;
+        try {
+          setText(els.chatStatus, `${targetNpc.name} 正在回复...`);
+          await callNpc(session, targetNpc, {});
+          touchSession(session);
+          persistSessions();
+          renderMessages({ stickToBottom: true });
+          renderChatListMenu();
+          setText(els.chatStatus, `${targetNpc.name} 已回复`);
+        } catch (error) {
+          debugLog("turn", t("debug.msg.turnFailed"), {
+            sessionId: session.id,
+            error: error.message,
+          });
+          console.error("[MOYU] @mention routing failed", {
+            sessionId: session.id,
+            mentionedName: targetNpc.name,
+            error: error.message,
+          });
+          session.messages.push({
+            role: "system",
+            speaker: "系统",
+            content: `@${targetNpc.name} 回复失败：${error.message}`,
+            createdAt: new Date().toISOString(),
+          });
+          renderMessages({ stickToBottom: true });
+          persistSessions();
+          setText(els.chatStatus, `@${targetNpc.name} 回复失败`);
+        } finally {
+          state.isSending = false;
+          els.sendBtn.disabled = false;
+          els.chatInput.disabled = false;
+          autoResizeChatInput();
+          updateComposerMode();
+          if (!window.matchMedia?.("(pointer: coarse)").matches) {
+            queueMicrotask(() => els.chatInput.focus());
+          }
+        }
+        return;
+      }
+    }
   }
 
   const isNoDirector = session.mode === SESSION_MODE_WORK && !session.directorModel && session.npcs.length === 1;
@@ -1532,7 +1775,7 @@ function ensureCompressMemoryPopover() {
     popover = document.createElement("div");
     popover.className = "memory-compress-popover hidden";
     debugLog("compress", t("debug.msg.popoverMounted"));
-    els.compressMemoryBtn.insertAdjacentElement("afterend", popover);
+    els.compressMemoryBtn.appendChild(popover);
   }
   return popover;
 }
@@ -1552,11 +1795,41 @@ function buildCompressMemoryPopoverMarkup(session) {
       <div class="memory-compress-stat-row">
         <span class="memory-compress-stat-label">上下文</span>
         <span class="memory-compress-stat-value">${metrics.contextCurrent} / ${metrics.contextThreshold}</span>
+        <button class="memory-compress-popover-action" type="button"${state.isSending ? " disabled" : ""}>压缩</button>
       </div>
       <div class="memory-compress-progress"><div class="memory-compress-progress-fill" style="width:${contextPercent}%"></div></div>
     </div>
-    <button class="memory-compress-popover-action" type="button"${state.isSending ? " disabled" : ""}>压缩</button>
   `.trim();
+}
+
+function updateCompressMemoryButtonProgress(session) {
+  if (!els.compressMemoryBtn) {
+    return;
+  }
+
+  const metrics = session ? buildDirectorContextTokenMetrics(session) : null;
+  const contextPercent = metrics
+    ? Math.max(0, Math.min(100, Math.round((metrics.contextCurrent / Math.max(1, metrics.contextThreshold)) * 100)))
+    : 0;
+
+  const progressColor = contextPercent >= 100
+    ? "#ff7a59"
+    : contextPercent >= 80
+      ? "#f0c35a"
+      : "#5aa7ff";
+
+  els.compressMemoryBtn.style.setProperty("--memory-compress-percent", String(contextPercent));
+  els.compressMemoryBtn.style.setProperty("--memory-compress-progress", progressColor);
+  els.compressMemoryBtn.dataset.hasProgress = metrics ? "true" : "false";
+  els.compressMemoryBtn.setAttribute(
+    "aria-label",
+    metrics
+      ? `压缩记忆，当前上下文 ${metrics.contextCurrent} / ${metrics.contextThreshold}，进度 ${contextPercent}%`
+      : "压缩记忆"
+  );
+  els.compressMemoryBtn.title = metrics
+    ? `压缩记忆 ${metrics.contextCurrent} / ${metrics.contextThreshold}`
+    : "压缩记忆";
 }
 
 function renderCompressMemoryPopover() {
@@ -1571,6 +1844,7 @@ function renderCompressMemoryPopover() {
 
   const session = getCurrentSession();
   const hasSession = Boolean(session);
+  updateCompressMemoryButtonProgress(session);
   popover.innerHTML = hasSession ? buildCompressMemoryPopoverMarkup(session) : "";
   popover.classList.toggle("hidden", !hasSession);
   els.compressMemoryBtn.classList.toggle("info-open", state.openCompressMemoryInfo && hasSession);
@@ -1612,7 +1886,7 @@ function updateModelThinkingBtn() {
   if (!els.modelThinkingBtn) return;
   const on = els.modelThinkingBtn.dataset.state === "enabled";
   els.modelThinkingBtn.className = `secondary-btn model-thinking-btn ${on ? "state-enabled" : "state-disabled"}`;
-  els.modelThinkingBtn.textContent = on ? "思考·开启" : "思考·关闭";
+  els.modelThinkingBtn.textContent = "Agent思考";
 }
 
 function getModelThinkingState() {
@@ -1657,6 +1931,13 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   // Defer reveal: buffer initial stream content, show meta + first chunk together
   let streamRevealed = false;
   let initialBuffer = "";
+  let initialThinkingBuffer = "";
+  const INITIAL_REVEAL_THRESHOLD = 12;
+  const streamBatch = createStreamBatchController(
+    targetMessage,
+    () => renderMessages({ stickToBottom: true }),
+    () => updateStreamingBubble(targetMessage)
+  );
 
   const shouldTrackUsage = state.settings?.session?.showTokenDisplay !== false;
 
@@ -1781,24 +2062,24 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
           }
           const delta = data?.choices?.[0]?.delta?.content ?? data?.choices?.[0]?.message?.content ?? "";
           const thinkingDelta = data?.choices?.[0]?.delta?.reasoning_content ?? data?.choices?.[0]?.message?.reasoning_content ?? "";
-          if (thinkingDelta) {
-            targetMessage.thinking += thinkingDelta;
-            if (streamRevealed) updateStreamingBubble(targetMessage);
+          if (thinkingDelta && !streamRevealed) {
+            initialThinkingBuffer += thinkingDelta;
           }
           if (delta) {
             if (!streamRevealed) {
               initialBuffer += delta;
-              if (initialBuffer.length >= 25) {
-                targetMessage.content = initialBuffer;
+              if (initialBuffer.length >= INITIAL_REVEAL_THRESHOLD) {
                 targetMessage.pending = false;
                 targetMessage.streaming = true;
-                renderMessages({ stickToBottom: true });
+                streamBatch.revealWithInitial(initialBuffer, initialThinkingBuffer);
                 streamRevealed = true;
+                initialThinkingBuffer = "";
               }
             } else {
-              targetMessage.content += delta;
-              updateStreamingBubble(targetMessage);
+              streamBatch.queue(delta, thinkingDelta, streamRevealed);
             }
+          } else if (thinkingDelta && streamRevealed) {
+            streamBatch.queue("", thinkingDelta, streamRevealed);
           }
         } catch {
           // Ignore incompatible keepalive chunks.
@@ -1809,12 +2090,13 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
 
   // Flush any buffered content that didn't reach the threshold
   if (!streamRevealed && initialBuffer) {
-    targetMessage.content = initialBuffer;
     targetMessage.pending = false;
     targetMessage.streaming = true;
-    renderMessages({ stickToBottom: true });
+    streamBatch.revealWithInitial(initialBuffer, initialThinkingBuffer);
     streamRevealed = true;
+    initialThinkingBuffer = "";
   }
+  streamBatch.flushFinal();
 
   if (!targetMessage.content.trim()) {
     targetMessage.streaming = false;
@@ -1832,6 +2114,12 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     if (retryResponse.ok && retryResponse.body) {
       let retryRevealed = false;
       let retryInitialBuffer = "";
+      let retryInitialThinkingBuffer = "";
+      const retryBatch = createStreamBatchController(
+        targetMessage,
+        () => renderMessages({ stickToBottom: true }),
+        () => updateStreamingBubble(targetMessage)
+      );
       const retryReader = retryResponse.body.getReader();
       const retryDecoder = new TextDecoder("utf-8");
       let retryBuffer = "";
@@ -1856,24 +2144,24 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
               }
               const delta = data?.choices?.[0]?.delta?.content ?? "";
               const thinkingDelta = data?.choices?.[0]?.delta?.reasoning_content ?? "";
-              if (thinkingDelta) {
-                targetMessage.thinking += thinkingDelta;
-                if (retryRevealed) updateStreamingBubble(targetMessage);
+              if (thinkingDelta && !retryRevealed) {
+                retryInitialThinkingBuffer += thinkingDelta;
               }
               if (delta) {
                 if (!retryRevealed) {
                   retryInitialBuffer += delta;
-                  if (retryInitialBuffer.length >= 25) {
-                    targetMessage.content = retryInitialBuffer;
+                  if (retryInitialBuffer.length >= INITIAL_REVEAL_THRESHOLD) {
                     targetMessage.pending = false;
                     targetMessage.streaming = true;
-                    renderMessages({ stickToBottom: true });
+                    retryBatch.revealWithInitial(retryInitialBuffer, retryInitialThinkingBuffer);
                     retryRevealed = true;
+                    retryInitialThinkingBuffer = "";
                   }
                 } else {
-                  targetMessage.content += delta;
-                  updateStreamingBubble(targetMessage);
+                  retryBatch.queue(delta, thinkingDelta, retryRevealed);
                 }
+              } else if (thinkingDelta && retryRevealed) {
+                retryBatch.queue("", thinkingDelta, retryRevealed);
               }
             } catch {}
           }
@@ -1881,12 +2169,13 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
       }
 
       if (!retryRevealed && retryInitialBuffer) {
-        targetMessage.content = retryInitialBuffer;
         targetMessage.pending = false;
         targetMessage.streaming = true;
-        renderMessages({ stickToBottom: true });
+        retryBatch.revealWithInitial(retryInitialBuffer, retryInitialThinkingBuffer);
         retryRevealed = true;
+        retryInitialThinkingBuffer = "";
       }
+      retryBatch.flushFinal();
     }
 
     if (!targetMessage.content.trim()) {
@@ -2092,4 +2381,241 @@ async function generateSuggestionGuide(session) {
       persistSessions();
     }
   } catch {}
+}
+
+// ============================================================
+// @mention Autocomplete — work-mode only NPC quick-select
+// ============================================================
+
+let mentionState = null;
+
+function escapeMentionPattern(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function resolveDirectMentionTarget(session, text, cursorPos = text.length) {
+  if (!session || session.mode !== SESSION_MODE_WORK || !text) {
+    return null;
+  }
+
+  const allNpcs = getSceneNpcs(session);
+  const seen = new Set();
+  const uniqueNpcs = allNpcs.filter((npc) => {
+    if (!npc?.name || seen.has(npc.name)) {
+      return false;
+    }
+    seen.add(npc.name);
+    return true;
+  });
+
+  let matched = null;
+  uniqueNpcs.forEach((npc) => {
+    const pattern = new RegExp(`@${escapeMentionPattern(npc.name)}(?=$|\\s|[，。、“”"'！？!?：:；;,.()（）\\[\\]{}<>《》])`, "g");
+    let result;
+    while ((result = pattern.exec(text)) !== null) {
+      const atPos = result.index;
+      const endPos = atPos + result[0].length;
+      if (atPos > cursorPos) {
+        break;
+      }
+      if (!matched || atPos >= matched.atPos) {
+        matched = {
+          npc,
+          atPos,
+          endPos,
+          raw: result[0],
+        };
+      }
+    }
+  });
+
+  if (matched) {
+    return matched;
+  }
+
+  const beforeCursor = text.slice(0, cursorPos);
+  const atPos = beforeCursor.lastIndexOf("@");
+  if (atPos < 0) {
+    return null;
+  }
+
+  return {
+    npc: null,
+    atPos,
+    endPos: cursorPos,
+    raw: beforeCursor.slice(atPos, cursorPos),
+    filterText: beforeCursor.slice(atPos + 1, cursorPos),
+  };
+}
+
+function getMentionItems() {
+  const popup = document.querySelector('.mention-popup');
+  return popup ? [...popup.querySelectorAll('.mention-popup-item')] : [];
+}
+
+function updateMentionSelection(items) {
+  items.forEach((el, i) => {
+    el.classList.toggle('active', i === mentionState?.selectedIndex);
+  });
+  const active = mentionState != null ? items[mentionState.selectedIndex] : null;
+  if (active) {
+    active.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function handleMentionInput() {
+  const session = getCurrentSession();
+  if (!session || session.mode !== SESSION_MODE_WORK) {
+    hideMentionPopup();
+    return;
+  }
+
+  const input = els.chatInput;
+  const cursorPos = input.selectionStart;
+  const text = input.value;
+  if (!text) { hideMentionPopup(); return; }
+
+  const mention = resolveDirectMentionTarget(session, text, cursorPos);
+  if (mention && mention.atPos >= 0 && !mention.npc) {
+    showMentionPopup(mention.atPos, mention.filterText || "");
+  } else {
+    hideMentionPopup();
+  }
+}
+
+function getTextCoords(textarea, charIndex) {
+  const style = getComputedStyle(textarea);
+  const tr = textarea.getBoundingClientRect();
+
+  if (charIndex === 0) {
+    return {
+      top: tr.top + (parseFloat(style.paddingTop) || 0),
+      left: tr.left + (parseFloat(style.paddingLeft) || 0),
+    };
+  }
+
+  const d = document.createElement('div');
+  d.style.cssText = [
+    'position:fixed;visibility:hidden;height:auto;overflow:hidden;',
+    'white-space:pre-wrap;overflow-wrap:break-word;',
+    `top:${tr.top}px;left:${tr.left}px;`,
+    `width:${style.width};`,
+    `padding-top:${style.paddingTop};padding-left:${style.paddingLeft};`,
+    `padding-right:${style.paddingRight};padding-bottom:${style.paddingBottom};`,
+    `font-size:${style.fontSize};font-family:${style.fontFamily};`,
+    `font-weight:${style.fontWeight};line-height:${style.lineHeight};`,
+    `letter-spacing:${style.letterSpacing};`,
+    `box-sizing:${style.boxSizing};`,
+  ].join('');
+
+  const before = textarea.value.substring(0, charIndex);
+  d.innerHTML = before
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>')
+    + '<i style="font-style:normal"></i>';
+  document.body.appendChild(d);
+
+  const m = d.querySelector('i').getBoundingClientRect();
+  document.body.removeChild(d);
+
+  return {
+    top: m.top - textarea.scrollTop,
+    left: m.left,
+  };
+}
+
+function showMentionPopup(atPos, filterText) {
+  const session = getCurrentSession();
+  if (!session || session.mode !== SESSION_MODE_WORK) {
+    hideMentionPopup();
+    return;
+  }
+
+  const allNpcs = getSceneNpcs(session);
+  // Deduplicate by name
+  const seen = new Set();
+  const filtered = allNpcs.filter(npc => {
+    if (seen.has(npc.name)) return false;
+    seen.add(npc.name);
+    return npc.name.includes(filterText);
+  });
+
+  if (!filtered.length) { hideMentionPopup(); return; }
+
+  let popup = document.querySelector('.mention-popup');
+  if (!popup) {
+    popup = document.createElement('div');
+    popup.className = 'mention-popup hidden';
+    document.body.appendChild(popup);
+  }
+
+  popup.innerHTML = filtered.map((npc, i) =>
+    `<div class="mention-popup-item ${i === 0 ? 'active' : ''}" data-name="${escapeHtml(npc.name)}">${escapeHtml(npc.name)}</div>`
+  ).join('');
+
+  // Position: 5px above the '@' character
+  const coords = getTextCoords(els.chatInput, atPos);
+  popup.style.left = coords.left + 'px';
+  popup.style.top = '0';
+  popup.classList.add('visible');
+  popup.classList.remove('hidden');
+  // Wait for layout then finalize position
+  requestAnimationFrame(() => {
+    const h = popup.offsetHeight;
+    popup.style.top = (coords.top - 5 - h) + 'px';
+    // Clamp to viewport
+    const r = popup.getBoundingClientRect();
+    const vw = window.innerWidth;
+    if (r.right > vw - 4) popup.style.left = (vw - r.width - 8) + 'px';
+    if (parseFloat(popup.style.left) < 4) popup.style.left = '4px';
+    if (r.top < 0) popup.style.top = (coords.top + 5) + 'px'; // flip below
+  });
+
+  // Click selection
+  popup.querySelectorAll('.mention-popup-item').forEach(item => {
+    item.addEventListener('click', () => insertMention(item.dataset.name));
+    item.addEventListener('mouseenter', () => {
+      if (!mentionState) return;
+      popup.querySelectorAll('.mention-popup-item').forEach(el => el.classList.remove('active'));
+      item.classList.add('active');
+      mentionState.selectedIndex = [...item.parentNode.children].indexOf(item);
+    });
+  });
+
+  mentionState = { atPos, filterText, selectedIndex: 0 };
+}
+
+function insertMention(name) {
+  const input = els.chatInput;
+  const text = input.value;
+  if (!mentionState) return;
+  const atPos = mentionState.atPos;
+
+  // Find end of current filter text
+  let endPos = atPos + 1;
+  while (endPos < text.length && text[endPos] !== ' ' && text[endPos] !== '\n') {
+    endPos++;
+  }
+
+  hideMentionPopup();
+
+  const before = text.substring(0, atPos);
+  const after = text.substring(endPos);
+  input.value = before + '@' + name + ' ' + after;
+
+  const newCursor = before.length + name.length + 2;
+  input.setSelectionRange(newCursor, newCursor);
+  autoResizeChatInput();
+  input.focus();
+}
+
+function hideMentionPopup() {
+  const popup = document.querySelector('.mention-popup');
+  if (popup) {
+    popup.classList.remove('visible');
+    popup.classList.add('hidden');
+  }
+  mentionState = null;
 }

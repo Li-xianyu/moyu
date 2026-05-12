@@ -590,6 +590,9 @@ function sanitizeNpcReply(session, speaker, content) {
   if (!cleaned) {
     return cleaned;
   }
+  if (/^`{3,}/m.test(cleaned)) {
+    return cleaned;
+  }
 
   const allNpcNames = getSceneNpcs(session).map((npc) => npc.name);
   const labelPattern = new RegExp(`^(${allNpcNames.map(escapeRegExp).join("|")})[：:]\\s*`);
@@ -631,6 +634,9 @@ function sanitizeNpcReply(session, speaker, content) {
 function sanitizeNpcReplyStrict(session, speaker, content) {
   let cleaned = sanitizeNpcReply(session, speaker, content);
   if (!cleaned) {
+    return cleaned;
+  }
+  if (/^`{3,}/m.test(cleaned)) {
     return cleaned;
   }
 
@@ -833,48 +839,34 @@ function unescapeHtml(text) {
 }
 
 function formatCodeBlock(lang, code) {
-  var lower = (lang || "").toLowerCase();
-
-  // js-beautify for JS/HTML/CSS
-  if (typeof js_beautify !== "undefined") {
-    try {
-      var jsLangs = { js: 1, javascript: 1, jsx: 1, ts: 1, typescript: 1, tsx: 1, json: 1, jsonc: 1, cjs: 1, mjs: 1 };
-      var htmlLangs = { html: 1, xml: 1, svg: 1, xhtml: 1, htm: 1 };
-      var cssLangs = { css: 1, scss: 1, less: 1, sass: 1 };
-      var opts = { indent_size: 2, wrap_line_length: 80, max_preserve_newlines: 2 };
-      if (jsLangs[lower]) return js_beautify(code, opts);
-      if (htmlLangs[lower]) return html_beautify(code, opts);
-      if (cssLangs[lower]) return css_beautify(code, opts);
-    } catch {}
-  }
-
-  // Generic indentation normalizer for unsupported languages (Python, Ruby, Go, etc.)
-  return normalizeCodeIndent(code);
+  return String(code || "");
 }
 
-function normalizeCodeIndent(code) {
-  var lines = code.split("\n");
-  if (lines.length <= 1) return code;
-
-  // Remove leading/trailing blank lines
-  while (lines.length && lines[0].trim() === "") lines.shift();
-  while (lines.length && lines[lines.length - 1].trim() === "") lines.pop();
-
-  // Detect common indentation
-  var minIndent = Infinity;
-  for (var i = 0; i < lines.length; i++) {
-    var trimmed = lines[i].trimStart();
-    if (trimmed === "") continue;
-    var indent = lines[i].length - trimmed.length;
-    if (indent < minIndent) minIndent = indent;
-  }
-  if (minIndent === Infinity || minIndent === 0) return lines.join("\n");
-
-  // Strip common leading whitespace
-  return lines.map(function (line) {
-    if (line.trim() === "") return "";
-    return line.slice(minIndent);
-  }).join("\n");
+// Normalize code fence language identifiers to highlight.js language names.
+// AI models often output informal or partial names (e.g. "objective" vs "objectivec").
+const LANG_ALIASES = {
+  "c#": "csharp",
+  "c++": "cpp",
+  "cplusplus": "cpp",
+  "objective": "objectivec",
+  "objective-c": "objectivec",
+  "obj-c": "objectivec",
+  "objc": "objectivec",
+  "f#": "fsharp",
+  "fsharp": "fsharp",
+  "vb.net": "vbnet",
+  "golang": "go",
+  "node": "javascript",
+  "ts": "typescript",
+  "js": "javascript",
+  "py": "python",
+  "rb": "ruby",
+  "sh": "bash",
+  "shell": "bash",
+};
+function normalizeCodeLang(raw) {
+  const lang = String(raw || "").trim().toLowerCase();
+  return LANG_ALIASES[lang] || lang;
 }
 
 function renderMarkdownContent(text) {
@@ -958,8 +950,9 @@ function renderMarkdownContent(text) {
         const openLen = (openingFence?.match(/^`+/) || [""])[0].length;
         const isCleanFence = /^`+\s*$/.test(line);
         if (fenceLen >= openLen && isCleanFence) {
-          const langMatch = openingFence?.match(/^`+\s*(\w*)/);
-          const lang = (langMatch && langMatch[1]) || "";
+          const langMatch = openingFence?.match(/^`+\s*(\S*)/);
+          const rawLang = (langMatch && langMatch[1]) || "";
+          const lang = normalizeCodeLang(rawLang);
           const langAttr = lang ? ` class="language-${lang}"` : "";
           const copyBtnHtml = "<button class=\"code-copy-btn\" type=\"button\" title=\"复制代码\"><i class=\"bi bi-clipboard\"></i></button>";
           const langLabelHtml = lang
@@ -1057,8 +1050,9 @@ function renderMarkdownContent(text) {
 
   // Close unclosed code block — same treatment as closed but without formatting
   if (inCodeBlock && codeBuffer.length) {
-    const langMatch = openingFence?.match(/^`+\s*(\w*)/);
-    const lang = (langMatch && langMatch[1]) || "";
+    const langMatch = openingFence?.match(/^`+\s*(\S*)/);
+    const rawLang = (langMatch && langMatch[1]) || "";
+    const lang = normalizeCodeLang(rawLang);
     const langAttr = lang ? ` class="language-${lang}"` : "";
     const copyBtnHtml = "<button class=\"code-copy-btn\" type=\"button\" title=\"复制代码\"><i class=\"bi bi-clipboard\"></i></button>";
     const langLabelHtml = lang

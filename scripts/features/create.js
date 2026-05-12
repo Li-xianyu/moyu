@@ -1,7 +1,3 @@
-function getEntityTerm(mode) {
-  return mode === SESSION_MODE_WORK ? "AI" : "NPC";
-}
-
 function updateEntityTerms() {
   const mode = getSelectedMode();
   const term = getEntityTerm(mode);

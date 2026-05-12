@@ -248,10 +248,16 @@ function renderChatListMenu() {
       </span>
       <span>${t("chat.menuEditSession")}</span>
     `;
-    editBtn.addEventListener("click", (event) => {
+    editBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
       state.openChatMenuId = null;
       state.deleteConfirmSessionId = null;
+      if (typeof window._loadScript === "function") {
+        await Promise.all([
+          window._loadScript("./scripts/features/create.js"),
+          window._loadScript("./scripts/features/settings.js"),
+        ]);
+      }
       openSessionEditor(session.id);
     });
 

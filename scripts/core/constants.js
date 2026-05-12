@@ -174,7 +174,7 @@ const i18n = {
     "chat.systemSpeaker": "系统",
     "chat.systemNoticeCreated": "会话已创建",
     "chat.globalPromptLabel": "全局设定",
-    "chat.readyAfterCreate": "创建会话后即可聊天",
+    "chat.readyAfterCreate": "所有单位已就绪",
     "chat.welcomeIntro": "一个多 AI 剧场与角色对话实验场。",
     "chat.welcomeHint": "先在左侧设置接口与工作模型，再创建聊天开始模鱼。",
     "chat.regenerate": "重新生成",

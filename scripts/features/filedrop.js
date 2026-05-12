@@ -11,7 +11,7 @@ function detectImportedFileType(data) {
   return "unknown";
 }
 
-function applySettingsFromDrop(data) {
+async function applySettingsFromDrop(data) {
   try {
     state.settings.configs = Array.isArray(data.settings.configs) ? data.settings.configs : [];
     state.settings.activeConfigId = data.settings.activeConfigId || null;
@@ -28,6 +28,10 @@ function applySettingsFromDrop(data) {
     persistSettings();
     persistModelCache();
     applyI18n();
+    await Promise.all([
+      typeof window._loadScript === "function" ? window._loadScript("./scripts/features/settings.js") : Promise.resolve(),
+      typeof window._loadScript === "function" ? window._loadScript("./scripts/features/create.js") : Promise.resolve(),
+    ]);
     hydrateSettingsInputs();
     renderSavedConfigs();
     renderModelCache();
@@ -43,13 +47,13 @@ function applySettingsFromDrop(data) {
 
 function handleDroppedFile(file) {
   const reader = new FileReader();
-  reader.onload = (event) => {
+  reader.onload = async (event) => {
     try {
       const data = JSON.parse(event.target.result);
       const type = detectImportedFileType(data);
 
       if (type === "settings") {
-        applySettingsFromDrop(data);
+        await applySettingsFromDrop(data);
       } else if (type === "sessions") {
         importSessionsFromFile(file);
       } else {

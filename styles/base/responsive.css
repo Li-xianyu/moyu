@@ -419,9 +419,9 @@
   }
 
   .memory-compress-btn {
-    min-width: 22px;
-    width: 22px;
-    min-height: 22px;
+    min-width: 18px;
+    width: 18px;
+    min-height: 18px;
   }
 
   .memory-compress-popover {

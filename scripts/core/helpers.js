@@ -143,6 +143,10 @@ function scrollChatToBottom() {
   }
 }
 
+function getEntityTerm(mode) {
+  return mode === SESSION_MODE_WORK ? "AI" : "NPC";
+}
+
 function maskKey(key) {
   if (key.length <= 8) {
     return "*".repeat(Math.max(key.length, 4));
