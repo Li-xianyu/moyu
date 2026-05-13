@@ -144,7 +144,7 @@ function getDirectorRecentMessages(session, recentLimit = DIRECTOR_RECENT_HISTOR
 
 function getCompressibleDirectorMessages(session, recentLimit = DIRECTOR_RECENT_HISTORY_LIMIT) {
   const visibleMessages = getVisibleHistoryMessages(session);
-  if (visibleMessages.length <= recentLimit) {
+  if (visibleMessages.length === 0) {
     return [];
   }
 
@@ -152,11 +152,12 @@ function getCompressibleDirectorMessages(session, recentLimit = DIRECTOR_RECENT_
     ? visibleMessages.findIndex((message) => message.id === session.compressedUntilMessageId)
     : -1;
   const unsummarized = cutoffIndex >= 0 ? visibleMessages.slice(cutoffIndex + 1) : visibleMessages;
-  if (unsummarized.length <= recentLimit) {
+  if (unsummarized.length === 0) {
     return [];
   }
 
-  return unsummarized.slice(0, unsummarized.length - recentLimit);
+  const compressCount = Math.max(1, unsummarized.length - recentLimit);
+  return unsummarized.slice(0, compressCount);
 }
 
 function buildManualCompressSourceMessages(session, recentLimit = DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT) {
@@ -1078,20 +1079,14 @@ function buildDirectorContextTokenMetrics(session) {
     return null;
   }
 
-  const currentDirectorContext = [
-    { role: "system", content: getDirectorSystemPrompt(session) },
-    { role: "system", content: "固定 NPC 列表：" + JSON.stringify((session.npcs || []).map((npc) => npc.name)) },
-    { role: "system", content: "场内 NPC：" + JSON.stringify(getSceneNpcs(session).map((npc) => npc.name)) },
-    { role: "system", content: "NPC 资料：" + buildDirectorNpcRoster(session) },
-    { role: "system", content: "全局设定：" + session.globalPrompt },
-    ...buildDirectorContextMessages(session),
-  ];
-
+  // 只衡量导演记忆本身（排除系统提示词、NPC 资料等固定开销），
+  // 因为压缩只能缩小记忆，无法减少固定开销。
+  const memoryMessages = buildDirectorMemorySystemMessage(session);
   const recentMessages = getDirectorRecentMessages(session);
 
   return {
-    contextCurrent: estimateChatMessagesTokens(currentDirectorContext),
-    contextThreshold: state.settings?.session?.compressThreshold || DIRECTOR_AUTO_COMPRESS_THRESHOLD_DEFAULT,
+    contextCurrent: estimateChatMessagesTokens(memoryMessages),
+    contextThreshold: DIRECTOR_MEMORY_TARGET_MAX,
     recentCount: recentMessages.length,
   };
 }

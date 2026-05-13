@@ -51,6 +51,13 @@ function bindChat() {
       state.openCompressMemoryInfo = !state.openCompressMemoryInfo;
       renderCompressMemoryPopover();
     });
+    els.compressMemoryBtn.addEventListener("pointerenter", () => {
+      requestAnimationFrame(() => adjustCompressPopoverBoundary());
+    });
+    els.compressMemoryBtn.addEventListener("pointerleave", () => {
+      const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
+      if (popover) popover.style.left = "";
+    });
   }
   // Director thinking toggle (inside popover)
   if (els.directorThinkingBtn) {
@@ -1631,21 +1638,28 @@ async function ensureDirectorSummary(session, options = {}) {
   const force = Boolean(options.force);
   const mode = options.mode || (force ? "manual" : "auto");
   const candidateMessages = getCompressibleDirectorMessages(session, recentLimit);
-  if (mode !== "manual" && !candidateMessages.length) {
-    return false;
-  }
 
   if (mode !== "manual") {
-    const currentDirectorContext = [
-      { role: "system", content: getDirectorSystemPrompt(session) },
-      { role: "system", content: "固定 NPC 列表：" + JSON.stringify((session.npcs || []).map((npc) => npc.name)) },
-      { role: "system", content: "场内 NPC：" + JSON.stringify(getSceneNpcs(session).map((npc) => npc.name)) },
-      { role: "system", content: "NPC 资料：" + buildDirectorNpcRoster(session) },
-      { role: "system", content: "全局设定：" + session.globalPrompt },
-      ...buildDirectorContextMessages(session),
-    ];
-    const threshold = state.settings?.session?.compressThreshold || DIRECTOR_AUTO_COMPRESS_THRESHOLD_DEFAULT;
-    if (estimateChatMessagesTokens(currentDirectorContext) < threshold) {
+    // 只衡量导演记忆本身（排除系统提示词、NPC 资料等固定开销），
+    // 因为压缩只能缩小记忆内容，无法减少固定开销。
+    const memoryOnlyContext = buildDirectorMemorySystemMessage(session);
+    const threshold = DIRECTOR_MEMORY_TARGET_MAX;
+    const memoryTokens = estimateChatMessagesTokens(memoryOnlyContext);
+
+    console.log("[MOYU:compress]", mode, "mode", {
+      memoryTokens,
+      threshold,
+      candidateCount: candidateMessages.length,
+      recentLimit,
+    });
+
+    if (memoryTokens >= threshold) {
+      // 记忆超阈值 → 全量重压缩（像手动压缩一样收紧记忆）
+      console.warn("[MOYU:compress] 记忆超阈值，触发全量重压缩", { memoryTokens, threshold });
+      return ensureDirectorSummary(session, { force: true, mode: "manual", recentLimit: DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT });
+    }
+
+    if (!candidateMessages.length) {
       return false;
     }
   }
@@ -1674,7 +1688,32 @@ async function ensureDirectorSummary(session, options = {}) {
   const beforeMemoryTokens = estimateTokens(currentMemoryBlock || String(session.directorSummary || ""));
   const beforeManualBudget = beforeMemoryTokens + beforeRecentTokens;
 
-  const payload = await createChatCompletionPayload(directorConfig.host, directorConfig.key, session.directorModel, summaryMessages, false, 0.4);
+  console.log("[MOYU:compress]", "调用压缩模型", {
+    model: session.directorModel,
+    mode,
+    targetTokens,
+    beforeMemoryTokens,
+    beforeRecentTokens,
+  });
+
+  let payload;
+  try {
+    payload = await createChatCompletionPayload(directorConfig.host, directorConfig.key, session.directorModel, summaryMessages, false, 0.4);
+  } catch (apiError) {
+    console.error("[MOYU:compress] 压缩 API 调用失败", {
+      model: session.directorModel,
+      host: directorConfig.host,
+      message: apiError.message,
+      status: apiError.status,
+    });
+    throw apiError;
+  }
+
+  console.log("[MOYU:compress]", "压缩模型返回", {
+    contentLength: payload.content?.length || 0,
+    usage: payload.usage,
+  });
+  console.log("[MOYU:compress]", "压缩结果文本", payload.content);
   const nextMemory = parseDirectorMemoryPayload(payload.content, session);
   const nextMemoryBlock = buildDirectorMemoryBlock(nextMemory);
   const nextSummary = nextMemory.synopsis || nextMemoryBlock;
@@ -1683,7 +1722,17 @@ async function ensureDirectorSummary(session, options = {}) {
     || !currentMemoryBlock
     || nextMemoryTokens <= Math.max(DIRECTOR_MEMORY_TARGET_MIN, beforeManualBudget);
 
+  console.log("[MOYU:compress]", "解析结果", {
+    mode,
+    beforeMemoryTokens,
+    nextMemoryTokens,
+    shouldApply: shouldApplyManualSummary,
+  });
+
   if (!shouldApplyManualSummary) {
+    console.warn("[MOYU:compress]", "未应用压缩结果", {
+      reason: mode === "manual" ? "新记忆token超预算" : "非手动模式且无变更",
+    });
     return false;
   }
 
@@ -1697,6 +1746,13 @@ async function ensureDirectorSummary(session, options = {}) {
   }
   touchSession(session);
   persistSessions();
+
+  console.log("[MOYU:compress]", "压缩完成", {
+    mode,
+    beforeMemoryTokens,
+    nextMemoryTokens,
+    compressedUntilMessageId: session.compressedUntilMessageId,
+  });
   return true;
 }
 
@@ -1707,8 +1763,35 @@ async function tryAutoCompressSession(session) {
   if (!session.directorModel) return;
 
   const metrics = buildDirectorContextTokenMetrics(session);
-  if (!metrics || metrics.contextCurrent < metrics.contextThreshold) return;
+  if (metrics) {
+    const needsRecompress = metrics.contextCurrent >= metrics.contextThreshold;
+    // 算未压缩消息数，超过 recentLimit 才有合并价值
+    const visibleMessages = getVisibleHistoryMessages(session);
+    const cutoffIdx = session?.compressedUntilMessageId
+      ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
+      : -1;
+    const unsummarizedCount = cutoffIdx >= 0
+      ? Math.max(0, visibleMessages.length - cutoffIdx - 1)
+      : visibleMessages.length;
+    const needsMerge = unsummarizedCount > DIRECTOR_RECENT_HISTORY_LIMIT;
+    if (!needsRecompress && !needsMerge) {
+      updateCompressMemoryButtonProgress(session);
+      return;
+    }
+  }
 
+  // Show state immediately
+  updateCompressMemoryButtonProgress(session);
+
+  console.log("[MOYU:compress]", "自动压缩触发", {
+    sessionId: session.id,
+    directorModel: session.directorModel,
+    contextCurrent: metrics?.contextCurrent,
+    contextThreshold: metrics?.contextThreshold,
+  });
+
+  const prevStatusText = els.chatStatus?.textContent || "";
+  setText(els.chatStatus, "正在自动压缩导演记忆...");
   _autoCompressPending = true;
   try {
     const changed = await ensureDirectorSummary(session);
@@ -1716,8 +1799,14 @@ async function tryAutoCompressSession(session) {
       updateCompressMemoryButtonProgress(session);
       renderCompressMemoryPopover();
     }
-  } catch {
-    // auto-compress failure is non-blocking
+    setText(els.chatStatus, prevStatusText || "所有单位已就绪");
+  } catch (error) {
+    setText(els.chatStatus, prevStatusText || "所有单位已就绪");
+    console.error("[MOYU:compress]", "自动压缩失败", {
+      message: error?.message || String(error),
+      directorModel: session.directorModel,
+      stack: error?.stack,
+    });
   } finally {
     _autoCompressPending = false;
   }
@@ -1871,6 +1960,9 @@ function renderCompressMemoryPopover() {
   updateCompressMemoryButtonProgress(session);
   popover.innerHTML = hasSession ? buildCompressMemoryPopoverMarkup(session) : "";
   popover.classList.toggle("hidden", !hasSession);
+  if (hasSession) {
+    requestAnimationFrame(() => adjustCompressPopoverBoundary());
+  }
   els.compressMemoryBtn.classList.toggle("info-open", state.openCompressMemoryInfo && hasSession);
   debugLog("compress", t("debug.msg.popoverRendered"), {
     hasSession,
@@ -1903,6 +1995,27 @@ function renderCompressMemoryPopover() {
     });
   } else {
     debugLog("compress", t("debug.msg.popoverActionMissing"));
+  }
+}
+
+function adjustCompressPopoverBoundary() {
+  const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
+  if (!popover || popover.classList.contains("hidden")) return;
+  const rect = popover.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const pad = 8;
+  if (rect.left >= pad && rect.right <= vw - pad) {
+    popover.style.left = "";
+    return;
+  }
+  const computedLeft = getComputedStyle(popover).left;
+  const base = computedLeft || "50%";
+  if (rect.left < pad) {
+    const shift = pad - rect.left;
+    popover.style.left = base.includes("%") ? `calc(${base} + ${shift}px)` : `${shift}px`;
+  } else if (rect.right > vw - pad) {
+    const shift = rect.right - vw + pad;
+    popover.style.left = base.includes("%") ? `calc(${base} - ${shift}px)` : `auto`;
   }
 }
 
