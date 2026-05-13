@@ -252,6 +252,24 @@ function bindSettings() {
     });
     els.importBackupInput.addEventListener("change", importSettingsBackup);
   }
+
+  preventToggleWhileTyping();
+}
+
+// 移动端设置页：输入框有焦点时，点开关只收起键盘，不触发切换。
+// 避免 blur → 键盘收起过程中 viewport 状态机计算错误导致页面收缩。
+function preventToggleWhileTyping() {
+  const isNarrow = window.matchMedia("(max-width: 960px)").matches;
+  const isTouch = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+  if (!isNarrow && !isTouch) return;
+
+  document.addEventListener("pointerdown", (e) => {
+    if (!isTypingTarget()) return;
+    const toggle = e.target.closest(".settings-toggle-row, .settings-toggle-input");
+    if (!toggle) return;
+    e.preventDefault();
+    document.activeElement?.blur();
+  }, { capture: true });
 }
 
 function switchSettingsSection(section) {

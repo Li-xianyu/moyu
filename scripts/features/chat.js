@@ -31,7 +31,13 @@ const DIRECTOR_MANUAL_RECOMPRESS_PROMPT = [
 ].join("\\n");
 
 function bindChat() {
-  els.sendBtn.addEventListener("click", sendUserMessage);
+  els.sendBtn.addEventListener("click", function onSendClick() {
+    if (state.isSending) {
+      stopGeneration();
+    } else {
+      sendUserMessage();
+    }
+  });
   if (els.compressMemoryBtn) {
     ensureCompressMemoryPopover();
     els.compressMemoryBtn.addEventListener("pointerdown", (event) => {
@@ -293,8 +299,22 @@ function updateComposerMode() {
   const composer = els.chatInput?.closest(".composer");
   const composerShell = els.chatInput?.closest(".composer-shell");
   const currentSession = getCurrentSession();
+
+  // 输出中 → 暂停按钮优先于一切
+  if (state.isSending) {
+    els.sendBtn.innerHTML = '<i class="bi bi-stop-fill"></i>';
+    els.sendBtn.disabled = false;
+    els.sendBtn.classList.add("sending");
+    els.chatInput.classList.remove("editing");
+    if (composer) composer.classList.remove("editing");
+    if (composerShell) composerShell.classList.remove("editing");
+    if (els.cancelEditBtn) els.cancelEditBtn.classList.add("hidden");
+    if (els.compressMemoryBtn) els.compressMemoryBtn.disabled = true;
+    return;
+  }
+
   if (state.editingUserMessageId) {
-    els.sendBtn.innerHTML = '<i class="bi bi-check-lg"></i> 确定修改';
+    els.sendBtn.innerHTML = '<i class="bi bi-check-lg"></i>';
     els.chatInput.classList.add("editing");
     if (composer) {
       composer.classList.add("editing");
@@ -314,6 +334,7 @@ function updateComposerMode() {
     return;
   }
 
+  els.sendBtn.classList.remove("sending");
   els.chatInput.classList.remove("editing");
   if (composer) {
     composer.classList.remove("editing");
@@ -455,6 +476,7 @@ async function regenerateFromUserMessage(messageId) {
     lastUser.scrollIntoView({ block: "start" });
     state.userScrolledAway = true;
   }
+  state.abortController = new AbortController();
   await runSessionTurn(session);
 }
 
@@ -504,11 +526,39 @@ function wrapCodeLines(el) {
   if (state.settings?.session?.showLineNumbers !== true) return;
   var codes = el.tagName === 'CODE' ? [el] : el.querySelectorAll('pre code');
   Array.from(codes).forEach(function (code) {
-    var lines = code.innerHTML.split('\n');
-    if (lines.length > 1 || (lines.length === 1 && lines[0] !== '')) {
-      code.innerHTML = lines.map(function (line) {
-        return '<span class="code-line">' + line + '</span>';
-      }).join('\n');
+    var raw = code.innerHTML;
+    var lines = raw.split('\n');
+    // debug: trailing lines
+    if (lines.length > 0) {
+      var tail = [];
+      for (var di = Math.max(0, lines.length - 5); di < lines.length; di++) {
+        tail.push(JSON.stringify(lines[di]));
+      }
+      console.log('[LN] total=' + lines.length + ' tail=' + tail.join(', '));
+    }
+    // 去掉末尾空白行（streaming 过程中内容末尾换行产生的伪影）
+    while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+      lines.pop();
+    }
+    var lineCount = lines.length;
+    if (lineCount > 1 || (lineCount === 1 && lines[0] !== '')) {
+      // Split layout: fixed gutter + scrollable code
+      var numHtml = '';
+      var textHtml = '';
+      for (var i = 0; i < lineCount; i++) {
+        numHtml += '<span class="code-line-num">' + (i + 1) + '</span>';
+        textHtml += '<div class="code-line-text">' + (lines[i] || '​') + '</div>';
+      }
+      code.innerHTML =
+        '<div class="code-body">' +
+          '<div class="code-gutter">' + numHtml + '</div>' +
+          '<div class="code-lines">' + textHtml + '</div>' +
+        '</div>';
+
+      // 行号列宽：位数 + 1ch 余量
+      var gutterWidth = String(lineCount).length + 1;
+      var block = code.closest('.pre-code-block');
+      block.style.setProperty('--line-num-width', gutterWidth + 'ch');
     }
   });
 }
@@ -535,7 +585,7 @@ function updateStreamingBubble(targetMessage) {
   } else {
     // Streaming incremental: inside an unclosed code block → update text
     // only, avoiding DOM destruction (fixes mobile scroll during streaming).
-    if (targetMessage.streaming && state.settings?.session?.showLineNumbers !== true) {
+    if (targetMessage.streaming) {
       const c = targetMessage.content;
       var fenceRe = /^`{3,}/gm;
       var fenceMatches = c.match(fenceRe);
@@ -1037,6 +1087,19 @@ function bindCodeCopyBtn(btn) {
   });
 }
 
+function stopGeneration() {
+  if (state.abortController) {
+    state.abortController.abort();
+    state.abortController = null;
+  }
+  state.isSending = false;
+  els.sendBtn.disabled = false;
+  els.chatInput.disabled = false;
+  autoResizeChatInput();
+  updateComposerMode();
+  setText(els.chatStatus, t("chat.stopped"));
+}
+
 async function sendUserMessage() {
   const session = getCurrentSession();
   if (!session || state.isSending) {
@@ -1098,6 +1161,7 @@ async function sendUserMessage() {
     content,
   });
 
+  state.abortController = new AbortController();
   await runSessionTurn(session);
 }
 
@@ -1127,25 +1191,36 @@ async function runSessionTurn(session) {
           renderChatListMenu();
           setText(els.chatStatus, `${targetNpc.name} 已回复`);
         } catch (error) {
-          debugLog("turn", t("debug.msg.turnFailed"), {
-            sessionId: session.id,
-            error: error.message,
-          });
-          console.error("[MOYU] @mention routing failed", {
-            sessionId: session.id,
-            mentionedName: targetNpc.name,
-            error: error.message,
-          });
-          session.messages.push({
-            role: "system",
-            speaker: "系统",
-            content: `@${targetNpc.name} 回复失败：${error.message}`,
-            createdAt: new Date().toISOString(),
-          });
-          renderMessages({ stickToBottom: true });
-          persistSessions();
-          setText(els.chatStatus, `@${targetNpc.name} 回复失败`);
+          if (error.name === 'AbortError') {
+            session.messages.forEach(m => { m.streaming = false; m.pending = false; });
+            session.messages.push({ role: "system", speaker: "系统", content: t("chat.stoppedHint"), createdAt: new Date().toISOString() });
+            touchSession(session);
+            persistSessions();
+            renderMessages();
+            renderChatListMenu();
+            setText(els.chatStatus, t("chat.stopped"));
+          } else {
+            debugLog("turn", t("debug.msg.turnFailed"), {
+              sessionId: session.id,
+              error: error.message,
+            });
+            console.error("[MOYU] @mention routing failed", {
+              sessionId: session.id,
+              mentionedName: targetNpc.name,
+              error: error.message,
+            });
+            session.messages.push({
+              role: "system",
+              speaker: "系统",
+              content: `@${targetNpc.name} 回复失败：${error.message}`,
+              createdAt: new Date().toISOString(),
+            });
+            renderMessages({ stickToBottom: true });
+            persistSessions();
+            setText(els.chatStatus, `@${targetNpc.name} 回复失败`);
+          }
         } finally {
+          state.abortController = null;
           state.isSending = false;
           els.sendBtn.disabled = false;
           els.chatInput.disabled = false;
@@ -1173,25 +1248,36 @@ async function runSessionTurn(session) {
       renderChatListMenu();
       setText(els.chatStatus, `${npc.name} 已回复`);
     } catch (error) {
-      debugLog("turn", t("debug.msg.turnFailed"), {
-        sessionId: session.id,
-        error: error.message,
-      });
-      console.error("[MOYU] Session turn failed", {
-        sessionId: session.id,
-        error: error.message,
-        host: session.host,
-      });
-      session.messages.push({
-        role: "system",
-        speaker: "系统",
-        content: `本轮生成失败：${error.message}`,
-        createdAt: new Date().toISOString(),
-      });
-      renderMessages({ stickToBottom: true });
-      persistSessions();
-      setText(els.chatStatus, "本轮回复失败");
+      if (error.name === 'AbortError') {
+        session.messages.forEach(m => { m.streaming = false; m.pending = false; });
+        session.messages.push({ role: "system", speaker: "系统", content: t("chat.stoppedHint"), createdAt: new Date().toISOString() });
+        touchSession(session);
+        persistSessions();
+        renderMessages();
+        renderChatListMenu();
+        setText(els.chatStatus, t("chat.stopped"));
+      } else {
+        debugLog("turn", t("debug.msg.turnFailed"), {
+          sessionId: session.id,
+          error: error.message,
+        });
+        console.error("[MOYU] Session turn failed", {
+          sessionId: session.id,
+          error: error.message,
+          host: session.host,
+        });
+        session.messages.push({
+          role: "system",
+          speaker: "系统",
+          content: `本轮生成失败：${error.message}`,
+          createdAt: new Date().toISOString(),
+        });
+        renderMessages({ stickToBottom: true });
+        persistSessions();
+        setText(els.chatStatus, "本轮回复失败");
+      }
     } finally {
+      state.abortController = null;
       state.isSending = false;
       els.sendBtn.disabled = false;
       els.chatInput.disabled = false;
@@ -1282,18 +1368,29 @@ async function runSessionTurn(session) {
       host: session.host,
       directorModel: session.directorModel,
     });
-    session.messages.push({
-      role: "system",
-      speaker: "系统",
-      content: `本轮生成失败：${error.message}`,
-      createdAt: new Date().toISOString(),
-    });
-    touchSession(session);
-    persistSessions();
-    renderMessages();
-    renderChatListMenu();
-    setText(els.chatStatus, `生成失败：${error.message}`);
+    if (error.name === 'AbortError') {
+      session.messages.forEach(m => { m.streaming = false; m.pending = false; });
+      session.messages.push({ role: "system", speaker: "系统", content: t("chat.stoppedHint"), createdAt: new Date().toISOString() });
+      touchSession(session);
+      persistSessions();
+      renderMessages();
+      renderChatListMenu();
+      setText(els.chatStatus, t("chat.stopped"));
+    } else {
+      session.messages.push({
+        role: "system",
+        speaker: "系统",
+        content: `本轮生成失败：${error.message}`,
+        createdAt: new Date().toISOString(),
+      });
+      touchSession(session);
+      persistSessions();
+      renderMessages();
+      renderChatListMenu();
+      setText(els.chatStatus, `生成失败：${error.message}`);
+    }
   } finally {
+    state.abortController = null;
     state.isSending = false;
     els.sendBtn.disabled = false;
     els.chatInput.disabled = false;
@@ -2104,6 +2201,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
       "Content-Type": "application/json",
     },
     body: JSON.stringify(buildStreamBody(withUsage, withTemp)),
+    signal: state.abortController?.signal,
   });
 
   let response = shouldTrackUsage ? await doStreamFetch(true) : await doStreamFetch(false);

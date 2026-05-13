@@ -10,7 +10,9 @@
 .settings-work-models-panel::-webkit-scrollbar,
 .settings-detail-panel::-webkit-scrollbar,
 .settings-model-panel::-webkit-scrollbar,
-.settings-page-panel::-webkit-scrollbar {
+.settings-page-panel::-webkit-scrollbar,
+.code-lines::-webkit-scrollbar,
+.pre-code-block code::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
@@ -27,7 +29,9 @@
 .settings-work-models-panel::-webkit-scrollbar-track,
 .settings-detail-panel::-webkit-scrollbar-track,
 .settings-model-panel::-webkit-scrollbar-track,
-.settings-page-panel::-webkit-scrollbar-track {
+.settings-page-panel::-webkit-scrollbar-track,
+.code-lines::-webkit-scrollbar-track,
+.pre-code-block code::-webkit-scrollbar-track {
   background: transparent;
 }
 
@@ -43,7 +47,9 @@
 .settings-work-models-panel::-webkit-scrollbar-thumb,
 .settings-detail-panel::-webkit-scrollbar-thumb,
 .settings-model-panel::-webkit-scrollbar-thumb,
-.settings-page-panel::-webkit-scrollbar-thumb {
+.settings-page-panel::-webkit-scrollbar-thumb,
+.code-lines::-webkit-scrollbar-thumb,
+.pre-code-block code::-webkit-scrollbar-thumb {
   background: #424242;
   border-radius: 999px;
   border: 2px solid transparent;
@@ -62,7 +68,9 @@
 .settings-work-models-panel::-webkit-scrollbar-thumb:hover,
 .settings-detail-panel::-webkit-scrollbar-thumb:hover,
 .settings-model-panel::-webkit-scrollbar-thumb:hover,
-.settings-page-panel::-webkit-scrollbar-thumb:hover {
+.settings-page-panel::-webkit-scrollbar-thumb:hover,
+.code-lines::-webkit-scrollbar-thumb:hover,
+.pre-code-block code::-webkit-scrollbar-thumb:hover {
   background: #424242;
   border: 2px solid transparent;
   background-clip: padding-box;

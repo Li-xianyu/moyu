@@ -411,7 +411,10 @@
     margin-left: -2px;
   }
 
-  .composer-cancel-btn,
+  .composer-cancel-btn {
+    min-width: 38px;
+    min-height: 38px;
+  }
   .memory-compress-btn {
     min-width: 84px;
     min-height: 38px;

@@ -318,6 +318,19 @@ function switchView(viewName) {
     button.classList.toggle("active", button.dataset.view === viewName);
   });
 
+  // 设置页/创建页自己滚动，锁 .main 避免键盘切换导致 layout shift
+  const mainEl = document.querySelector(".main");
+  if (mainEl) {
+    const nonChat = viewName !== "chat";
+    const isNarrow = window.matchMedia("(max-width: 960px)").matches;
+    const isTouch = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+    if (nonChat && (isNarrow || isTouch)) {
+      mainEl.classList.add("scroll-lock");
+    } else {
+      mainEl.classList.remove("scroll-lock");
+    }
+  }
+
   if (isMobileViewport() && state.mobileSidebarOpen) {
     state.mobileSidebarOpen = false;
     applySidebarState();
@@ -343,6 +356,7 @@ function mountSessionEditButton() {
       const fromEntry = captureViewEntry();
       await _loadScript("./scripts/features/create.js");
       await _loadScript("./scripts/features/settings.js");
+      initCreateView();
       if (fromEntry) history.pushState(fromEntry, "");
       openSessionEditor(session.id);
     }
@@ -360,7 +374,7 @@ function mountComposerCancelButton() {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "secondary-btn composer-cancel-btn hidden";
-  button.textContent = "取消";
+  button.innerHTML = '<i class="bi bi-x"></i>';
   button.addEventListener("click", () => {
     clearUserMessageEdit();
   });

@@ -22,6 +22,7 @@
   deleteConfirmConfigId: null,
   chatSearchQuery: "",
   userScrolledAway: false,
+  abortController: null,
 };
 
 const els = {

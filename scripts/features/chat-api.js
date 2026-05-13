@@ -221,6 +221,7 @@ async function streamLocalText(message, content) {
 
   const step = Math.max(2, Math.min(12, Math.floor(text.length / 24) || 2));
   for (let index = 0; index < text.length; index += step) {
+    if (state.abortController?.signal.aborted) break;
     message.content = text.slice(0, index + step);
     renderMessages({ stickToBottom: true });
     await wait(28);

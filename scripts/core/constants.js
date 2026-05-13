@@ -181,6 +181,8 @@ const i18n = {
     "chat.regenerateHint": "从您的最后一条消息重新生成",
     "chat.copy": "复制",
     "chat.copied": "已复制",
+    "chat.stopped": "已中断",
+    "chat.stoppedHint": "用户已手动中断",
 
     "debug.scope.director": "导演",
     "debug.scope.turn": "回合",
@@ -401,6 +403,8 @@ const i18n = {
     "chat.regenerateHint": "Regenerate from your last message",
     "chat.copy": "Copy",
     "chat.copied": "Copied",
+    "chat.stopped": "Stopped",
+    "chat.stoppedHint": "User stopped the generation",
 
     "debug.scope.director": "Director",
     "debug.scope.turn": "Turn",
