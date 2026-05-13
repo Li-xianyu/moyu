@@ -1,0 +1,25 @@
+#!/bin/bash
+# Auto-bump version in index.html before each commit
+# Version format: YYYYM.DD.RR  (e.g. 20265.13.01 = 2026/May/13 rev01)
+
+FILE="index.html"
+CURRENT=$(grep 'window.APP_VERSION = "' "$FILE" | sed 's/.*"\([^"]*\)".*/\1/')
+[ -z "$CURRENT" ] && exit 0
+
+OLD_DATE="${CURRENT%.*}"
+OLD_REV="${CURRENT##*.}"
+
+YEAR=$(date +%Y)
+MONTH=$(date +%-m)
+DAY=$(date +%-d)
+TODAY="${YEAR}${MONTH}.${DAY}"
+
+if [ "$OLD_DATE" = "$TODAY" ]; then
+  NEW_REV=$(printf "%02d" $((10#$OLD_REV + 1)))
+else
+  NEW_REV="01"
+fi
+
+NEW_VER="${TODAY}.${NEW_REV}"
+sed -i 's/window\.APP_VERSION = "[^"]*"/window.APP_VERSION = "'"$NEW_VER"'"/' "$FILE"
+git add "$FILE"
