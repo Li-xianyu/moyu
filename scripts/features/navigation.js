@@ -40,6 +40,20 @@ function pushViewHistory() {
   history.pushState(entry, "");
 }
 
+function captureViewEntry() {
+  const activeView = getCurrentActiveView();
+  if (!activeView) return null;
+  const entry = { view: activeView };
+  if (activeView === "chat") {
+    if (state.showWelcomeHome) entry.welcome = true;
+    else entry.sessionId = state.currentSessionId || "";
+  } else if (activeView === "create") {
+    entry.sessionId = state.currentSessionId || "";
+    entry.editingId = state.editingSessionId || "";
+  }
+  return entry;
+}
+
 function getCurrentActiveView() {
   for (const [name, view] of Object.entries(els.views)) {
     if (view.classList.contains("active")) return name;
@@ -117,7 +131,7 @@ function bindNav() {
   els.navButtons.forEach((button) => {
     button.addEventListener("click", async () => {
       const view = button.dataset.view;
-      pushViewHistory();
+      const fromEntry = captureViewEntry();
       if (view === "create") {
         await _loadScript("./scripts/features/create.js");
         initCreateView();
@@ -126,6 +140,8 @@ function bindNav() {
         await _loadScript("./scripts/features/settings.js");
         initSettingsView();
       }
+      // Push history right before switching — no async gap between push and switch
+      if (fromEntry) history.pushState(fromEntry, "");
       switchView(view);
     });
   });
@@ -317,9 +333,10 @@ function mountSessionEditButton() {
     }
     const session = getCurrentSession();
     if (session) {
-      pushViewHistory();
+      const fromEntry = captureViewEntry();
       await _loadScript("./scripts/features/create.js");
       await _loadScript("./scripts/features/settings.js");
+      if (fromEntry) history.pushState(fromEntry, "");
       openSessionEditor(session.id);
     }
   });
