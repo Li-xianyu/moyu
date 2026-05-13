@@ -48,6 +48,11 @@
   autoResizeChatInput();
   renderMessages();
   scrollChatToBottom();
+
+  // Fire-and-forget: auto-compress if context over threshold
+  if (typeof tryAutoCompressSession === "function" && session) {
+    tryAutoCompressSession(session);
+  }
 }
 
 function renderChatMetaMarkup(session) {

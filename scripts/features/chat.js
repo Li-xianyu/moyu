@@ -1700,6 +1700,29 @@ async function ensureDirectorSummary(session, options = {}) {
   return true;
 }
 
+let _autoCompressPending = false;
+
+async function tryAutoCompressSession(session) {
+  if (!session || state.isSending || _autoCompressPending) return;
+  if (!session.directorModel) return;
+
+  const metrics = buildDirectorContextTokenMetrics(session);
+  if (!metrics || metrics.contextCurrent < metrics.contextThreshold) return;
+
+  _autoCompressPending = true;
+  try {
+    const changed = await ensureDirectorSummary(session);
+    if (changed && getCurrentSession()?.id === session.id) {
+      updateCompressMemoryButtonProgress(session);
+      renderCompressMemoryPopover();
+    }
+  } catch {
+    // auto-compress failure is non-blocking
+  } finally {
+    _autoCompressPending = false;
+  }
+}
+
 async function triggerManualDirectorCompression() {
   const session = getCurrentSession();
   let finalStatusText = "";
