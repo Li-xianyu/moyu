@@ -25,7 +25,7 @@ function pushViewHistory() {
   const activeView = getCurrentActiveView();
   if (!activeView) return;
 
-  const entry = { view: activeView };
+  const entry = { view: activeView, mobileSidebarOpen: state.mobileSidebarOpen };
   if (activeView === "chat") {
     if (state.showWelcomeHome) {
       entry.welcome = true;
@@ -43,7 +43,7 @@ function pushViewHistory() {
 function captureViewEntry() {
   const activeView = getCurrentActiveView();
   if (!activeView) return null;
-  const entry = { view: activeView };
+  const entry = { view: activeView, mobileSidebarOpen: state.mobileSidebarOpen };
   if (activeView === "chat") {
     if (state.showWelcomeHome) entry.welcome = true;
     else entry.sessionId = state.currentSessionId || "";
@@ -71,7 +71,14 @@ async function restoreViewFromHistory(entry) {
       state.currentSessionId = entry.sessionId || "";
     }
     state.editingSessionId = null;
+    // Temporarily close sidebar so switchView doesn't auto-close it again
+    state.mobileSidebarOpen = false;
     switchView("chat");
+    // Restore sidebar to saved state
+    if (entry.mobileSidebarOpen && isMobileViewport()) {
+      state.mobileSidebarOpen = true;
+      applySidebarState();
+    }
     renderSession();
   } else if (entry.view === "create") {
     state.openChatMenuId = null;
