@@ -451,6 +451,7 @@ function restartSessionFromExisting(sessionId) {
     title: source.titleSource === "manual" && source.title ? source.title : t("chat.generatingTitle"),
     titleSource: source.titleSource === "manual" && source.title ? "manual" : "auto",
     globalPrompt: source.globalPrompt,
+    mode: source.mode,
     directorModel: source.directorModel,
     directorConfigId: source.directorConfigId || source.configId || "",
     npcs: (source.npcs || []).map((npc) => ({ ...npc })),

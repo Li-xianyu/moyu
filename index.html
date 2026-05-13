@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#1e1e1e">
   <meta name="color-scheme" content="dark">
   <title>MOYU - 模鱼空间</title>
@@ -504,7 +504,10 @@
                   </span>
                 </label>
               </div>
-              <small id="sessionModeHint" class="hint-text" data-i18n="create.modeHint">创建时选择会话模式；创建后模式会锁定。两种模式都由导演调度，只是调度目标不同。</small>
+              <div id="sessionModeHint" class="mode-lock-warning">
+                <i class="bi bi-lock-fill"></i>
+                <span data-i18n="create.modeHint">创建时选择会话模式；创建后<strong>永久锁定</strong>，无法切换。请谨慎选择！</span>
+              </div>
             </div>
 
             <div id="globalPromptField">

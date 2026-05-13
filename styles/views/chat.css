@@ -1248,18 +1248,6 @@
   height: 12px;
 }
 
-.memory-compress-popover::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  margin-left: -4px;
-  top: 100%;
-  width: 8px;
-  height: 8px;
-  background: #252526;
-  transform: rotate(45deg) translateY(-4px);
-}
-
 .memory-compress-btn:hover .memory-compress-popover,
 .memory-compress-btn:focus-visible .memory-compress-popover,
 .memory-compress-btn.info-open .memory-compress-popover,
@@ -1400,16 +1388,6 @@
   transform: translateY(6px);
   pointer-events: none;
   transition: opacity 0.18s ease, transform 0.18s ease;
-}
-.thinking-popover::after {
-  content: "";
-  position: absolute;
-  left: 20px;
-  top: 100%;
-  width: 8px;
-  height: 8px;
-  background: #252526;
-  transform: rotate(45deg) translateY(-4px);
 }
 .thinking-popover.visible {
   opacity: 1;
@@ -1645,6 +1623,30 @@
 .mode-option input[type="radio"]:checked + .mode-option-label {
   border-color: var(--accent);
   background: rgba(0, 122, 204, 0.06);
+}
+
+/* ----- mode lock warning (create view) ----- */
+.mode-lock-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border: 1.5px solid #e8a317;
+  border-radius: 10px;
+  background: rgba(232, 163, 23, 0.1);
+  color: #f0c040;
+  font-size: 13px;
+  line-height: 1.5;
+  user-select: none;
+}
+.mode-lock-warning .bi-lock-fill {
+  flex-shrink: 0;
+  font-size: 15px;
+  opacity: 0.9;
+}
+.mode-lock-warning strong {
+  color: #f5d06a;
 }
 
 /* ===== @mention Autocomplete Popup ===== */
