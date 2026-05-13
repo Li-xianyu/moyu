@@ -1640,6 +1640,7 @@ async function ensureDirectorSummary(session, options = {}) {
       { role: "system", content: getDirectorSystemPrompt(session) },
       { role: "system", content: "固定 NPC 列表：" + JSON.stringify((session.npcs || []).map((npc) => npc.name)) },
       { role: "system", content: "场内 NPC：" + JSON.stringify(getSceneNpcs(session).map((npc) => npc.name)) },
+      { role: "system", content: "NPC 资料：" + buildDirectorNpcRoster(session) },
       { role: "system", content: "全局设定：" + session.globalPrompt },
       ...buildDirectorContextMessages(session),
     ];
