@@ -33,6 +33,17 @@ function updateMobileViewportFix() {
   root.style.setProperty("--moyu-app-height", `${Math.floor(viewportHeight)}px`);
   root.classList.toggle("keyboard-open", keyboardOpen);
 
+  // 创建页/设置页自己滚动，不让 .main 抢滚动导致底部空白
+  const mainEl = document.querySelector(".main");
+  if (mainEl) {
+    if (keyboardOpen) {
+      const active = document.querySelector(".view.active");
+      mainEl.classList.toggle("scroll-lock", Boolean(active && active.id !== "chatView"));
+    } else {
+      mainEl.classList.remove("scroll-lock");
+    }
+  }
+
   let detectedOverlay = 0;
   if (viewport) {
     detectedOverlay = Math.max(0, window.innerHeight - viewport.height - (viewport.offsetTop || 0));
@@ -160,6 +171,19 @@ function init() {
   bindInfoPopover();
   bindChatList();
   bindFileDrop();
+
+  // Mobile: when keyboard opens, scroll active input into view within its own scroll container
+  // instead of letting the browser scroll the outer container (causing blank space below).
+  document.addEventListener("focusin", () => {
+    const el = document.activeElement;
+    if (!el || !isMobileViewport()) return;
+    const tag = el.tagName;
+    if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") return;
+    const view = el.closest(".view.active");
+    if (!view || !view.querySelector(":scope > .panel, :scope > .settings-stage")) return;
+    requestAnimationFrame(() => el.scrollIntoView({ block: "center", behavior: "smooth" }));
+  });
+
   const initialView = resolveInitialView();
   switchView(initialView);
   renderChatListMenu();

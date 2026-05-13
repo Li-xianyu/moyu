@@ -98,6 +98,11 @@ body::after {
   .keyboard-open .main {
     overflow-y: auto !important;
   }
+
+  /* 创建页/设置页自己滚动，不让 .main 抢滚动导致底部空白 */
+  .keyboard-open .main.scroll-lock {
+    overflow-y: hidden !important;
+  }
 }
 
 @media (max-width: 640px) {
