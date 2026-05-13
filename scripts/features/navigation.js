@@ -26,8 +26,12 @@ function pushViewHistory() {
   if (!activeView) return;
 
   const entry = { view: activeView };
-  if (activeView === "chat" || activeView === "welcome") {
-    entry.sessionId = state.currentSessionId || "";
+  if (activeView === "chat") {
+    if (state.showWelcomeHome) {
+      entry.welcome = true;
+    } else {
+      entry.sessionId = state.currentSessionId || "";
+    }
   } else if (activeView === "create") {
     entry.sessionId = state.currentSessionId || "";
     entry.editingId = state.editingSessionId || "";
@@ -44,12 +48,16 @@ function getCurrentActiveView() {
 }
 
 async function restoreViewFromHistory(entry) {
-  state.currentSessionId = entry.sessionId || "";
-
   if (entry.view === "chat" || entry.view === "welcome") {
+    if (entry.welcome || entry.view === "welcome") {
+      state.showWelcomeHome = true;
+      state.currentSessionId = "";
+    } else {
+      state.showWelcomeHome = false;
+      state.currentSessionId = entry.sessionId || "";
+    }
     state.editingSessionId = null;
-    state.showWelcomeHome = entry.view === "welcome";
-    switchView(entry.view);
+    switchView("chat");
     renderSession();
   } else if (entry.view === "create") {
     state.openChatMenuId = null;
