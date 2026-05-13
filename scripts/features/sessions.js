@@ -185,6 +185,7 @@ function renderChatListMenu() {
       if (state.renameSessionId) {
         commitRenameIfNeeded();
       }
+      pushViewHistory();
       clearUserMessageEdit();
       state.showWelcomeHome = false;
       state.currentSessionId = session.id;

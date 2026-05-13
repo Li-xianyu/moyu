@@ -21,6 +21,64 @@ function _loadScript(src) {
   });
 }
 
+function pushViewHistory() {
+  const activeView = getCurrentActiveView();
+  if (!activeView) return;
+
+  const entry = { view: activeView };
+  if (activeView === "chat" || activeView === "welcome") {
+    entry.sessionId = state.currentSessionId || "";
+  } else if (activeView === "create") {
+    entry.sessionId = state.currentSessionId || "";
+    entry.editingId = state.editingSessionId || "";
+  }
+
+  history.pushState(entry, "");
+}
+
+function getCurrentActiveView() {
+  for (const [name, view] of Object.entries(els.views)) {
+    if (view.classList.contains("active")) return name;
+  }
+  return null;
+}
+
+async function restoreViewFromHistory(entry) {
+  state.currentSessionId = entry.sessionId || "";
+
+  if (entry.view === "chat" || entry.view === "welcome") {
+    state.editingSessionId = null;
+    state.showWelcomeHome = entry.view === "welcome";
+    switchView(entry.view);
+    renderSession();
+  } else if (entry.view === "create") {
+    state.openChatMenuId = null;
+    state.deleteConfirmSessionId = null;
+    state.renameSessionId = null;
+    if (entry.editingId) {
+      await _loadScript("./scripts/features/create.js");
+      await _loadScript("./scripts/features/settings.js");
+      initCreateView();
+      openSessionEditor(entry.editingId);
+    } else {
+      await _loadScript("./scripts/features/create.js");
+      initCreateView();
+      prepareCreateViewForNewSession();
+      switchView("create");
+    }
+  } else if (entry.view === "settings") {
+    await _loadScript("./scripts/features/settings.js");
+    initSettingsView();
+    switchView("settings");
+  }
+}
+
+window.addEventListener("popstate", (e) => {
+  if (e.state?.view) {
+    restoreViewFromHistory(e.state);
+  }
+});
+
 function bindNav() {
   if (els.sidebarToggleBtn) {
     els.sidebarToggleBtn.addEventListener("click", () => {
@@ -51,6 +109,7 @@ function bindNav() {
   els.navButtons.forEach((button) => {
     button.addEventListener("click", async () => {
       const view = button.dataset.view;
+      pushViewHistory();
       if (view === "create") {
         await _loadScript("./scripts/features/create.js");
         initCreateView();
@@ -250,6 +309,7 @@ function mountSessionEditButton() {
     }
     const session = getCurrentSession();
     if (session) {
+      pushViewHistory();
       await _loadScript("./scripts/features/create.js");
       await _loadScript("./scripts/features/settings.js");
       openSessionEditor(session.id);
