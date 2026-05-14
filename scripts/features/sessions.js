@@ -431,6 +431,9 @@ function deleteSession(sessionId) {
   state.deleteConfirmSessionId = null;
   state.renameSessionId = null;
   persistSessions();
+  if (window.__chatDB) {
+    window.__chatDB.deleteSession(sessionId).catch(function () {});
+  }
   renderSession();
 }
 
@@ -459,6 +462,7 @@ function restartSessionFromExisting(sessionId) {
     transientNpcs: [],
     directorMemory: normalizeDirectorMemory(source.directorMemory),
     directorSummary: "",
+    chatSummary: "",
     compressedUntilMessageId: "",
     suggestionGuide: "",
     messages: [
@@ -546,6 +550,7 @@ function importSessionsFromFile(file) {
           transientNpcs: [],
           directorMemory: normalizeDirectorMemory(raw.directorMemory),
           directorSummary: raw.directorSummary || "",
+          chatSummary: raw.chatSummary || "",
           compressedUntilMessageId: "",
           messages: Array.isArray(raw.messages) ? raw.messages.map((m) => ({ ...m })) : [],
           createdAt: raw.createdAt || new Date().toISOString(),
@@ -553,6 +558,13 @@ function importSessionsFromFile(file) {
         };
 
         state.sessions.push(session);
+        // 保存导入的会话消息到 IDB
+        if (window.__chatDB && session.messages && session.messages.length) {
+          const nonSys = session.messages.filter(function (m) { return m.role !== "system"; });
+          if (nonSys.length) {
+            window.__chatDB.saveMessages(session.id, nonSys, 0).catch(function () {});
+          }
+        }
         imported++;
       });
 

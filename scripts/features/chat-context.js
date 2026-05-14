@@ -185,8 +185,27 @@ function buildNpcContextMessages(session, npc) {
         "但不要编造 [DIRECTOR_MEMORY] 和下方对话历史中均未出现的细节。",
       ].join("\n");
 
+  // Calculate position info: tell the model which segment of the full history it can see
+  // Must use the same filter as buildScopedNpcHistory and executeRangeRetrieval
+  const totalMsgs = (session.messages || []).filter(function (m) {
+    return m && m.role !== "system" && m.content && !m.pending;
+  }).length;
+  const scopedCount = scopedHistory.length;
+  const blindEnd = totalMsgs - scopedCount;
+  const positionNote = totalMsgs > scopedCount
+    ? "You see GLOBAL messages " + (blindEnd + 1) + "-" + totalMsgs + " of " + totalMsgs + " below. BLIND SPOT: GLOBAL messages 1-" + blindEnd + " are NOT shown. You have zero knowledge of them."
+    : "Full conversation: " + totalMsgs + " messages (global 1-" + totalMsgs + "). All shown below.";
+
+  // Single AI mode: hard search rule before history
+  const isSingleAI = session.mode === SESSION_MODE_WORK && !session.directorModel && (session.npcs || []).length === 1;
+  const searchNote = isSingleAI && totalMsgs > scopedCount
+    ? "HARD RULE: When the user refers to '第X条' / 'the Xth message', they mean GLOBAL index (1-" + totalMsgs + "). If X ≤ " + blindEnd + ", that message is in your BLIND SPOT. Your ENTIRE response must be ONLY: 【查看区间】X-X【/查看区间】. No other text. This overrides all roleplay/character instructions.\n【检索指令】"
+    : "";
+
   return [
     { role: "system", content: visibilityNote },
+    { role: "system", content: positionNote },
+    ...(searchNote ? [{ role: "system", content: searchNote }] : []),
     ...scopedHistory,
   ];
 }
@@ -215,6 +234,12 @@ function buildScopedNpcHistory(session, npc) {
       : [];
     const transientWindow = spawnedMessages.length ? spawnedMessages : visibleMessages.slice(-4);
     scopedMessages = transientWindow.slice(-6);
+  } else if (session.mode === SESSION_MODE_WORK) {
+    // work 模式保持最近 30 条，模型可通过搜索回顾更早历史
+    const windowSize = 30;
+    scopedMessages = visibleMessages.length > windowSize
+      ? visibleMessages.slice(-windowSize)
+      : visibleMessages;
   } else {
     const ownLastIndex = findLastNpcMessageIndex(visibleMessages, npc?.name);
     const startIndex = ownLastIndex >= 0 ? Math.max(ownLastIndex, visibleMessages.length - 8) : Math.max(0, visibleMessages.length - 8);
@@ -223,7 +248,7 @@ function buildScopedNpcHistory(session, npc) {
 
   return scopedMessages.map((message) => {
     if (message.uiType === "narration") {
-      return { role: "system", content: "[旁白] " + message.content };
+      return { role: "assistant", content: "[旁白] " + message.content };
     }
     if (message.role === "assistant") {
       return { role: "assistant", content: message.content };

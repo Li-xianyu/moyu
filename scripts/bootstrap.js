@@ -241,5 +241,36 @@ function init() {
   }
 }
 
-migrateLegacySessions();
-init();
+(async function boot() {
+  // 1. 从 IDB 加载全量会话
+  var loaded = 0;
+  if (window.__chatDB) {
+    try {
+      var sessions = await window.__chatDB.loadAllSessions();
+      if (sessions && sessions.length) {
+        state.sessions = sessions;
+      }
+    } catch (e) {
+      console.warn("[boot] IDB load failed", e);
+    }
+    // 2. 总是尝试迁移 localStorage 旧数据（内部有 flag 防重复）
+    //    修复旧版本迁移时 uiType 字段丢失的问题
+    try {
+      var migrated = await window.__chatDB.migrateFromLocalStorage();
+      if (migrated > 0 || (!state.sessions.length)) {
+        var reloaded = await window.__chatDB.loadAllSessions();
+        if (reloaded && reloaded.length) {
+          state.sessions = reloaded;
+        }
+      }
+    } catch (e) {
+      console.warn("[boot] migration failed", e);
+    }
+  }
+
+  // 3. 标准化会话
+  migrateLegacySessions();
+
+  // 4. 启动
+  init();
+})();

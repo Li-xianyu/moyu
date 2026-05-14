@@ -432,7 +432,7 @@
   }
 
   .memory-compress-popover {
-    left: 0;
+    left: 50%;
     width: min(232px, calc(100vw - 24px));
   }
 

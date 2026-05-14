@@ -96,6 +96,7 @@ function bindCreateFlow() {
       transientNpcs: [],
       directorMemory: normalizeDirectorMemory(null),
       directorSummary: "",
+      chatSummary: "",
       compressedUntilMessageId: "",
       suggestionGuide: "",
       messages: [
@@ -627,6 +628,7 @@ function saveSessionEdits(payload, activeConfig) {
   session.transientNpcs = (session.transientNpcs || []).filter((npc) => !session.npcs.some((baseNpc) => baseNpc.name === npc.name));
   session.directorMemory = normalizeDirectorMemory(null);
   session.directorSummary = "";
+  session.chatSummary = "";
   session.compressedUntilMessageId = "";
   session.suggestionGuide = "";
   touchSession(session);

@@ -2,7 +2,7 @@
   locale: loadJson(STORAGE_KEYS.locale, "zh-CN"),
   settings: normalizeSettings(loadJson(STORAGE_KEYS.settings, { host: "", key: "", configs: [] })),
   modelCache: loadJson(STORAGE_KEYS.modelCache, {}),
-  sessions: loadJson(STORAGE_KEYS.sessions, []),
+  sessions: [],
   currentSessionId: loadJson(STORAGE_KEYS.currentSessionId, null),
   sidebarCollapsed: loadJson(STORAGE_KEYS.sidebarCollapsed, null),
   mobileSidebarOpen: false,
@@ -175,7 +175,6 @@ function ensureSessionMessageIds(session) {
 }
 
 function migrateLegacySessions() {
-  const legacySession = loadJson(STORAGE_KEYS.currentSession, null);
   if (!Array.isArray(state.sessions)) {
     state.sessions = [];
   }
@@ -192,25 +191,9 @@ function migrateLegacySessions() {
     suggestionGuide: session.suggestionGuide || "",
   })).map((session) => ensureSessionMessageIds(session));
 
-  if (legacySession && legacySession.id && !state.sessions.some((session) => session.id === legacySession.id)) {
-    state.sessions.unshift({
-      ...legacySession,
-      title: legacySession.title || buildFallbackTitle(legacySession),
-      titleSource: legacySession.titleSource || "auto",
-      transientNpcs: Array.isArray(legacySession.transientNpcs) ? legacySession.transientNpcs : [],
-      directorMemory: resolveDirectorMemory(legacySession.directorMemory, legacySession.directorSummary),
-      directorSummary: typeof legacySession.directorSummary === "string" ? legacySession.directorSummary : "",
-      compressedUntilMessageId: legacySession.compressedUntilMessageId || "",
-      suggestionGuide: legacySession.suggestionGuide || "",
-    });
-    ensureSessionMessageIds(state.sessions[0]);
-  }
-
   if (!state.currentSessionId && state.sessions.length) {
     state.currentSessionId = state.sessions[0].id;
   }
-
-  persistSessions();
 }
 
 function t(key, params = {}) {

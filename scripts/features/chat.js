@@ -30,6 +30,38 @@ const DIRECTOR_MANUAL_RECOMPRESS_PROMPT = [
   "必须只输出 JSON 对象，字段固定为：scene, relationships, facts, tensions, openLoops, npcState, synopsis。",
 ].join("\\n");
 
+// ── 单 AI 模式（无导演）对话摘要压缩 ──
+const CHAT_CONVERSATION_THRESHOLD = 3000;
+const CHAT_SUMMARY_TARGET_MAX = 800;
+const CHAT_AUTO_COMPRESS_THRESHOLD = 600;
+const CHAT_COMPRESS_PROMPT = [
+  "你是对话摘要器。",
+  "请把给定对话历史压缩成一份简洁的摘要，保留后续对话所需的关键信息。",
+  "包括已讨论的话题、重要决定、用户偏好、人物状态。",
+  "不要修辞，不要扩写，不要模仿对白。",
+  "用一段或两段自然语言输出摘要即可。",
+].join("\\n");
+
+function buildChatSummaryBlock(session) {
+  const summary = session?.chatSummary;
+  if (!summary) return "";
+  return `[CHAT_SUMMARY]\n${summary}\n[/CHAT_SUMMARY]`;
+}
+
+function buildChatContextTokenMetrics(session) {
+  if (!session) return null;
+  // 度量当前可见消息总量，作为上下文占用参考
+  const visibleMessages = getVisibleHistoryMessages(session);
+  const totalTokens = estimateChatMessagesTokens(
+    visibleMessages.map((m) => ({ role: m.role || "user", content: m.content || "" }))
+  );
+  return {
+    contextCurrent: totalTokens,
+    contextThreshold: CHAT_CONVERSATION_THRESHOLD,
+    recentCount: visibleMessages.length,
+  };
+}
+
 function bindChat() {
   els.sendBtn.addEventListener("click", function onSendClick() {
     if (state.isSending) {
@@ -62,7 +94,11 @@ function bindChat() {
     });
     els.compressMemoryBtn.addEventListener("pointerleave", () => {
       const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
-      if (popover) popover.style.left = "";
+      if (popover) {
+        popover.style.setProperty("--memory-compress-popover-shift-x", "0px");
+        popover.style.setProperty("--memory-compress-popover-shift-y", "0px");
+        popover.style.maxHeight = "";
+      }
     });
   }
   // Director thinking toggle (inside popover)
@@ -88,6 +124,20 @@ function bindChat() {
   if (els.thinkingToggleBtn) {
     els.thinkingToggleBtn.addEventListener("click", (event) => {
       event.stopPropagation();
+      const session = getCurrentSession();
+      if (isSingleModelWorkSession(session)) {
+        const current = state.settings?.session?.modelThinking === "enabled" ? "disabled" : "enabled";
+        state.settings.session = state.settings.session || {};
+        state.settings.session.modelThinking = current;
+        persistSettings();
+        if (els.thinkingPopover) {
+          els.thinkingPopover.classList.add("hidden");
+          els.thinkingPopover.classList.remove("visible");
+        }
+        updateModelThinkingBtn();
+        updateThinkingToggleMode();
+        return;
+      }
       const isOpen = els.thinkingPopover && !els.thinkingPopover.classList.contains("hidden");
       if (els.thinkingPopover) {
         els.thinkingPopover.classList.toggle("hidden", isOpen);
@@ -361,6 +411,7 @@ function updateComposerMode() {
     els.modelThinkingBtn.dataset.state = saved;
     updateModelThinkingBtn();
   }
+  updateThinkingToggleMode();
   renderCompressMemoryPopover();
   els.sendBtn.innerHTML = '<i class="bi bi-arrow-up"></i>';
   setText(els.chatStatus, state.isSending ? "正在处理中..." : "所有单位已就绪");
@@ -496,6 +547,15 @@ function applyUserMessageEdit(session, messageId, content) {
   const target = session.messages[targetIndex];
   target.content = content;
   target.createdAt = new Date().toISOString();
+
+  // 从 IDB 删除被截断的旧消息（AI 回复等），防止刷新后阴魂不散
+  const removedMsgs = session.messages.slice(targetIndex + 1);
+  if (removedMsgs.length && window.__chatDB) {
+    removedMsgs.forEach(function (m) {
+      if (m.id) window.__chatDB.deleteMessage(m.id).catch(function () {});
+    });
+  }
+
   session.messages = session.messages.slice(0, targetIndex + 1);
   session.transientNpcs = [];
 }
@@ -1139,6 +1199,15 @@ async function sendUserMessage() {
 
   touchSession(session);
   persistSessions();
+  // 保存用户消息到 IndexedDB
+  if (window.__chatDB) {
+    const userMsgs = session.messages.filter(function (m) { return m.role === "user"; });
+    const userIdx = userMsgs.length - 1;
+    const lastUser = session.messages[session.messages.length - 1];
+    if (lastUser && lastUser.role === "user") {
+      window.__chatDB.saveMessage(session.id, lastUser, userIdx).catch(function () {});
+    }
+  }
   els.chatInput.value = "";
   autoResizeChatInput();
   renderMessages();
@@ -1190,6 +1259,14 @@ async function runSessionTurn(session) {
           renderMessages({ stickToBottom: true });
           renderChatListMenu();
           setText(els.chatStatus, `${targetNpc.name} 已回复`);
+          // ── 搜索标记检测 ──
+          if (window.__chatRetrieval && !state.abortController?.signal.aborted) {
+            const lastResp = session.messages.filter(function (m) { return m.role === "assistant" && !m.uiType; });
+            const lastAssistant = lastResp.length ? lastResp[lastResp.length - 1] : null;
+            if (lastAssistant && lastAssistant._contextMessages) {
+              await handleSearchMarker(session, lastAssistant, targetNpc, lastAssistant._contextMessages);
+            }
+          }
         } catch (error) {
           if (error.name === 'AbortError') {
             session.messages.forEach(m => { m.streaming = false; m.pending = false; });
@@ -1240,6 +1317,8 @@ async function runSessionTurn(session) {
   if (isNoDirector) {
     try {
       const npc = session.npcs[0];
+      // Auto-compress conversation summary before NPC generates
+      try { await ensureChatSummary(session); } catch (_) { /* non-fatal */ }
       setText(els.chatStatus, `${npc.name} 正在回复...`);
       await callNpc(session, npc, {});
       touchSession(session);
@@ -1247,6 +1326,50 @@ async function runSessionTurn(session) {
       renderMessages({ stickToBottom: true });
       renderChatListMenu();
       setText(els.chatStatus, `${npc.name} 已回复`);
+      // ── 搜索标记检测：模型主动请求的历史检索 ──
+      let didSearch = false;
+      if (window.__chatRetrieval && !state.abortController?.signal.aborted) {
+        const lastResp = session.messages.filter(function (m) { return m.role === "assistant" && !m.uiType; });
+        const lastAssistant = lastResp.length ? lastResp[lastResp.length - 1] : null;
+        if (lastAssistant && lastAssistant._contextMessages) {
+          didSearch = await handleSearchMarker(session, lastAssistant, npc, lastAssistant._contextMessages);
+        }
+      }
+
+      // ── 保险：模型未输出标记但用户明显在问盲区索引 ──
+      if (!didSearch && window.__chatRetrieval && !state.abortController?.signal.aborted) {
+        const totalMsgs = (session.messages || []).filter(function (m) { return m && m.role !== "system" && m.content && !m.pending; }).length;
+        const blindEnd = totalMsgs > 30 ? totalMsgs - 30 : 0;
+        if (blindEnd > 0) {
+          const lastUserMsg = session.messages.filter(function (m) { return m.role === "user"; });
+          const lastUserContent = lastUserMsg.length ? lastUserMsg[lastUserMsg.length - 1].content : "";
+          const blindRange = window.__chatRetrieval.parseBlindRangeFromUserText
+            ? window.__chatRetrieval.parseBlindRangeFromUserText(lastUserContent, blindEnd)
+            : null;
+          if (blindRange) {
+            console.log("[MOYU-SEARCH] 模型未输出标记，自动执行区间检索", blindRange);
+            setText(els.chatStatus, "正在检索历史记录...");
+            const lastResp2 = session.messages.filter(function (m) { return m.role === "assistant" && !m.uiType; });
+            const lastAssistant2 = lastResp2.length ? lastResp2[lastResp2.length - 1] : null;
+            if (lastAssistant2 && lastAssistant2._contextMessages) {
+              const success = await window.__chatRetrieval.followUpStreamRange(
+                session, lastAssistant2, blindRange.start, blindRange.end, npc, lastAssistant2._contextMessages
+              );
+              if (success) {
+                setText(els.chatStatus, "已检索相关历史记录");
+              } else {
+                lastAssistant2.content = "（区间检索失败或无结果）";
+                lastAssistant2.pending = false;
+                lastAssistant2.streaming = false;
+                touchSession(session);
+                persistSessions();
+                renderMessages({ stickToBottom: true });
+                setText(els.chatStatus, "区间检索失败或无结果");
+              }
+            }
+          }
+        }
+      }
     } catch (error) {
       if (error.name === 'AbortError') {
         session.messages.forEach(m => { m.streaming = false; m.pending = false; });
@@ -1645,6 +1768,8 @@ async function callNpc(session, npc, npcInstructions = {}) {
       ].join("\n")
     : "";
 
+  const isSingleAIMode = session.mode === SESSION_MODE_WORK && !session.directorModel && session.npcs.length === 1;
+
   const baseRules = isWeakModel(npc.model)
     ? [
         `你现在扮演 ${npc.name}。`,
@@ -1661,18 +1786,20 @@ async function callNpc(session, npc, npcInstructions = {}) {
         `你现在扮演 ${npc.name}。`,
         npc.prompt ? `人物要求：${npc.prompt}` : "请根据全局设定和当前聊天自然回应。",
         priorRepliesText,
-        directiveSection,
+        ...(directiveSection ? ["", directiveSection] : []),
         "",
         "=== 绝对禁止 ===",
         `1. 禁止输出任何形式的说话人标签。不要写"${npc.name}："、"模型："、"AI："等前缀。历史中的 [标签] 仅为标识谁在说话，不要模仿。直接输出内容，不要加任何前缀。`,
         "2. 禁止重复！检查历史中你自己的上一条回复，如果与你要说的话有 40% 以上词语重合，这是严重违规。",
         "   每轮必须用全新的措辞、不同的比喻、不同的角度来回应。宁可说一句全新的话，也不准改写旧内容。",
-        "3. 禁止模拟别的 NPC、禁止替别人补充、禁止自问自答、禁止连续写多轮对话。",
+        ...(!isSingleAIMode ? [
+          "3. 禁止模拟别的 NPC、禁止替别人补充、禁止自问自答、禁止连续写多轮对话。",
+          "5. 只能写你自己的发言、动作、神态、感受和判断。禁止替别的 NPC 决定动作，禁止代替别的 NPC 说话。",
+          "7. 如果本轮在你之前已经有 NPC 说过话，禁止重写、复述、扩写、改写那位 NPC 刚刚说过的大段内容。",
+          "8. 你可以接着别人的话往下说，但必须明显往前推进，不能把上一位的整段描写再说一遍。",
+        ] : []),
         "4. 只输出一版最终答案，不要给草稿、补充版、总结版、收尾版。",
-        "5. 只能写你自己的发言、动作、神态、感受和判断。禁止替别的 NPC 决定动作，禁止代替别的 NPC 说话。",
         "6. 禁止替用户说话、行动或做决定。用户会自己发言，不需要你代言。",
-        "7. 如果本轮在你之前已经有 NPC 说过话，禁止重写、复述、扩写、改写那位 NPC 刚刚说过的大段内容。",
-        "8. 你可以接着别人的话往下说，但必须明显往前推进，不能把上一位的整段描写再说一遍。",
         "",
         "=== 输出格式 ===",
         `直接输出 ${npc.name} 说的话，禁止加任何前缀标签。不要包含说话人标识。`,
@@ -1686,33 +1813,168 @@ async function callNpc(session, npc, npcInstructions = {}) {
 
         "=== 必须遵守 ===",
         "如果用户要求限制字数、格式或风格，你必须严格遵守。",
-      ];
-
-      // Story mode: no extra push needed — format rules are inline above
+      ].filter(Boolean);
 
   const baseRulesText = baseRules.join("\n");
 
-  const messages = [
+  const directorMemoryMsgs = buildDirectorMemorySystemMessage(session);
+
+  let messages = [
     { role: "system", content: baseRulesText },
-    { role: "system", content: `当前场景中在场的 NPC：${getSceneNpcs(session).map((item) => item.name).join("、")}。所有场内 NPC 始终一起待在当前场景中，不会因发言顺序而离开或入场。你们的对话视为同处一室的当面交谈。` },
-    { role: "system", content: `全局设定：\n${session.globalPrompt}` },
-    { role: "system", content: "以下 [DIRECTOR_MEMORY] 是本轮之前发生的关键事件摘要，仅作为背景参考。你据此了解已发生过的事情即可，不要重复叙述历史，不要替用户或不在当前场景中的角色说话。" },
-    ...buildDirectorMemorySystemMessage(session),
+    // work 模式注入当前时间（模型时间感知）
+    ...(session.mode === SESSION_MODE_WORK
+      ? [{ role: "system", content: `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}` }]
+      : []),
+    // 多 NPC 模式下告知在场角色（单 AI 模式下模型已知自己是谁）
+    ...(isSingleAIMode ? [] : [{ role: "system", content: `当前场景中在场的 NPC：${getSceneNpcs(session).map((item) => item.name).join("、")}。所有场内 NPC 始终一起待在当前场景中，不会因发言顺序而离开或入场。你们的对话视为同处一室的当面交谈。` }]),
+    // 全局设定（单 AI 模式下可能为空）
+    ...(session.globalPrompt ? [{ role: "system", content: `全局设定：\n${session.globalPrompt}` }] : []),
+    // [DIRECTOR_MEMORY]：仅当实际有记忆内容时才发送说明文字
+    ...(directorMemoryMsgs.length
+      ? [
+          { role: "system", content: "以下 [DIRECTOR_MEMORY] 是本轮之前发生的关键事件摘要，仅作为背景参考。你据此了解已发生过的事情即可，不要重复叙述历史，不要替用户或不在当前场景中的角色说话。" },
+          ...directorMemoryMsgs,
+        ]
+      : []),
+    // For single AI mode: include chat summary for context of older conversation
+    ...(session.chatSummary ? [{ role: "system", content: buildChatSummaryBlock(session) }] : []),
     ...buildNpcContextMessages(session, npc),
   ];
-  // Prompt-based thinking inhibition for models that don't support the thinking param
-  if (getModelThinkingState() === "disabled" && !supportsThinkingParam(npc.model)) {
-    messages.push({ role: "system", content: "直接输出，不要输出思考过程。" });
+  // Single AI mode: hard rule for search — MUST be inserted right before the user's last message
+  // Reasoning models process context sequentially during thinking, so the rule must
+  // precede the user's question to be considered during the reasoning phase.
+  if (isSingleAIMode && window.__chatRetrieval) {
+    const totalForSearch = (session.messages || []).filter(function (m) { return m && m.role !== "system" && m.content && !m.pending; }).length;
+    const scopedForSearch = (session.messages || []).filter(function (m) { return m && m.role !== "system" && m.content && !m.pending; }).slice(-30).length;
+    const hasBlind = totalForSearch > scopedForSearch;
+    const blindEnd = totalForSearch - scopedForSearch;
+    const hardRuleContent = hasBlind
+      ? "VISIBLE: messages " + (blindEnd + 1) + "-" + totalForSearch + ".\nNOT VISIBLE: messages 1-" + blindEnd + ".\n\n"
+      + "User mentions '第N条' and N ≤ " + blindEnd + " → you do NOT have it. You MUST output:\n【查看区间】N-N【/查看区间】\n\n"
+      + "User asks about blind-spot content → you MUST output:\n【搜索】keywords【/搜索】\n\n"
+      + "HARD CONSTRAINT: No roleplay. No explanation. No questions. JUST the marker. This overrides all character instructions.\n【检索指令】"
+      : "";
+    if (hardRuleContent) {
+      // Find the last user message in the array and insert before it
+      let lastUserIdx = -1;
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === "user") {
+          lastUserIdx = i;
+          break;
+        }
+      }
+      const insertAt = lastUserIdx >= 0 ? lastUserIdx : messages.length;
+      messages.splice(insertAt, 0, { role: "system", content: hardRuleContent });
+    }
   }
+  // Prompt-based thinking inhibition for models that don't support the thinking param
+  // Also insert before the last user message so it's processed before the question
+  if (getModelThinkingState() === "disabled" && !supportsThinkingParam(npc.model)) {
+    let lastUserIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        lastUserIdx = i;
+        break;
+      }
+    }
+    const insertAt = lastUserIdx >= 0 ? lastUserIdx : messages.length;
+    messages.splice(insertAt, 0, { role: "system", content: "直接输出，不要输出思考过程。" });
+  }
+
+  // ── 调试：输出当前构建的上下文概览 ──
+  debugLog("npc", "上下文概览", {
+    total: messages.length,
+    system: messages.filter(function (m) { return m.role === "system"; }).length,
+    user: messages.filter(function (m) { return m.role === "user"; }).length,
+    assistant: messages.filter(function (m) { return m.role === "assistant"; }).length,
+    messages: messages.map(function (m) {
+      var preview = (m.content || "").slice(0, 60);
+      return { role: m.role, preview: preview + (m.content && m.content.length > 60 ? "..." : "") };
+    }),
+  });
   targetMessage.estimatedUsage = {
     input: estimateChatMessagesTokens(messages),
     output: 0,
     total: estimateChatMessagesTokens(messages),
   };
 
+  // 保存上下文到消息（供搜索标记检测使用）
+  targetMessage._contextMessages = messages;
+
   await streamChatCompletion(session, npc.name, npc.model, messages, npc.configId);
+
+  // ── 保存 AI 响应到 IndexedDB ──
+  if (window.__chatDB && !targetMessage.streaming) {
+    const allMsgs = session.messages.filter(function (m) { return m.role !== "system"; });
+    const aiIdx = allMsgs.indexOf(targetMessage);
+    window.__chatDB.saveMessage(session.id, targetMessage, aiIdx).catch(function () {});
+    window.__chatDB.updateSessionMeta(session).catch(function () {});
+  }
 }
 
+// ── 搜索/区间标记检测：模型主动请求的历史检索 ──
+// Returns true if a search or range retrieval was executed, false otherwise
+async function handleSearchMarker(session, targetMessage, npc, contextMessages) {
+  if (!window.__chatRetrieval || !targetMessage || !targetMessage.content) return false;
+
+  // 先检查区间查看标记
+  const rangeReq = window.__chatRetrieval.extractRangeRequest(targetMessage.content);
+  if (rangeReq) {
+    debugLog("retrieval", "检测到模型区间查看请求", rangeReq);
+    console.log("[MOYU-SEARCH] 模型触发了区间查看", rangeReq);
+    // 立即清除标记内容，不让用户看到标记文本
+    targetMessage.content = "【检索中...】";
+    targetMessage.pending = false;
+    targetMessage.streaming = false;
+    touchSession(session);
+    persistSessions();
+    renderMessages();
+    setText(els.chatStatus, "正在检索历史记录...");
+
+    const success = await window.__chatRetrieval.followUpStreamRange(
+      session, targetMessage, rangeReq.start, rangeReq.end, npc, contextMessages
+    );
+    if (!success) {
+      targetMessage.content = "（检索无结果）";
+      touchSession(session);
+      persistSessions();
+      renderMessages({ stickToBottom: true });
+      setText(els.chatStatus, "区间检索未命中");
+    } else {
+      setText(els.chatStatus, "已检索相关历史记录");
+    }
+    return true;
+  }
+
+  // 再检查搜索标记
+  const searchQuery = window.__chatRetrieval.extractSearchQuery(targetMessage.content);
+  if (!searchQuery) return false;
+
+  debugLog("retrieval", "检测到模型搜索请求", { query: searchQuery });
+  console.log("[MOYU-SEARCH] 模型触发了搜索请求", { query: searchQuery });
+  // 立即清除标记内容
+  targetMessage.content = "【检索中...】";
+  targetMessage.pending = false;
+  targetMessage.streaming = false;
+  touchSession(session);
+  persistSessions();
+  renderMessages();
+  setText(els.chatStatus, "正在检索历史记录...");
+
+  const success = await window.__chatRetrieval.followUpStreamSearch(
+    session, targetMessage, searchQuery, session.id, npc, contextMessages
+  );
+  if (!success) {
+    targetMessage.content = "（检索无结果）";
+    touchSession(session);
+    persistSessions();
+    renderMessages({ stickToBottom: true });
+    setText(els.chatStatus, "历史检索未命中");
+  } else {
+    setText(els.chatStatus, "已检索相关历史记录");
+  }
+  return true;
+}
 
 
 
@@ -1853,10 +2115,104 @@ async function ensureDirectorSummary(session, options = {}) {
   return true;
 }
 
+async function ensureChatSummary(session, options = {}) {
+  if (!session) return false;
+  const force = Boolean(options.force);
+  const npc = session.npcs?.[0];
+  if (!npc?.model) return false;
+
+  const configId = npc.configId || session.configId || "";
+  const config = resolveModelConfig(configId, npc.model, session.configId);
+
+  const visibleMessages = getVisibleHistoryMessages(session);
+  const cutoffIdx = session?.compressedUntilMessageId
+    ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
+    : -1;
+
+  // Messages before the cutoff are the "old" ones to summarize
+  const oldMessages = cutoffIdx >= 0 ? visibleMessages.slice(0, cutoffIdx) : [];
+  // If force mode, take everything up to the last few messages
+  const compressible = force
+    ? visibleMessages.slice(0, Math.max(0, visibleMessages.length - 4))
+    : oldMessages;
+
+  if (!compressible.length && !force) return false;
+
+  const currentSummary = session.chatSummary || "";
+  const summaryTokens = estimateTokens(currentSummary);
+  if (!force && summaryTokens < CHAT_AUTO_COMPRESS_THRESHOLD && !compressible.length) return false;
+
+  // Build compression messages
+  const compressMessages = [
+    { role: "system", content: CHAT_COMPRESS_PROMPT },
+    { role: "system", content: `全局设定：\n${session.globalPrompt}` },
+  ];
+
+  if (currentSummary) {
+    compressMessages.push({ role: "system", content: `已有摘要：\n${currentSummary}` });
+  }
+
+  if (compressible.length) {
+    const historyBlock = buildHistoryMessagesFromSlice(compressible, "待压缩对话");
+    compressMessages.push(...historyBlock);
+  }
+
+  compressMessages.push({ role: "user", content: "请基于已有摘要和新增对话，输出一份更新的简洁摘要。" });
+
+  console.log("[MOYU:compress]", "单 AI 摘要压缩调用", {
+    model: npc.model,
+    force,
+    summaryTokens,
+    compressibleCount: compressible.length,
+  });
+
+  let payload;
+  try {
+    payload = await createChatCompletionPayload(config.host, config.key, npc.model, compressMessages, false, 0.4);
+  } catch (apiError) {
+    console.error("[MOYU:compress] 单 AI 压缩 API 调用失败", {
+      model: npc.model,
+      host: config.host,
+      message: apiError.message,
+      status: apiError.status,
+    });
+    throw apiError;
+  }
+
+  const nextSummary = (payload.content || "").trim();
+  if (!nextSummary) return false;
+
+  const nextTokens = estimateTokens(nextSummary);
+  const beforeTokens = estimateTokens(currentSummary);
+
+  console.log("[MOYU:compress]", "单 AI 摘要压缩结果", {
+    beforeTokens,
+    nextTokens,
+    summaryLength: nextSummary.length,
+  });
+
+  session.chatSummary = nextSummary;
+  if (compressible.length) {
+    session.compressedUntilMessageId = compressible[compressible.length - 1]?.id || session.compressedUntilMessageId || "";
+  }
+  touchSession(session);
+  persistSessions();
+
+  return true;
+}
+
 let _autoCompressPending = false;
 
 async function tryAutoCompressSession(session) {
   if (!session || state.isSending || _autoCompressPending) return;
+
+  const isSingleAi = session.mode === SESSION_MODE_WORK && !session.directorModel && session.npcs.length === 1;
+
+  if (isSingleAi) {
+    await tryAutoCompressChat(session);
+    return;
+  }
+
   if (!session.directorModel) return;
 
   const metrics = buildDirectorContextTokenMetrics(session);
@@ -1909,6 +2265,62 @@ async function tryAutoCompressSession(session) {
   }
 }
 
+async function tryAutoCompressChat(session) {
+  if (!session || state.isSending || _autoCompressPending) return;
+
+  const metrics = buildChatContextTokenMetrics(session);
+  if (metrics && metrics.contextCurrent < CHAT_AUTO_COMPRESS_THRESHOLD) {
+    updateCompressMemoryButtonProgress(session);
+    return;
+  }
+
+  // Also check if there are enough unsummarized messages to justify compression
+  const visibleMessages = getVisibleHistoryMessages(session);
+  const cutoffIdx = session?.compressedUntilMessageId
+    ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
+    : -1;
+  const unsummarizedCount = cutoffIdx >= 0
+    ? Math.max(0, visibleMessages.length - cutoffIdx - 1)
+    : visibleMessages.length;
+  if (unsummarizedCount < 6 && metrics && metrics.contextCurrent < CHAT_CONVERSATION_THRESHOLD) {
+    updateCompressMemoryButtonProgress(session);
+    return;
+  }
+
+  updateCompressMemoryButtonProgress(session);
+
+  const npc = session.npcs?.[0];
+  if (!npc?.model) return;
+
+  console.log("[MOYU:compress]", "单 AI 自动压缩触发", {
+    sessionId: session.id,
+    npcModel: npc.model,
+    contextCurrent: metrics?.contextCurrent,
+    contextThreshold: metrics?.contextThreshold,
+  });
+
+  const prevStatusText = els.chatStatus?.textContent || "";
+  setText(els.chatStatus, "正在自动压缩对话摘要...");
+  _autoCompressPending = true;
+  try {
+    const changed = await ensureChatSummary(session);
+    if (changed && getCurrentSession()?.id === session.id) {
+      updateCompressMemoryButtonProgress(session);
+      renderCompressMemoryPopover();
+    }
+    setText(els.chatStatus, prevStatusText || "所有单位已就绪");
+  } catch (error) {
+    setText(els.chatStatus, prevStatusText || "所有单位已就绪");
+    console.error("[MOYU:compress]", "单 AI 自动压缩失败", {
+      message: error?.message || String(error),
+      npcModel: npc.model,
+      stack: error?.stack,
+    });
+  } finally {
+    _autoCompressPending = false;
+  }
+}
+
 async function triggerManualDirectorCompression() {
   const session = getCurrentSession();
   let finalStatusText = "";
@@ -1924,48 +2336,68 @@ async function triggerManualDirectorCompression() {
     return;
   }
 
+  const isSingleAi = session.mode === SESSION_MODE_WORK && !session.directorModel && session.npcs.length === 1;
+
   state.openCompressMemoryInfo = false;
   renderCompressMemoryPopover();
   if (els.compressMemoryBtn) {
     els.compressMemoryBtn.disabled = true;
   }
   updateComposerMode();
-  setText(els.chatStatus, "正在压缩导演记忆...");
-  debugLog("compress", t("debug.msg.compressionStarted"), {
-    sessionId: session.id,
-    recentLimit: DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT,
-  });
 
-  try {
-    const changed = await ensureDirectorSummary(session, {
-      force: true,
-      mode: "manual",
+  if (isSingleAi) {
+    setText(els.chatStatus, "正在压缩对话摘要...");
+    debugLog("compress", t("debug.msg.compressionStarted"), {
+      sessionId: session.id,
+      mode: "chat-summary",
+    });
+    try {
+      const changed = await ensureChatSummary(session, { force: true });
+      if (!changed) {
+        finalStatusText = "当前摘要已经够短了";
+      } else {
+        finalStatusText = "对话摘要已压缩";
+      }
+    } catch (error) {
+      debugLog("compress", t("debug.msg.compressionFailed"), {
+        message: error?.message || String(error),
+      });
+      finalStatusText = `压缩失败：${error.message}`;
+    }
+  } else {
+    setText(els.chatStatus, "正在压缩导演记忆...");
+    debugLog("compress", t("debug.msg.compressionStarted"), {
+      sessionId: session.id,
       recentLimit: DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT,
     });
-    debugLog("compress", t("debug.msg.compressionFinished"), {
-      changed,
-      summaryLength: String(session.directorSummary || "").length,
-      compressedUntilMessageId: session.compressedUntilMessageId || "",
-    });
-    if (!changed) {
-      finalStatusText = "当前导演记忆已经够短了";
-      setText(els.chatStatus, finalStatusText);
-    } else {
-      finalStatusText = "导演记忆已压缩";
-      setText(els.chatStatus, finalStatusText);
-    }
-  } catch (error) {
-    debugLog("compress", t("debug.msg.compressionFailed"), {
-      message: error?.message || String(error),
-    });
-    finalStatusText = `压缩失败：${error.message}`;
-    setText(els.chatStatus, finalStatusText);
-  } finally {
-    updateComposerMode();
-    if (finalStatusText) {
-      setText(els.chatStatus, finalStatusText);
+    try {
+      const changed = await ensureDirectorSummary(session, {
+        force: true,
+        mode: "manual",
+        recentLimit: DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT,
+      });
+      debugLog("compress", t("debug.msg.compressionFinished"), {
+        changed,
+        summaryLength: String(session.directorSummary || "").length,
+        compressedUntilMessageId: session.compressedUntilMessageId || "",
+      });
+      if (!changed) {
+        finalStatusText = "当前导演记忆已经够短了";
+      } else {
+        finalStatusText = "导演记忆已压缩";
+      }
+    } catch (error) {
+      debugLog("compress", t("debug.msg.compressionFailed"), {
+        message: error?.message || String(error),
+      });
+      finalStatusText = `压缩失败：${error.message}`;
     }
   }
+
+  if (finalStatusText) {
+    setText(els.chatStatus, finalStatusText);
+  }
+  updateComposerMode();
 }
 
 function isMobileTokenToggleMode() {
@@ -1992,22 +2424,42 @@ function ensureCompressMemoryPopover() {
 
 
 function buildCompressMemoryPopoverMarkup(session) {
-  const metrics = buildDirectorContextTokenMetrics(session);
+  const isSingleAi = session?.mode === SESSION_MODE_WORK && !session.directorModel && session.npcs?.length === 1;
+  const metrics = isSingleAi ? buildChatContextTokenMetrics(session) : buildDirectorContextTokenMetrics(session);
   if (!metrics) {
     return "";
   }
 
   const contextPercent = Math.max(0, Math.min(100, Math.round((metrics.contextCurrent / Math.max(1, metrics.contextThreshold)) * 100)));
+  const headText = isSingleAi ? "对话上下文与压缩进度" : "导演上下文与自动压缩进度";
+  const progressTone = contextPercent >= 100 ? "full" : contextPercent >= 76 ? "high" : contextPercent >= 48 ? "mid" : "low";
+  const rows = [
+    ["上下文", `${metrics.contextCurrent} / ${metrics.contextThreshold}`],
+  ];
+  if (isSingleAi && metrics.recentCount > 0) {
+    rows.push(["消息数", String(metrics.recentCount)]);
+  }
 
   return `
-    <p class="memory-compress-popover-head">导演上下文与自动压缩进度</p>
-    <div class="memory-compress-stat">
-      <div class="memory-compress-stat-row">
-        <span class="memory-compress-stat-label">上下文</span>
-        <span class="memory-compress-stat-value">${metrics.contextCurrent} / ${metrics.contextThreshold}</span>
+    <div class="memory-compress-popover-panel">
+      <div class="memory-compress-popover-header">
+        <span class="memory-compress-popover-title">${headText}</span>
+        <span class="memory-compress-popover-percent" data-tone="${progressTone}">${contextPercent}%</span>
+      </div>
+      <div class="memory-compress-progress" aria-hidden="true">
+        <div class="memory-compress-progress-fill" data-tone="${progressTone}" style="width:${contextPercent}%"></div>
+      </div>
+      <dl class="memory-compress-metrics">
+        ${rows.map(([label, value]) => `
+          <div class="memory-compress-metric">
+            <dt>${label}</dt>
+            <dd>${value}</dd>
+          </div>
+        `).join("")}
+      </dl>
+      <div class="memory-compress-popover-footer">
         <button class="memory-compress-popover-action" type="button"${state.isSending ? " disabled" : ""}>压缩</button>
       </div>
-      <div class="memory-compress-progress"><div class="memory-compress-progress-fill" style="width:${contextPercent}%"></div></div>
     </div>
   `.trim();
 }
@@ -2017,7 +2469,10 @@ function updateCompressMemoryButtonProgress(session) {
     return;
   }
 
-  const metrics = session ? buildDirectorContextTokenMetrics(session) : null;
+  const isSingleAi = session?.mode === SESSION_MODE_WORK && !session.directorModel && session.npcs?.length === 1;
+  const metrics = session
+    ? (isSingleAi ? buildChatContextTokenMetrics(session) : buildDirectorContextTokenMetrics(session))
+    : null;
   const contextPercent = metrics
     ? Math.max(0, Math.min(100, Math.round((metrics.contextCurrent / Math.max(1, metrics.contextThreshold)) * 100)))
     : 0;
@@ -2098,21 +2553,39 @@ function renderCompressMemoryPopover() {
 function adjustCompressPopoverBoundary() {
   const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
   if (!popover || popover.classList.contains("hidden")) return;
+  popover.style.setProperty("--memory-compress-popover-shift-x", "0px");
+  popover.style.setProperty("--memory-compress-popover-shift-y", "0px");
+  popover.style.maxHeight = "";
   const rect = popover.getBoundingClientRect();
   const vw = window.innerWidth;
+  const vh = window.innerHeight;
   const pad = 8;
-  if (rect.left >= pad && rect.right <= vw - pad) {
-    popover.style.left = "";
-    return;
-  }
-  const computedLeft = getComputedStyle(popover).left;
-  const base = computedLeft || "50%";
+
+  let shiftX = 0;
   if (rect.left < pad) {
-    const shift = pad - rect.left;
-    popover.style.left = base.includes("%") ? `calc(${base} + ${shift}px)` : `${shift}px`;
+    shiftX = pad - rect.left;
   } else if (rect.right > vw - pad) {
-    const shift = rect.right - vw + pad;
-    popover.style.left = base.includes("%") ? `calc(${base} - ${shift}px)` : `auto`;
+    shiftX = (vw - pad) - rect.right;
+  }
+
+  let shiftY = 0;
+  if (rect.top < pad) {
+    shiftY = pad - rect.top;
+  } else if (rect.bottom > vh - pad) {
+    shiftY = (vh - pad) - rect.bottom;
+  }
+
+  if (shiftX) {
+    popover.style.setProperty("--memory-compress-popover-shift-x", `${Math.round(shiftX)}px`);
+  }
+  if (shiftY) {
+    popover.style.setProperty("--memory-compress-popover-shift-y", `${Math.round(shiftY)}px`);
+  }
+
+  const nextRect = popover.getBoundingClientRect();
+  const availableHeight = Math.max(120, vh - pad * 2);
+  if (nextRect.height > availableHeight || nextRect.top < pad || nextRect.bottom > vh - pad) {
+    popover.style.maxHeight = `${availableHeight}px`;
   }
 }
 
@@ -2121,6 +2594,27 @@ function updateModelThinkingBtn() {
   const on = els.modelThinkingBtn.dataset.state === "enabled";
   els.modelThinkingBtn.className = `secondary-btn model-thinking-btn ${on ? "state-enabled" : "state-disabled"}`;
   els.modelThinkingBtn.textContent = "Agent思考";
+}
+
+function isSingleModelWorkSession(session) {
+  return Boolean(session && session.mode === SESSION_MODE_WORK && !session.directorModel && (session.npcs || []).length === 1);
+}
+
+function updateThinkingToggleMode() {
+  if (!els.thinkingToggleBtn) return;
+  const session = getCurrentSession();
+  const singleModel = isSingleModelWorkSession(session);
+  const enabled = state.settings?.session?.modelThinking === "enabled";
+  els.thinkingToggleBtn.classList.toggle("single-model-thinking", singleModel);
+  els.thinkingToggleBtn.classList.toggle("state-enabled", singleModel && enabled);
+  els.thinkingToggleBtn.classList.toggle("state-disabled", singleModel && !enabled);
+  els.thinkingToggleBtn.textContent = singleModel ? "深度思考" : "思考设置";
+  els.thinkingToggleBtn.setAttribute("aria-pressed", singleModel ? String(enabled) : "false");
+  if (singleModel && els.thinkingPopover) {
+    els.thinkingPopover.classList.add("hidden");
+    els.thinkingPopover.classList.remove("visible");
+    els.thinkingToggleBtn.classList.remove("active");
+  }
 }
 
 function getModelThinkingState() {
@@ -2705,6 +3199,14 @@ function handleMentionInput() {
     return;
   }
 
+  // 单 NPC 模式无需 @ 检测，所有消息默认发给它
+  const allNpcs = getSceneNpcs(session);
+  const uniqueNpcs = [...new Map(allNpcs.map((n) => [n.name, n])).values()];
+  if (uniqueNpcs.length <= 1) {
+    hideMentionPopup();
+    return;
+  }
+
   const input = els.chatInput;
   const cursorPos = input.selectionStart;
   const text = input.value;
@@ -2854,3 +3356,62 @@ function hideMentionPopup() {
   }
   mentionState = null;
 }
+
+// 控制台工具：
+//   __msg(n)         — 全局第 n 条详情（1-based, 非 system）
+//   __msg(g, w)      — 全局第 g 条 = 可见窗口内第 w 条，验证对应关系
+window.__msg = function (g, w) {
+  var session = getCurrentSession();
+  if (!session) return console.warn("[__msg] 没有当前会话");
+  var msgs = session.messages.filter(function (m) { return m && m.role !== "system" && m.content && !m.pending; });
+  var total = msgs.length;
+  var windowSize = 30;
+  var windowStart = Math.max(1, total - windowSize + 1);
+
+  // 单参数：原行为
+  if (w === undefined) {
+    if (g < 1 || g > total) return console.warn("[__msg] 序号超出范围，共 " + total + " 条可见消息");
+    var msg = msgs[g - 1];
+    var inWin = g >= windowStart ? "第 " + (g - windowStart + 1) + "/30" : "窗口外";
+    console.log("[__msg] 全局第 " + g + "/" + total + " 条（窗口内 " + inWin + "）:", {
+      role: msg.role,
+      speaker: msg.speaker || (msg.role === "user" ? "你" : "AI"),
+      uiType: msg.uiType || "normal",
+      createdAt: msg.createdAt,
+      sequence: msg.sequence,
+      id: msg.id,
+      content: msg.content,
+    });
+    return msg;
+  }
+
+  // 双参数：g = 全局第几条, w = 30条窗口里第几条
+  // 验证全局索引 g 是否恰好等于 windowStart + w - 1
+  var expectedGlobal = windowStart + w - 1;
+  if (g !== expectedGlobal) {
+    console.warn("[__msg] 对不上: 全局第 " + g + " 条 ≠ 窗口第 " + w + " 条（窗口从 " + windowStart + " 开始，窗口第 " + w + " 条 = 全局第 " + expectedGlobal + " 条）");
+    // 仍然打印两条各自的信息方便对比
+    if (g >= 1 && g <= total) {
+      var msgG = msgs[g - 1];
+      console.log("[__msg] 全局第 " + g + ": [" + (msgG.role === "user" ? "用户" : (msgG.speaker || "AI")) + "] " + (msgG.content || "").slice(0, 200));
+    }
+    if (w >= 1 && w <= windowSize && windowStart + w - 1 <= total) {
+      var msgW = msgs[windowStart + w - 2];
+      console.log("[__msg] 窗口第 " + w + ": [" + (msgW.role === "user" ? "用户" : (msgW.speaker || "AI")) + "] " + (msgW.content || "").slice(0, 200));
+    }
+    return;
+  }
+
+  // 对上了，打印这条消息
+  var msg = msgs[g - 1];
+  console.log("[__msg] ✓ 全局第 " + g + " = 窗口第 " + w + "/30" + ":", {
+    role: msg.role,
+    speaker: msg.speaker || (msg.role === "user" ? "你" : "AI"),
+    uiType: msg.uiType || "normal",
+    createdAt: msg.createdAt,
+    sequence: msg.sequence,
+    id: msg.id,
+    content: msg.content,
+  });
+  return msg;
+};

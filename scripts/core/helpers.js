@@ -77,12 +77,45 @@ function persistModelCache() {
   localStorage.setItem(STORAGE_KEYS.modelCache, JSON.stringify(state.modelCache));
 }
 
-function persistSessions() {
-  localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify(state.sessions));
-  localStorage.setItem(STORAGE_KEYS.currentSessionId, JSON.stringify(state.currentSessionId));
-  const current = getCurrentSession();
-  localStorage.setItem(STORAGE_KEYS.currentSession, JSON.stringify(current));
+// ── IDB 持久化防抖 ──
+var _idbPersistTimer = null;
+function _flushIDBPersist() {
+  _idbPersistTimer = null;
+  if (window.__chatDB && state.sessions) {
+    window.__chatDB.saveAllSessionBlobs(state.sessions).catch(function (err) {
+      console.warn("[persist] IDB sync failed", err);
+    });
+  }
 }
+function _scheduleIDBPersist() {
+  if (_idbPersistTimer) clearTimeout(_idbPersistTimer);
+  _idbPersistTimer = setTimeout(_flushIDBPersist, 1500);
+}
+
+function persistSessions() {
+  localStorage.setItem(STORAGE_KEYS.currentSessionId, JSON.stringify(state.currentSessionId));
+  if (window.__chatDB) {
+    // 立即保存当前会话元数据（防丢）
+    var current = getCurrentSession();
+    if (current) {
+      window.__chatDB.saveSession(current).catch(function (err) {
+        console.warn("[persist] save session failed", err);
+      });
+    }
+    // 全量防抖保存（同步所有会话的排序/标题）
+    _scheduleIDBPersist();
+  }
+}
+
+// 页面关闭前强制刷一次
+window.addEventListener("beforeunload", function () {
+  if (_idbPersistTimer) {
+    clearTimeout(_idbPersistTimer);
+    if (window.__chatDB && state.sessions) {
+      window.__chatDB.saveAllSessionBlobs(state.sessions);
+    }
+  }
+});
 
 function loadJson(key, fallback) {
   try {
