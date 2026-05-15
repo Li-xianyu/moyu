@@ -382,7 +382,8 @@
 
   .composer-status-bar {
     min-height: 20px;
-    padding: 0;
+    margin: 0 -2px 4px;
+    padding: 4px 8px;
   }
 
   .composer {
@@ -407,6 +408,11 @@
     order: 0;
   }
 
+  .mobile-newline-btn {
+    display: inline-flex;
+    order: 0;
+  }
+
   .composer-footer .composer-cancel-btn + .send-inside-btn {
     margin-left: -2px;
   }
@@ -421,6 +427,11 @@
   }
 
   .send-inside-btn {
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  .mobile-newline-btn {
     min-width: 38px;
     min-height: 38px;
   }
@@ -528,6 +539,7 @@
     max-width: calc(100vw - 32px);
     padding: 6px 12px;
     line-height: 1.38;
+    border-radius: 14px 14px 6px 14px;
   }
 
   .message.user.single-line {

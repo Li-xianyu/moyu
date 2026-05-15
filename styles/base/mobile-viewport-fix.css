@@ -157,6 +157,8 @@ body::after {
     width: auto !important;
     height: auto !important;
     min-height: 0 !important;
+    box-sizing: border-box !important;
+    padding: 16px max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)) !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch !important;
@@ -203,6 +205,7 @@ body::after {
     display: grid !important;
     grid-template-columns: 1fr !important;
     align-content: start !important;
+    width: 100% !important;
   }
 
   #settingsView .settings-main-panel {
