@@ -577,6 +577,8 @@
                           msg.uiType = "narration";
                         }
                         if (m.thinking) msg.thinking = m.thinking;
+                        if (m.usage) msg.usage = m.usage;
+                        if (m.estimatedUsage) msg.estimatedUsage = m.estimatedUsage;
                         return msg;
                       });
                     // 重建完整 session 对象
@@ -671,6 +673,8 @@
                 sequence: i,
                 uiType: m.uiType || "",
                 thinking: m.thinking || "",
+                usage: m.usage || null,
+                estimatedUsage: m.estimatedUsage || null,
               });
             }
             count++;
@@ -695,6 +699,8 @@
         sequence: typeof sequence === "number" ? sequence : 0,
         uiType: msg.uiType || "",
         thinking: msg.thinking || "",
+        usage: msg.usage || null,
+        estimatedUsage: msg.estimatedUsage || null,
       };
       return doPut("messages", record).then(function () {
         return indexMessage(record);
@@ -720,6 +726,8 @@
             sequence: startSeq + idx,
             uiType: msg.uiType || "",
             thinking: msg.thinking || "",
+            usage: msg.usage || null,
+            estimatedUsage: msg.estimatedUsage || null,
           };
           return doPut("messages", record).then(function () {
             return indexMessage(record).then(function () { saved++; });

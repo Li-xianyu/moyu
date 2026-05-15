@@ -85,12 +85,24 @@ function estimateChatMessagesTokens(messages) {
   return Math.max(1, total + 2);
 }
 
+function estimateMessageOutputUsage(message) {
+  if (!message || message.role !== "assistant" || message.pending) {
+    return null;
+  }
+
+  const output = estimateTokens([message.content || "", message.thinking || ""].filter(Boolean).join("\n"));
+  if (!output) {
+    return null;
+  }
+  return { input: 0, output, total: output };
+}
+
 function buildMessageTokenLabel(message) {
   if (state.settings?.session?.showTokenDisplay === false) {
     return "";
   }
   const usage = normalizeUsage(message?.usage);
-  const estimatedUsage = normalizeUsage(message?.estimatedUsage);
+  const estimatedUsage = normalizeUsage(message?.estimatedUsage) || estimateMessageOutputUsage(message);
   const tokenStats = usage || estimatedUsage;
   if (!tokenStats) {
     return "";
@@ -99,6 +111,9 @@ function buildMessageTokenLabel(message) {
 
   if (tokenStats.input && tokenStats.output) {
     return `${prefix}${tokenStats.input} in · ${prefix}${tokenStats.output} out`;
+  }
+  if (tokenStats.output && !tokenStats.input) {
+    return `${prefix}${tokenStats.output} out`;
   }
   if (tokenStats.total) {
     return `${prefix}${tokenStats.total} total`;
@@ -113,7 +128,7 @@ function supportsThinkingParam(modelName) {
   const name = (modelName || "").toLowerCase();
   // nothinking 系列模型明确不支持 thinking 参数
   if (name.includes("nothinking")) return false;
-  return name.includes("deepseek") || name.includes("claude") || name.includes("doubao");
+  return name.includes("deepseek") || name.includes("claude") || name.includes("doubao") || name.includes("chatgpt");
 }
 
 function buildThinkingExtra(modelName, value) {

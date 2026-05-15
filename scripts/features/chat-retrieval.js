@@ -196,6 +196,30 @@
     return null;
   };
 
+  RETRIEVAL.getTurnRanges = function (session) {
+    if (!session || !Array.isArray(session.messages)) return [];
+    var visibleMsgs = session.messages.filter(function (m) {
+      return m && m.role !== "system" && m.content && !m.pending;
+    });
+    var ranges = [];
+    for (var i = 0; i < visibleMsgs.length; i++) {
+      if (visibleMsgs[i].role !== "user") continue;
+      var end = visibleMsgs.length - 1;
+      for (var j = i + 1; j < visibleMsgs.length; j++) {
+        if (visibleMsgs[j].role === "user") {
+          end = j - 1;
+          break;
+        }
+      }
+      ranges.push({
+        turn: ranges.length + 1,
+        start: i + 1,
+        end: end + 1,
+      });
+    }
+    return ranges;
+  };
+
   // ── 6. 移除搜索标记（清理显示内容） ──
   RETRIEVAL.stripSearchMarker = function (content) {
     if (!content) return content;

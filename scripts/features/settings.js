@@ -86,6 +86,9 @@ function bindSettings() {
     state.settings.session = state.settings.session || {};
     state.settings.session.showTokenDisplay = Boolean(els.showTokenDisplayToggle.checked);
     persistSettings();
+    if (typeof renderMessages === "function") {
+      renderMessages();
+    }
   });
 
   const directorDispatchToggle = document.getElementById("directorDispatchToggle");

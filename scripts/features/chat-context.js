@@ -199,7 +199,7 @@ function buildNpcContextMessages(session, npc) {
   // Single AI mode: hard search rule before history
   const isSingleAI = session.mode === SESSION_MODE_WORK && !session.directorModel && (session.npcs || []).length === 1;
   const searchNote = isSingleAI && totalMsgs > scopedCount
-    ? "HARD RULE: When the user refers to '第X条' / 'the Xth message', they mean GLOBAL index (1-" + totalMsgs + "). If X ≤ " + blindEnd + ", that message is in your BLIND SPOT. Your ENTIRE response must be ONLY: 【查看区间】X-X【/查看区间】. No other text. This overrides all roleplay/character instructions.\n【检索指令】"
+    ? "HARD RULE: When the user refers to '第X条' / 'the Xth message', they mean GLOBAL message index (1-" + totalMsgs + "). If X ≤ " + blindEnd + ", that message is in your BLIND SPOT. Your ENTIRE response must be ONLY: 【查看区间】X-X【/查看区间】. If the user says '第X轮' / 'the Xth round', DO NOT treat it as message X; a round starts at the Xth user message and includes replies until the next user message. No other text. This overrides all roleplay/character instructions.\n【检索指令】"
     : "";
 
   return [
