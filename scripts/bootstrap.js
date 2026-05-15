@@ -59,7 +59,7 @@ function updateMobileViewportFix() {
   // 键盘弹出/收起后，view 尺寸变化，重新把输入框滚到可见区域
   if (keyboardOpen !== prevKeyboardOpen) {
     const el = document.activeElement;
-    if (el && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) {
+    if (el && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) && el.id !== "chatInput") {
       clearTimeout(window.__moyuKbScroll);
       window.__moyuKbScroll = setTimeout(() => {
         try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (_) {}
@@ -236,8 +236,16 @@ function init() {
 
   var loadingEl = document.getElementById('loadingScreen');
   if (loadingEl) {
-    loadingEl.classList.add('loading-screen--fade-out');
-    setTimeout(function() { loadingEl.style.display = 'none'; }, 400);
+    var tw = window.__moyuTypewriter;
+    function fadeOut() {
+      loadingEl.classList.add('loading-screen--fade-out');
+      setTimeout(function() { loadingEl.style.display = 'none'; }, 400);
+    }
+    if (tw && tw.cycleCount < 1) {
+      tw.onCycle = fadeOut;
+    } else {
+      fadeOut();
+    }
   }
 }
 

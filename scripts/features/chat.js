@@ -2,6 +2,149 @@
   const el = els.chatInput;
   el.style.height = "auto";
   el.style.height = el.scrollHeight + "px";
+  recalcUserTopAnchorSpacer();
+}
+
+function getChatScrollElement() {
+  return els.chatMessages?.closest(".main") || els.chatMessages;
+}
+
+function getLastUserMessageBlock() {
+  const userBlocks = els.chatMessages?.querySelectorAll(".message-block.user");
+  return userBlocks?.[userBlocks.length - 1] || null;
+}
+
+function getComposerShellHeight() {
+  const composerShell = els.chatInput?.closest(".composer-shell");
+  return composerShell ? composerShell.getBoundingClientRect().height : 0;
+}
+
+function getTopFloatingChromeHeight() {
+  const floatingButtons = [...document.querySelectorAll(".info-btn.floating")];
+  if (!floatingButtons.length) return 0;
+  return floatingButtons.reduce((maxBottom, button) => {
+    const rect = button.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return maxBottom;
+    return Math.max(maxBottom, rect.bottom);
+  }, 0);
+}
+
+function clearUserTopAnchorSpacer() {
+  els.chatMessages?.classList.remove("hide-before");
+  els.chatMessages?.querySelector(".scroll-spacer")?.remove();
+}
+
+function collapseUserTopAnchorSpacer() {
+  const spacer = els.chatMessages?.querySelector(".scroll-spacer");
+  const shouldFollow = state.userTopAnchorAutoFollow;
+  els.chatMessages?.classList.remove("hide-before");
+  if (!spacer) return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    spacer.remove();
+    return;
+  }
+  const currentHeight = spacer.getBoundingClientRect().height;
+  spacer.style.height = `${currentHeight}px`;
+  spacer.style.transition = "height 520ms ease";
+  requestAnimationFrame(() => {
+    spacer.style.height = "0px";
+    if (shouldFollow) scrollChatToBottom();
+  });
+  spacer.addEventListener("transitionend", () => spacer.remove(), { once: true });
+  window.setTimeout(() => spacer.remove(), 700);
+}
+
+function scrollChatToBottom() {
+  const scrollEl = getChatScrollElement();
+  if (scrollEl) {
+    scrollEl.scrollTop = scrollEl.scrollHeight - scrollEl.clientHeight;
+  }
+}
+
+const CHAT_BOTTOM_FOCUS_THRESHOLD_PX = 160;
+let shouldKeepBottomOnKeyboard = false;
+
+function getChatBottomDistance() {
+  const scrollEl = getChatScrollElement();
+  if (!scrollEl) return Infinity;
+  return scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+}
+
+function isChatNearBottom(threshold = CHAT_BOTTOM_FOCUS_THRESHOLD_PX) {
+  return getChatBottomDistance() <= threshold;
+}
+
+function settleChatBottomAfterViewportShift() {
+  scrollChatToBottom();
+  requestAnimationFrame(scrollChatToBottom);
+  window.setTimeout(scrollChatToBottom, 80);
+  window.setTimeout(scrollChatToBottom, 220);
+}
+
+function getMessageGapPx() {
+  const styles = window.getComputedStyle(els.chatMessages);
+  return parseFloat(styles.rowGap || styles.gap || "0") || 0;
+}
+
+function calculateContentBelowUserHeight(userBlock) {
+  const userBottom = userBlock.offsetTop + userBlock.offsetHeight;
+  let lastBottom = userBottom;
+  for (let node = userBlock.nextElementSibling; node; node = node.nextElementSibling) {
+    if (node.classList?.contains("scroll-spacer")) continue;
+    lastBottom = Math.max(lastBottom, node.offsetTop + node.offsetHeight);
+  }
+  return Math.max(0, lastBottom - userBottom);
+}
+
+function recalcUserTopAnchorSpacer(userBlock = getLastUserMessageBlock()) {
+  if (!state.userTopAnchorActive || !state.isSending || !els.chatMessages || !userBlock?.isConnected) {
+    if (!state.isSending) clearUserTopAnchorSpacer();
+    return;
+  }
+
+  const scrollEl = getChatScrollElement();
+  if (!scrollEl) return;
+
+  const existingSpacer = els.chatMessages.querySelector(".scroll-spacer");
+  if (existingSpacer) existingSpacer.remove();
+
+  els.chatMessages.classList.add("hide-before");
+
+  const gap = getMessageGapPx();
+  const contentBelowUserHeight = calculateContentBelowUserHeight(userBlock);
+  const spacerGap = gap;
+  const visualSafetyPx = 8;
+  const visibleMessageHeight = Math.max(0, scrollEl.clientHeight - getComposerShellHeight() - getTopFloatingChromeHeight() - visualSafetyPx);
+  const spareSpace = visibleMessageHeight - userBlock.offsetHeight - contentBelowUserHeight - spacerGap;
+  const spacerHeight = Math.max(0, Math.floor(spareSpace));
+
+  const spacer = document.createElement("div");
+  spacer.className = "scroll-spacer";
+  spacer.style.cssText = `flex:0 0 auto;pointer-events:none;height:${spacerHeight}px;`;
+  els.chatMessages.appendChild(spacer);
+  if (state.userTopAnchorAutoFollow) {
+    scrollChatToBottom();
+  }
+}
+
+function pinLastUserMessageToTop() {
+  const lastUser = getLastUserMessageBlock();
+  if (!lastUser) return;
+  state.userTopAnchorActive = true;
+  state.userTopAnchorAutoFollow = true;
+  state.userScrolledAway = true;
+  recalcUserTopAnchorSpacer(lastUser);
+}
+
+function finishUserTopAnchor() {
+  const shouldFollow = state.userTopAnchorAutoFollow;
+  state.userTopAnchorActive = false;
+  state.userScrolledAway = false;
+  collapseUserTopAnchorSpacer();
+  state.userTopAnchorAutoFollow = false;
+  if (shouldFollow) {
+    requestAnimationFrame(scrollChatToBottom);
+  }
 }
 
 const DIRECTOR_RECENT_HISTORY_LIMIT = 8;
@@ -72,32 +215,28 @@ function bindChat() {
   });
   if (els.compressMemoryBtn) {
     ensureCompressMemoryPopover();
-    els.compressMemoryBtn.addEventListener("pointerdown", (event) => {
-      debugLog("compress", t("debug.msg.toolbarIconPointerdown"), {
-        disabled: Boolean(els.compressMemoryBtn?.disabled),
-        open: state.openCompressMemoryInfo,
-      });
-      event.preventDefault();
-    });
     els.compressMemoryBtn.addEventListener("click", (event) => {
       debugLog("compress", t("debug.msg.toolbarIconClick"), {
         disabled: Boolean(els.compressMemoryBtn?.disabled),
         openBefore: state.openCompressMemoryInfo,
       });
-      event.preventDefault();
       event.stopPropagation();
       state.openCompressMemoryInfo = !state.openCompressMemoryInfo;
       renderCompressMemoryPopover();
+      toggleCompressPopover();
     });
     els.compressMemoryBtn.addEventListener("pointerenter", () => {
-      requestAnimationFrame(() => adjustCompressPopoverBoundary());
+      showCompressPopover();
     });
     els.compressMemoryBtn.addEventListener("pointerleave", () => {
-      const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
-      if (popover) {
-        popover.style.setProperty("--memory-compress-popover-shift-x", "0px");
-        popover.style.setProperty("--memory-compress-popover-shift-y", "0px");
-        popover.style.maxHeight = "";
+      if (!state.openCompressMemoryInfo) {
+        hideCompressPopover();
+        const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
+        if (popover) {
+          popover.style.setProperty("--memory-compress-popover-shift-x", "0px");
+          popover.style.setProperty("--memory-compress-popover-shift-y", "0px");
+          popover.style.maxHeight = "";
+        }
       }
     });
   }
@@ -204,8 +343,17 @@ function bindChat() {
   });
   els.chatInput.addEventListener("input", clearSuggestions);
   els.chatInput.addEventListener("input", handleMentionInput);
+  els.chatInput.addEventListener("focus", () => {
+    shouldKeepBottomOnKeyboard = isChatNearBottom();
+    if (shouldKeepBottomOnKeyboard) {
+      settleChatBottomAfterViewportShift();
+    }
+  });
   if (els.suggestBtn) {
     els.suggestBtn.addEventListener("click", generateSuggestions);
+  }
+  if (els.mobileNewlineBtn) {
+    els.mobileNewlineBtn.addEventListener("click", insertChatInputNewline);
   }
   const suggestionClose = els.suggestionBar?.querySelector(".suggestion-close-btn");
   if (suggestionClose) {
@@ -233,9 +381,24 @@ function bindChat() {
     }
     debugLog("compress", t("debug.msg.popoverClosedOutside"));
     state.openCompressMemoryInfo = false;
-    renderCompressMemoryPopover();
+    hideCompressPopover();
   });
-  window.addEventListener("resize", autoResizeChatInput);
+  window.addEventListener("resize", () => {
+    autoResizeChatInput();
+    recalcUserTopAnchorSpacer();
+    adjustCompressPopoverBoundary();
+    if (document.activeElement === els.chatInput && shouldKeepBottomOnKeyboard) {
+      settleChatBottomAfterViewportShift();
+    }
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", () => {
+      adjustCompressPopoverBoundary();
+      if (document.activeElement === els.chatInput && shouldKeepBottomOnKeyboard) {
+        settleChatBottomAfterViewportShift();
+      }
+    });
+  }
   autoResizeChatInput();
 
   // Close @mention popup on click outside
@@ -246,10 +409,17 @@ function bindChat() {
   });
 
   // 滚动跟踪：检测用户是否主动离开底部
-  const scrollEl = els.chatMessages.closest(".main") || els.chatMessages;
+  const scrollEl = getChatScrollElement();
   if (scrollEl) {
     scrollEl.addEventListener("scroll", () => {
-      const distFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
+      if (state.userTopAnchorActive && state.isSending && els.chatMessages.querySelector(".scroll-spacer")) {
+        if (getChatBottomDistance() > 180) {
+          state.userTopAnchorAutoFollow = false;
+        }
+        state.userScrolledAway = true;
+        return;
+      }
+      const distFromBottom = getChatBottomDistance();
       state.userScrolledAway = distFromBottom > 100;
     }, { passive: true });
   }
@@ -344,6 +514,21 @@ function autoResizeChatInput() {
   el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
 }
 
+function insertChatInputNewline() {
+  const input = els.chatInput;
+  if (!input || input.disabled || state.isSending) return;
+
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? start;
+  const nextValue = `${input.value.slice(0, start)}\n${input.value.slice(end)}`;
+  input.value = nextValue;
+  const nextCursor = start + 1;
+  input.setSelectionRange(nextCursor, nextCursor);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  autoResizeChatInput();
+  input.focus();
+}
+
 
 function updateComposerMode() {
   const composer = els.chatInput?.closest(".composer");
@@ -356,6 +541,7 @@ function updateComposerMode() {
     els.sendBtn.disabled = false;
     els.sendBtn.classList.add("sending");
     els.chatInput.classList.remove("editing");
+    if (els.mobileNewlineBtn) els.mobileNewlineBtn.disabled = true;
     if (composer) composer.classList.remove("editing");
     if (composerShell) composerShell.classList.remove("editing");
     if (els.cancelEditBtn) els.cancelEditBtn.classList.add("hidden");
@@ -366,6 +552,7 @@ function updateComposerMode() {
   if (state.editingUserMessageId) {
     els.sendBtn.innerHTML = '<i class="bi bi-check-lg"></i>';
     els.chatInput.classList.add("editing");
+    if (els.mobileNewlineBtn) els.mobileNewlineBtn.disabled = false;
     if (composer) {
       composer.classList.add("editing");
     }
@@ -386,6 +573,9 @@ function updateComposerMode() {
 
   els.sendBtn.classList.remove("sending");
   els.chatInput.classList.remove("editing");
+  if (els.mobileNewlineBtn) {
+    els.mobileNewlineBtn.disabled = !currentSession;
+  }
   if (composer) {
     composer.classList.remove("editing");
   }
@@ -514,19 +704,7 @@ async function regenerateFromUserMessage(messageId) {
   persistSessions();
   renderMessages();
   renderChatListMenu();
-  const userBlocks = els.chatMessages.querySelectorAll('.message-block.user');
-  const lastUser = userBlocks[userBlocks.length - 1];
-  if (lastUser) {
-    els.chatMessages.classList.add('hide-before');
-    if (!els.chatMessages.querySelector('.scroll-spacer')) {
-      const spacer = document.createElement('div');
-      spacer.className = 'scroll-spacer';
-      spacer.style.cssText = 'flex:0 0 auto;pointer-events:none;height:100vh;min-height:600px;';
-      els.chatMessages.appendChild(spacer);
-    }
-    lastUser.scrollIntoView({ block: "start" });
-    state.userScrolledAway = true;
-  }
+  pinLastUserMessageToTop();
   state.abortController = new AbortController();
   await runSessionTurn(session);
 }
@@ -755,11 +933,8 @@ function updateStreamingBubble(targetMessage) {
   }
 
   // streaming 过程中用户消息钉在视口顶部
-  if (state.userScrolledAway) {
-    const userBlock = els.chatMessages.querySelector('.message-block.user:last-child');
-    if (userBlock) {
-      userBlock.scrollIntoView({ block: "start" });
-    }
+  if (state.userTopAnchorActive && state.isSending) {
+    recalcUserTopAnchorSpacer();
   }
 }
 
@@ -840,7 +1015,7 @@ function createStreamBatchController(targetMessage, revealFn, updateFn) {
 
 function renderMessages(options = {}) {
   const shouldStickToBottom = Boolean(options.stickToBottom);
-  const scrollEl = els.chatMessages.closest(".main") || els.chatMessages;
+  const scrollEl = getChatScrollElement();
   const previousScrollTop = scrollEl.scrollTop;
   const previousScrollHeight = scrollEl.scrollHeight;
   const session = getCurrentSession();
@@ -904,21 +1079,16 @@ function renderMessages(options = {}) {
 
   // --- Scroll handling (unchanged) ---
   if (shouldStickToBottom) {
+    if (state.userTopAnchorActive && state.isSending) {
+      recalcUserTopAnchorSpacer();
+      return;
+    }
     if (!state.userScrolledAway) {
+      clearUserTopAnchorSpacer();
       scrollEl.scrollTop = scrollEl.scrollHeight;
       state.userScrolledAway = false;
     } else {
-      els.chatMessages.classList.add('hide-before');
-      if (!els.chatMessages.querySelector('.scroll-spacer')) {
-        const spacer = document.createElement('div');
-        spacer.className = 'scroll-spacer';
-        spacer.style.cssText = 'flex:0 0 auto;pointer-events:none;height:100vh;min-height:600px;';
-        els.chatMessages.appendChild(spacer);
-      }
-      const userBlock = els.chatMessages.querySelector('.message-block.user:last-child');
-      if (userBlock) {
-        userBlock.scrollIntoView({ block: "start" });
-      }
+      clearUserTopAnchorSpacer();
     }
     return;
   }
@@ -1082,8 +1252,17 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
       const tools = buildMessageTools(message);
       block.appendChild(tools);
     } else if (message.role === "assistant") {
+      const tokenLabel = buildMessageTokenLabel(message);
       const tokenSpan = existingTools.querySelector('.message-token-label');
-      if (tokenSpan) tokenSpan.textContent = buildMessageTokenLabel(message);
+      if (tokenSpan) {
+        tokenSpan.textContent = tokenLabel;
+      } else if (tokenLabel) {
+        const nextTokenSpan = document.createElement("span");
+        nextTokenSpan.className = "message-token-label";
+        nextTokenSpan.textContent = tokenLabel;
+        existingTools.prepend(nextTokenSpan);
+      }
+      existingTools.classList.toggle("has-token", Boolean(tokenLabel));
     }
   } else if (existingTools && message.pending) {
     existingTools.remove();
@@ -1096,6 +1275,7 @@ function buildMessageTools(message) {
   tools.style.justifyContent = message.role === "user" ? "flex-end" : "space-between";
 
   const tokenLabel = message.role === "assistant" ? buildMessageTokenLabel(message) : "";
+  tools.classList.toggle("has-token", Boolean(tokenLabel));
   if (message.role === "assistant" && tokenLabel) {
     const tokenSpan = document.createElement("span");
     tokenSpan.className = "message-token-label";
@@ -1155,6 +1335,7 @@ function stopGeneration() {
   state.isSending = false;
   els.sendBtn.disabled = false;
   els.chatInput.disabled = false;
+  finishUserTopAnchor();
   autoResizeChatInput();
   updateComposerMode();
   setText(els.chatStatus, t("chat.stopped"));
@@ -1212,18 +1393,7 @@ async function sendUserMessage() {
   autoResizeChatInput();
   renderMessages();
   renderChatListMenu();
-  // 用户消息固定到视口顶部 + 底部垫片供 AI 展开
-  const userBlocks = els.chatMessages.querySelectorAll('.message-block.user');
-  const lastUser = userBlocks[userBlocks.length - 1];
-  if (lastUser) {
-    els.chatMessages.classList.add('hide-before');
-    const spacer = document.createElement('div');
-    spacer.className = 'scroll-spacer';
-    spacer.style.cssText = 'flex:0 0 auto;pointer-events:none;height:100vh;min-height:600px;';
-    els.chatMessages.appendChild(spacer);
-    lastUser.scrollIntoView({ block: "start" });
-    state.userScrolledAway = true;
-  }
+  pinLastUserMessageToTop();
   debugLog("turn", t("debug.msg.userMessageSubmitted"), {
     sessionId: session.id,
     editingMessageId: state.editingUserMessageId,
@@ -1301,6 +1471,7 @@ async function runSessionTurn(session) {
           state.isSending = false;
           els.sendBtn.disabled = false;
           els.chatInput.disabled = false;
+          finishUserTopAnchor();
           autoResizeChatInput();
           updateComposerMode();
           if (!window.matchMedia?.("(pointer: coarse)").matches) {
@@ -1347,7 +1518,7 @@ async function runSessionTurn(session) {
             ? window.__chatRetrieval.parseBlindRangeFromUserText(lastUserContent, blindEnd)
             : null;
           if (blindRange) {
-            console.log("[MOYU-SEARCH] 模型未输出标记，自动执行区间检索", blindRange);
+            console.log("[MOYU-SEARCH] 模型未输出标记，自动执行历史区间检索", blindRange);
             setText(els.chatStatus, "正在检索历史记录...");
             const lastResp2 = session.messages.filter(function (m) { return m.role === "assistant" && !m.uiType; });
             const lastAssistant2 = lastResp2.length ? lastResp2[lastResp2.length - 1] : null;
@@ -1404,6 +1575,7 @@ async function runSessionTurn(session) {
       state.isSending = false;
       els.sendBtn.disabled = false;
       els.chatInput.disabled = false;
+      finishUserTopAnchor();
       autoResizeChatInput();
       updateComposerMode();
       if (!window.matchMedia?.("(pointer: coarse)").matches) {
@@ -1517,6 +1689,7 @@ async function runSessionTurn(session) {
     state.isSending = false;
     els.sendBtn.disabled = false;
     els.chatInput.disabled = false;
+    finishUserTopAnchor();
     autoResizeChatInput();
     updateComposerMode();
     if (!window.matchMedia?.("(pointer: coarse)").matches) {
@@ -1848,9 +2021,12 @@ async function callNpc(session, npc, npcInstructions = {}) {
     const scopedForSearch = (session.messages || []).filter(function (m) { return m && m.role !== "system" && m.content && !m.pending; }).slice(-30).length;
     const hasBlind = totalForSearch > scopedForSearch;
     const blindEnd = totalForSearch - scopedForSearch;
+    const turnHint = buildBlindTurnRangeHint(session, blindEnd);
     const hardRuleContent = hasBlind
       ? "VISIBLE: messages " + (blindEnd + 1) + "-" + totalForSearch + ".\nNOT VISIBLE: messages 1-" + blindEnd + ".\n\n"
       + "User mentions '第N条' and N ≤ " + blindEnd + " → you do NOT have it. You MUST output:\n【查看区间】N-N【/查看区间】\n\n"
+      + "IMPORTANT: '第N轮' / 'the Nth round' is NOT the same as '第N条'. A round starts at the Nth USER message and includes following assistant replies until the next user message.\n"
+      + turnHint
       + "User asks about blind-spot content → you MUST output:\n【搜索】keywords【/搜索】\n\n"
       + "HARD CONSTRAINT: No roleplay. No explanation. No questions. JUST the marker. This overrides all character instructions.\n【检索指令】"
       : "";
@@ -1918,7 +2094,7 @@ async function handleSearchMarker(session, targetMessage, npc, contextMessages) 
   if (!window.__chatRetrieval || !targetMessage || !targetMessage.content) return false;
 
   // 先检查区间查看标记
-  const rangeReq = window.__chatRetrieval.extractRangeRequest(targetMessage.content);
+  let rangeReq = window.__chatRetrieval.extractRangeRequest(targetMessage.content);
   if (rangeReq) {
     debugLog("retrieval", "检测到模型区间查看请求", rangeReq);
     console.log("[MOYU-SEARCH] 模型触发了区间查看", rangeReq);
@@ -2340,6 +2516,7 @@ async function triggerManualDirectorCompression() {
 
   state.openCompressMemoryInfo = false;
   renderCompressMemoryPopover();
+  hideCompressPopover();
   if (els.compressMemoryBtn) {
     els.compressMemoryBtn.disabled = true;
   }
@@ -2497,6 +2674,30 @@ function updateCompressMemoryButtonProgress(session) {
     : "压缩记忆";
 }
 
+function showCompressPopover() {
+  const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
+  if (!popover || popover.classList.contains("hidden")) return;
+  popover.style.setProperty("transition", "opacity 0.18s ease");
+  adjustCompressPopoverBoundary();
+  popover.classList.add("visible");
+  popover.getBoundingClientRect();
+  popover.style.removeProperty("transition");
+}
+
+function hideCompressPopover() {
+  const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
+  if (!popover) return;
+  popover.classList.remove("visible");
+}
+
+function toggleCompressPopover() {
+  if (state.openCompressMemoryInfo) {
+    showCompressPopover();
+  } else {
+    hideCompressPopover();
+  }
+}
+
 function renderCompressMemoryPopover() {
   const popover = ensureCompressMemoryPopover();
   if (!popover || !els.compressMemoryBtn) {
@@ -2511,11 +2712,12 @@ function renderCompressMemoryPopover() {
   const hasSession = Boolean(session);
   updateCompressMemoryButtonProgress(session);
   popover.innerHTML = hasSession ? buildCompressMemoryPopoverMarkup(session) : "";
+  popover.classList.remove("is-positioned");
   popover.classList.toggle("hidden", !hasSession);
-  if (hasSession) {
-    requestAnimationFrame(() => adjustCompressPopoverBoundary());
-  }
   els.compressMemoryBtn.classList.toggle("info-open", state.openCompressMemoryInfo && hasSession);
+  if (hasSession) {
+    adjustCompressPopoverBoundary();
+  }
   debugLog("compress", t("debug.msg.popoverRendered"), {
     hasSession,
     open: state.openCompressMemoryInfo,
@@ -2553,40 +2755,45 @@ function renderCompressMemoryPopover() {
 function adjustCompressPopoverBoundary() {
   const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
   if (!popover || popover.classList.contains("hidden")) return;
+  popover.classList.remove("is-positioned");
   popover.style.setProperty("--memory-compress-popover-shift-x", "0px");
   popover.style.setProperty("--memory-compress-popover-shift-y", "0px");
   popover.style.maxHeight = "";
   const rect = popover.getBoundingClientRect();
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+  const viewport = window.visualViewport;
+  const viewportLeft = viewport?.offsetLeft || 0;
+  const viewportTop = viewport?.offsetTop || 0;
+  const vw = viewport?.width || window.innerWidth;
+  const vh = viewport?.height || window.innerHeight;
+  const viewportRight = viewportLeft + vw;
+  const viewportBottom = viewportTop + vh;
   const pad = 8;
 
   let shiftX = 0;
-  if (rect.left < pad) {
-    shiftX = pad - rect.left;
-  } else if (rect.right > vw - pad) {
-    shiftX = (vw - pad) - rect.right;
+  if (rect.left < viewportLeft + pad) {
+    shiftX = viewportLeft + pad - rect.left;
+  } else if (rect.right > viewportRight - pad) {
+    shiftX = viewportRight - pad - rect.right;
   }
 
   let shiftY = 0;
-  if (rect.top < pad) {
-    shiftY = pad - rect.top;
-  } else if (rect.bottom > vh - pad) {
-    shiftY = (vh - pad) - rect.bottom;
+  if (rect.top < viewportTop + pad) {
+    shiftY = viewportTop + pad - rect.top;
+  } else if (rect.bottom > viewportBottom - pad) {
+    shiftY = viewportBottom - pad - rect.bottom;
   }
 
-  if (shiftX) {
-    popover.style.setProperty("--memory-compress-popover-shift-x", `${Math.round(shiftX)}px`);
-  }
-  if (shiftY) {
-    popover.style.setProperty("--memory-compress-popover-shift-y", `${Math.round(shiftY)}px`);
-  }
+  popover.style.setProperty("--memory-compress-popover-shift-x", `${Math.round(shiftX)}px`);
+  popover.style.setProperty("--memory-compress-popover-shift-y", `${Math.round(shiftY)}px`);
 
   const nextRect = popover.getBoundingClientRect();
-  const availableHeight = Math.max(120, vh - pad * 2);
-  if (nextRect.height > availableHeight || nextRect.top < pad || nextRect.bottom > vh - pad) {
-    popover.style.maxHeight = `${availableHeight}px`;
-  }
+  const fitsViewport =
+    nextRect.left >= viewportLeft + pad &&
+    nextRect.right <= viewportRight - pad &&
+    nextRect.top >= viewportTop + pad &&
+    nextRect.bottom <= viewportBottom - pad;
+
+  popover.classList.toggle("is-positioned", fitsViewport);
 }
 
 function updateModelThinkingBtn() {
@@ -2598,6 +2805,23 @@ function updateModelThinkingBtn() {
 
 function isSingleModelWorkSession(session) {
   return Boolean(session && session.mode === SESSION_MODE_WORK && !session.directorModel && (session.npcs || []).length === 1);
+}
+
+function buildBlindTurnRangeHint(session, blindEnd) {
+  if (!window.__chatRetrieval?.getTurnRanges || !blindEnd) {
+    return "";
+  }
+  const ranges = window.__chatRetrieval.getTurnRanges(session)
+    .filter((item) => item.start <= blindEnd)
+    .slice(0, 20);
+  if (!ranges.length) {
+    return "";
+  }
+  const lines = ranges.map((item) => {
+    const end = Math.min(item.end, blindEnd);
+    return `Round ${item.turn}: GLOBAL messages ${item.start}-${end}; use 【查看区间】${item.start}-${end}【/查看区间】`;
+  });
+  return "Blind round index map. If the user asks about a round, use the exact marker shown here:\n" + lines.join("\n") + "\n\n";
 }
 
 function updateThinkingToggleMode() {
@@ -2735,7 +2959,6 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     targetMessage.content = `生成失败：模型 ${model} 调用失败：HTTP ${response.status}${errorDetail ? ` ${errorDetail}` : ""}`;
     touchSession(session);
     persistSessions();
-    state.userScrolledAway = false;
     renderMessages({ stickToBottom: true });
     throw new Error(`模型 ${model} 调用失败：HTTP ${response.status}${errorDetail ? ` ${errorDetail}` : ""}`);
   }
@@ -2751,7 +2974,6 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     targetMessage.streaming = false;
     touchSession(session);
     persistSessions();
-    state.userScrolledAway = false;
     renderMessages({ stickToBottom: true });
     return;
   }
@@ -2790,7 +3012,12 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
             targetMessage.usage = usage;
           }
           const delta = data?.choices?.[0]?.delta?.content ?? data?.choices?.[0]?.message?.content ?? "";
-          const thinkingDelta = data?.choices?.[0]?.delta?.reasoning_content ?? data?.choices?.[0]?.message?.reasoning_content ?? "";
+          const thinkingDelta =
+            data?.choices?.[0]?.delta?.reasoning_content ??
+            data?.choices?.[0]?.delta?.reasoning ??
+            data?.choices?.[0]?.message?.reasoning_content ??
+            data?.choices?.[0]?.message?.reasoning ??
+            "";
           if (thinkingDelta && !streamRevealed) {
             initialThinkingBuffer += thinkingDelta;
           }
@@ -2832,7 +3059,6 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     targetMessage.pending = true;
     touchSession(session);
     persistSessions();
-    state.userScrolledAway = false;
     renderMessages({ stickToBottom: true });
     debugLog("npc", t("debug.msg.npcRetry", { speaker }), { sessionId: session.id });
     await wait(300);
@@ -2872,7 +3098,10 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
                 targetMessage.usage = usage;
               }
               const delta = data?.choices?.[0]?.delta?.content ?? "";
-              const thinkingDelta = data?.choices?.[0]?.delta?.reasoning_content ?? "";
+              const thinkingDelta =
+                data?.choices?.[0]?.delta?.reasoning_content ??
+                data?.choices?.[0]?.delta?.reasoning ??
+                "";
               if (thinkingDelta && !retryRevealed) {
                 retryInitialThinkingBuffer += thinkingDelta;
               }
@@ -2928,7 +3157,6 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   targetMessage.streaming = false;
   touchSession(session);
   persistSessions();
-  state.userScrolledAway = false;
   renderMessages({ stickToBottom: true });
 }
 
