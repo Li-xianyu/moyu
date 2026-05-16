@@ -579,6 +579,9 @@
                         if (m.thinking) msg.thinking = m.thinking;
                         if (m.usage) msg.usage = m.usage;
                         if (m.estimatedUsage) msg.estimatedUsage = m.estimatedUsage;
+                        if (m.toolTrace) msg.toolTrace = m.toolTrace;
+                        if (m.toolTraceExpanded) msg.toolTraceExpanded = m.toolTraceExpanded;
+                        if (m.thinkingExpanded) msg.thinkingExpanded = m.thinkingExpanded;
                         return msg;
                       });
                     // 重建完整 session 对象
@@ -675,6 +678,9 @@
                 thinking: m.thinking || "",
                 usage: m.usage || null,
                 estimatedUsage: m.estimatedUsage || null,
+                toolTrace: m.toolTrace || null,
+                toolTraceExpanded: Boolean(m.toolTraceExpanded),
+                thinkingExpanded: Boolean(m.thinkingExpanded),
               });
             }
             count++;
@@ -701,6 +707,9 @@
         thinking: msg.thinking || "",
         usage: msg.usage || null,
         estimatedUsage: msg.estimatedUsage || null,
+        toolTrace: msg.toolTrace || null,
+        toolTraceExpanded: Boolean(msg.toolTraceExpanded),
+        thinkingExpanded: Boolean(msg.thinkingExpanded),
       };
       return doPut("messages", record).then(function () {
         return indexMessage(record);
@@ -728,6 +737,9 @@
             thinking: msg.thinking || "",
             usage: msg.usage || null,
             estimatedUsage: msg.estimatedUsage || null,
+            toolTrace: msg.toolTrace || null,
+            toolTraceExpanded: Boolean(msg.toolTraceExpanded),
+            thinkingExpanded: Boolean(msg.thinkingExpanded),
           };
           return doPut("messages", record).then(function () {
             return indexMessage(record).then(function () { saved++; });
@@ -745,6 +757,28 @@
         IDBKeyRange.bound([sessionId, 0], [sessionId, Infinity]),
         { limit: limit, dir: "next" }
       );
+    },
+
+    getSessionScopeNames: function (sessionId) {
+      if (!sessionId) return Promise.resolve([]);
+      return doGetByIndex(
+        "messages",
+        "session_seq",
+        IDBKeyRange.bound([sessionId, 0], [sessionId, Infinity]),
+        { limit: Infinity, dir: "next" }
+      ).then(function (messages) {
+        var seen = {};
+        var scopes = [];
+        (messages || []).forEach(function (msg) {
+          if (!msg || msg.role === "system" || !msg.content) return;
+          var scope = msg.role === "user" ? "user" : (msg.speaker || "assistant");
+          scope = String(scope || "").trim();
+          if (!scope || seen[scope]) return;
+          seen[scope] = true;
+          scopes.push(scope);
+        });
+        return scopes;
+      });
     },
 
     getMessageCount: function (sessionId) {

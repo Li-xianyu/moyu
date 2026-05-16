@@ -1,4 +1,4 @@
-// ──────────────────────────────────────────────
+﻿// ──────────────────────────────────────────────
 // chat-retrieval.js — 检索逻辑层 + 模型交互协议
 // ──────────────────────────────────────────────
 // 职责:
@@ -15,7 +15,7 @@
 
   // ── 搜索标记格式 ──
   var SEARCH_PATTERN = /【搜索】([\s\S]*?)【\/搜索】/;
-  var RANGE_PATTERN = /【查看区间】(\d+)\s*-\s*(\d+)【\/查看区间】/;
+  var RANGE_PATTERN = /【查看区间】([\s\S]*?)【\/查看区间】/;
   var RETRIEVING_TEXT = "【检索中...】";
 
   // ── 1. Hard Rule Prompt ──
@@ -28,7 +28,8 @@
       "",
       "If the user's question involves blind-spot content, you HAVE ONLY TWO OPTIONS:",
       "  【搜索】keywords【/搜索】  — full-text search across all sessions",
-      "  【查看区间】start-end【/查看区间】 — view a specific message range by index",
+      "  【查看区间】start-end【/查看区间】 — view a specific global message range by index",
+      "  【查看区间】scope,start-end【/查看区间】 — view a scoped range, for example user,1-1 or assistant,2-3 or a speaker name like Alice,1-2",
       "",
       "RULES:",
       "- Output the marker at the VERY START of your reply, before anything else.",
@@ -159,10 +160,21 @@
     if (!content || typeof content !== "string") return null;
     var match = content.match(RANGE_PATTERN);
     if (!match) return null;
-    var start = parseInt(match[1], 10);
-    var end = parseInt(match[2], 10);
+    var raw = String(match[1] || "").trim();
+    if (!raw) return null;
+    var scope = null;
+    var rangePart = raw;
+    if (raw.indexOf(",") !== -1) {
+      var commaIdx = raw.indexOf(",");
+      scope = raw.slice(0, commaIdx).trim();
+      rangePart = raw.slice(commaIdx + 1).trim();
+    }
+    var rangeMatch = rangePart.match(/^(\d+)\s*-\s*(\d+)$/);
+    if (!rangeMatch) return null;
+    var start = parseInt(rangeMatch[1], 10);
+    var end = parseInt(rangeMatch[2], 10);
     if (isNaN(start) || isNaN(end) || start < 1 || end < start) return null;
-    return { start: start, end: end };
+    return { start: start, end: end, scope: scope || null, raw: raw };
   };
 
   RETRIEVAL.parseBlindRangeFromUserText = function (content, blindEnd) {
@@ -267,18 +279,44 @@
   };
 
   // ── 7b. Execute range retrieval (slice session.messages by index range) ──
-  RETRIEVAL.executeRangeRetrieval = function (session, start, end) {
+  function getVisibleMessages(session) {
     if (!session || !Array.isArray(session.messages)) return null;
-    // Must use the same filter as buildScopedNpcHistory
-    var visibleMsgs = session.messages.filter(function (m) {
+    return session.messages.filter(function (m) {
       return m && m.role !== "system" && m.content && !m.pending;
     });
-    var total = visibleMsgs.length;
+  }
+
+  function filterMessagesByScope(messages, scope) {
+    if (!scope) {
+      return messages;
+    }
+    var normalizedScope = String(scope).trim().toLowerCase();
+    if (!normalizedScope) {
+      return messages;
+    }
+    return messages.filter(function (m) {
+      var speaker = String(m.speaker || "").trim().toLowerCase();
+      var role = String(m.role || "").trim().toLowerCase();
+      if (normalizedScope === "user") {
+        return role === "user";
+      }
+      if (normalizedScope === "assistant" || normalizedScope === "ai") {
+        return role === "assistant";
+      }
+      return speaker === normalizedScope;
+    });
+  }
+
+  RETRIEVAL.executeRangeRetrieval = function (session, start, end, scope) {
+    var visibleMsgs = getVisibleMessages(session);
+    if (!visibleMsgs) return null;
+    var scopedMsgs = filterMessagesByScope(visibleMsgs, scope);
+    var total = scopedMsgs.length;
     var from = Math.max(0, start - 1);
     var to = Math.min(total, end);
     if (from >= to) return null;
 
-    var sliced = visibleMsgs.slice(from, to);
+    var sliced = scopedMsgs.slice(from, to);
     if (!sliced.length) return null;
 
     var lines = sliced.map(function (m, i) {
@@ -287,8 +325,12 @@
       return "#" + idx + " [" + tag + "]: " + m.content;
     });
 
+    var headerLabel = scope
+      ? "Scoped Historical Range Retrieval Results (" + scope + ", " + (from + 1) + "-" + Math.min(to, total) + " of " + total + ")"
+      : "Historical Range Retrieval Results (Messages " + (from + 1) + "-" + Math.min(to, total) + " of " + total + ")";
+
     return {
-      text: "## Historical Range Retrieval Results (Messages " + (from + 1) + "-" + Math.min(to, total) + " of " + total + ")\n" + lines.join("\n\n"),
+      text: "## " + headerLabel + "\n" + lines.join("\n\n"),
       count: sliced.length,
     };
   };
@@ -369,6 +411,16 @@
         count: searchResult.count,
         resultPreview: (searchResult.text || "").slice(0, 200),
       });
+      try {
+        if (window.__appendToolTraceStep) {
+          window.__appendToolTraceStep(targetMessage, {
+            tool: "历史搜索",
+            label: "hit",
+            status: "running",
+            detail: "query=" + searchQuery + "\ncount=" + searchResult.count + "\npreview=\n" + (searchResult.text || "").slice(0, 220),
+          });
+        }
+      } catch (e) {}
 
       followUp.executed = true;
 
@@ -391,6 +443,20 @@
 
       // Inject search results as a system message
       followUpMsgs.push({ role: "system", content: searchResult.text });
+      followUpMsgs.push({
+        role: "system",
+        content: "The search results above are the authoritative retrieved records for this follow-up step. Prefer them over vague memory. If they directly answer the user's question, answer from them plainly and do not drift to nearby visible context.",
+      });
+      try {
+        if (window.__appendToolTraceStep) {
+          window.__appendToolTraceStep(targetMessage, {
+            tool: "历史搜索",
+            label: "inject",
+            status: "running",
+            detail: "system_len=" + (searchResult.text || "").length + "\nctx=" + followUpMsgs.length,
+          });
+        }
+      } catch (e) {}
 
       // Re-add the user's latest question
       var userMsgs = (session.messages || []).filter(function (m) { return m.role === "user"; });
@@ -398,7 +464,7 @@
       if (lastUserContent) {
         followUpMsgs.push({
           role: "user",
-          content: "My question was: " + lastUserContent + "\n\nPlease answer based on the search results provided above. If the results are irrelevant, ignore them and answer normally.",
+          content: "My question was: " + lastUserContent + "\n\nAnswer using the retrieved search results above as your primary evidence. If they directly answer the question, give the answer plainly and do not substitute a different message from current visible context.",
         });
       }
 
@@ -503,6 +569,16 @@
             targetMessage.streaming = false;
             targetMessage.pending = false;
             targetMessage.searchEnhanced = true;
+            try {
+              if (window.__appendToolTraceStep) {
+                window.__appendToolTraceStep(targetMessage, {
+                  tool: "历史搜索",
+                  label: "done",
+                  status: "done",
+                  detail: "content_len=" + content.length,
+                });
+              }
+            } catch (e) {}
 
             // 更新用量
             try {
@@ -538,15 +614,25 @@
 
   // ── 11. 区间标记跟进 ──
   // 检测到 【查看区间】 标记后，直接从 session.messages 取数据并发起二次请求
-  RETRIEVAL.followUpStreamRange = function (session, targetMessage, start, end, npc, contextMessages) {
+  RETRIEVAL.followUpStreamRange = function (session, targetMessage, start, end, scope, npc, contextMessages) {
     if (!session || !targetMessage) return Promise.resolve(false);
-    var rangeResult = RETRIEVAL.executeRangeRetrieval(session, start, end);
+    var rangeResult = RETRIEVAL.executeRangeRetrieval(session, start, end, scope);
     if (!rangeResult || !rangeResult.text) {
-      debugLog("retrieval", "区间检索无结果", { start: start, end: end });
+      debugLog("retrieval", "区间检索无结果", { start: start, end: end, scope: scope || null });
       return Promise.resolve(false);
     }
 
-    debugLog("retrieval", "区间检索命中", { start: start, end: end, count: rangeResult.count });
+    debugLog("retrieval", "区间检索命中", { start: start, end: end, scope: scope || null, count: rangeResult.count });
+    try {
+      if (window.__appendToolTraceStep) {
+        window.__appendToolTraceStep(targetMessage, {
+          tool: "区间查看",
+          label: "hit",
+          status: "running",
+          detail: "range=" + (scope ? (scope + "," + start + "-" + end) : (start + "-" + end)) + "\ncount=" + rangeResult.count + "\npreview=\n" + (rangeResult.text || "").slice(0, 220),
+        });
+      }
+    } catch (e) {}
 
     targetMessage.content = RETRIEVING_TEXT;
     targetMessage.pending = false;
@@ -559,13 +645,27 @@
       return true;
     });
     followUpMsgs.push({ role: "system", content: rangeResult.text });
+    followUpMsgs.push({
+      role: "system",
+      content: "The historical range block above is the authoritative source for this follow-up step. Treat the numbered message(s) in that block as exact ground truth. Do not replace them with nearby visible-context guesses. If the user asked what a specific message was, answer from the retrieved numbered message directly.",
+    });
+    try {
+      if (window.__appendToolTraceStep) {
+        window.__appendToolTraceStep(targetMessage, {
+          tool: "区间查看",
+          label: "inject",
+          status: "running",
+          detail: "system_len=" + (rangeResult.text || "").length + "\nctx=" + followUpMsgs.length,
+        });
+      }
+    } catch (e) {}
 
     var userMsgs = (session.messages || []).filter(function (m) { return m.role === "user"; });
     var lastUserContent = userMsgs.length ? userMsgs[userMsgs.length - 1].content : "";
     if (lastUserContent) {
       followUpMsgs.push({
         role: "user",
-        content: "My question was: " + lastUserContent + "\n\nPlease answer based on the historical records provided above. If the content is irrelevant, ignore it and answer normally.",
+        content: "My question was: " + lastUserContent + "\n\nUse the retrieved numbered historical record above as the primary evidence. If it directly answers the question, quote or restate that retrieved message instead of guessing from current visible context.",
       });
     }
 
@@ -648,6 +748,16 @@
         targetMessage.streaming = false;
         targetMessage.pending = false;
         targetMessage.searchEnhanced = true;
+        try {
+          if (window.__appendToolTraceStep) {
+            window.__appendToolTraceStep(targetMessage, {
+              tool: "区间查看",
+              label: "done",
+              status: "done",
+              detail: "content_len=" + content.length,
+            });
+          }
+        } catch (e) {}
 
         try {
           if (data.usage) targetMessage.usage = data.usage;

@@ -14,6 +14,7 @@
   editingUserMessageId: null,
   openUserMessageToolsId: null,
   openAgentTokenInfoId: null,
+  openAgentToolTraceId: null,
   openCompressMemoryInfo: false,
   directorThinking: false,
   openChatMenuId: null,

@@ -513,6 +513,34 @@ button,
   transition: transform 0.22s ease;
 }
 
+.app-shell.compress-lock .sidebar,
+.app-shell.compress-lock .shell-toggle-btn,
+.app-shell.compress-lock .sidebar-backdrop,
+.app-shell.compress-lock .composer-shell,
+.app-shell.compress-lock .info-btn.floating,
+.app-shell.compress-lock .chat-info-popover,
+.app-shell.compress-lock .nav,
+.app-shell.compress-lock .settings-main-panel,
+.app-shell.compress-lock .settings-detail-panel,
+.app-shell.compress-lock .settings-page-panel,
+.app-shell.compress-lock .settings-model-panel,
+.app-shell.compress-lock .settings-work-models-panel {
+  pointer-events: none !important;
+}
+
+.app-shell.compress-lock .main {
+  overflow-y: auto !important;
+}
+
+.app-shell.compress-lock .chat-stage,
+.app-shell.compress-lock .chat-stage * {
+  pointer-events: auto;
+}
+
+.app-shell.compress-lock .chat-stage .composer-shell {
+  pointer-events: none;
+}
+
 .shell-toggle-btn {
   position: fixed;
   top: 16px;

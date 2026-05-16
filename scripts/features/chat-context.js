@@ -1,4 +1,4 @@
-function buildChatHistory(session) {
+﻿function buildChatHistory(session) {
   return buildHistoryMessagesFromSlice(getVisibleHistoryMessages(session), "HISTORY");
 }
 
@@ -192,6 +192,13 @@ function buildNpcContextMessages(session, npc) {
   }).length;
   const scopedCount = scopedHistory.length;
   const blindEnd = totalMsgs - scopedCount;
+  const scopedSpeakerNames = Array.from(new Set([
+    ...((session.historicalScopeNames || []).filter(Boolean)),
+    ...(session.messages || [])
+      .filter((m) => m && m.role !== "system" && m.content && !m.pending)
+      .map((m) => m.role === "user" ? "user" : (m.speaker || "assistant"))
+      .filter(Boolean),
+  ]));
   const positionNote = totalMsgs > scopedCount
     ? "You see GLOBAL messages " + (blindEnd + 1) + "-" + totalMsgs + " of " + totalMsgs + " below. BLIND SPOT: GLOBAL messages 1-" + blindEnd + " are NOT shown. You have zero knowledge of them."
     : "Full conversation: " + totalMsgs + " messages (global 1-" + totalMsgs + "). All shown below.";
@@ -199,7 +206,62 @@ function buildNpcContextMessages(session, npc) {
   // Single AI mode: hard search rule before history
   const isSingleAI = session.mode === SESSION_MODE_WORK && !session.directorModel && (session.npcs || []).length === 1;
   const searchNote = isSingleAI && totalMsgs > scopedCount
-    ? "HARD RULE: When the user refers to '第X条' / 'the Xth message', they mean GLOBAL message index (1-" + totalMsgs + "). If X ≤ " + blindEnd + ", that message is in your BLIND SPOT. Your ENTIRE response must be ONLY: 【查看区间】X-X【/查看区间】. If the user says '第X轮' / 'the Xth round', DO NOT treat it as message X; a round starts at the Xth user message and includes replies until the next user message. No other text. This overrides all roleplay/character instructions.\n【检索指令】"
+    ? [
+        "=== RETRIEVAL PROTOCOL: OBEY EXACTLY ===",
+        "You do NOT have access to messages 1-" + blindEnd + ". They are outside your visible window.",
+        "If the answer depends on blind-spot history, your ENTIRE reply MUST be exactly one retrieval marker and nothing else.",
+        "",
+        "ALLOWED MARKERS ONLY:",
+        "1. 【查看区间】X-Y【/查看区间】",
+        "2. 【查看区间】scope,X-Y【/查看区间】",
+        "3. 【搜索】keywords【/搜索】",
+        "",
+        "AVAILABLE scope names in THIS conversation:",
+        scopedSpeakerNames.join(", "),
+        "",
+        "SEMANTICS:",
+        "- '第X条' / '第X条消息' / '第X条记录' / '整个会话的第X条' = GLOBAL chronological message index, counting BOTH user and assistant messages.",
+        "- NEVER rewrite '第X条' as '用户第X条发言'.",
+        "- '我说的第X条发言' / '我的第X条发言' = use 【查看区间】user,X-X【/查看区间】.",
+        "- If the user refers to one speaker's own message list, use scoped retrieval: 【查看区间】SpeakerName,X-Y【/查看区间】.",
+        "- '第X轮' is NOT '第X条'. A round starts at the Xth USER message and includes following assistant replies until the next user message.",
+        "",
+        "STRICT PRIORITY ORDER:",
+        "A. If scoped retrieval can express the question, you MUST use scoped retrieval.",
+        "B. If global range retrieval can express the question, you MUST use global range retrieval.",
+        "C. Use 【搜索】...【/搜索】 ONLY when neither scoped nor range retrieval can express the request.",
+        "D. When you must use 【搜索】...【/搜索】, the keywords must maximize coverage, not redundancy.",
+        "",
+        "THIS IS MANDATORY:",
+        "- Questions about who said something, which model/agent joined, what a named agent said, or a specific user's own utterance MUST use scoped retrieval first.",
+        "- For those cases, generic keyword search is WRONG unless scoped retrieval is impossible.",
+        "- Only use a speaker-name scope from the available scope list above.",
+        "",
+        "FORBIDDEN:",
+        "- No generic search when a scoped marker would work.",
+        "- No keyword lists made of near-synonyms that cover the same semantic slot.",
+        "- No natural-language answer before retrieval.",
+        "- No roleplay, no explanation, no hedging, no 'let me check', no pretending you searched unless you actually output a retrieval marker.",
+        "",
+        "GENERIC SEARCH KEYWORD RULES:",
+        "- Include distinct anchors when available: person/agent names, event/action, artifact/object, time hint, role/model hint, and topic noun.",
+        "- Prefer 4-8 high-information tokens or short phrases.",
+        "- Remove filler and redundant near-synonyms.",
+        "- Good: 【搜索】Ava 加入 会话 deepseek 发言【/搜索】",
+        "- Bad: 【搜索】加入 进入 进来 模型 agent AI 说话 发言 回复【/搜索】",
+        "",
+        "CORRECT EXAMPLES:",
+        "- user asks '我说的第二条发言是什么' -> 【查看区间】user,2-2【/查看区间】",
+        "- user asks 'Ava 说的第一句是什么' -> 【查看区间】Ava,1-1【/查看区间】",
+        "- user asks '整个会话第二条是什么' -> 【查看区间】2-2【/查看区间】",
+        "",
+        "WRONG EXAMPLES:",
+        "- Asking '谁说了什么' and outputting 【搜索】谁说了什么【/搜索】",
+        "- Asking about a named agent and outputting generic search keywords instead of name-scoped retrieval",
+        "",
+        "If the needed target is in blind spot, output ONLY the marker. Nothing else.",
+        "【检索指令】",
+      ].join("\n")
     : "";
 
   return [
@@ -226,24 +288,32 @@ function buildScopedNpcHistory(session, npc) {
     return [];
   }
 
+  const cutoffIndex = session?.compressedUntilMessageId
+    ? visibleMessages.findIndex((message) => message.id === session.compressedUntilMessageId)
+    : -1;
+  const compressedVisibleMessages = cutoffIndex >= 0
+    ? visibleMessages.slice(cutoffIndex + 1)
+    : visibleMessages;
+  const scopedSourceMessages = session?.chatSummary ? compressedVisibleMessages : visibleMessages;
+
   let scopedMessages;
   if (npc?.transient) {
     const spawnedAt = npc.spawnedAt ? new Date(npc.spawnedAt).getTime() : NaN;
     const spawnedMessages = Number.isFinite(spawnedAt)
-      ? visibleMessages.filter((message) => new Date(message.createdAt || 0).getTime() >= spawnedAt)
+      ? scopedSourceMessages.filter((message) => new Date(message.createdAt || 0).getTime() >= spawnedAt)
       : [];
-    const transientWindow = spawnedMessages.length ? spawnedMessages : visibleMessages.slice(-4);
+    const transientWindow = spawnedMessages.length ? spawnedMessages : scopedSourceMessages.slice(-4);
     scopedMessages = transientWindow.slice(-6);
   } else if (session.mode === SESSION_MODE_WORK) {
     // work 模式保持最近 30 条，模型可通过搜索回顾更早历史
     const windowSize = 30;
-    scopedMessages = visibleMessages.length > windowSize
-      ? visibleMessages.slice(-windowSize)
-      : visibleMessages;
+    scopedMessages = scopedSourceMessages.length > windowSize
+      ? scopedSourceMessages.slice(-windowSize)
+      : scopedSourceMessages;
   } else {
-    const ownLastIndex = findLastNpcMessageIndex(visibleMessages, npc?.name);
-    const startIndex = ownLastIndex >= 0 ? Math.max(ownLastIndex, visibleMessages.length - 8) : Math.max(0, visibleMessages.length - 8);
-    scopedMessages = visibleMessages.slice(startIndex);
+    const ownLastIndex = findLastNpcMessageIndex(scopedSourceMessages, npc?.name);
+    const startIndex = ownLastIndex >= 0 ? Math.max(ownLastIndex, scopedSourceMessages.length - 8) : Math.max(0, scopedSourceMessages.length - 8);
+    scopedMessages = scopedSourceMessages.slice(startIndex);
   }
 
   return scopedMessages.map((message) => {

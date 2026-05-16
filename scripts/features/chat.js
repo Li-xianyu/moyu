@@ -179,11 +179,13 @@ const CHAT_SUMMARY_TARGET_MAX = 800;
 const CHAT_AUTO_COMPRESS_THRESHOLD = 600;
 const CHAT_COMPRESS_PROMPT = [
   "你是对话摘要器。",
-  "请把给定对话历史压缩成一份简洁的摘要，保留后续对话所需的关键信息。",
-  "包括已讨论的话题、重要决定、用户偏好、人物状态。",
-  "不要修辞，不要扩写，不要模仿对白。",
-  "用一段或两段自然语言输出摘要即可。",
+  "请把给定对话历史压缩成一份细致、可靠、便于后续延续对话的摘要。",
+  "目标不是一句话概括，而是保留足够多的可用细节：已讨论的话题、重要结论、待办事项、用户偏好、人物状态、明确约定、未解决问题、时间顺序。",
+  "可以分成 2 到 5 个短段落，按主题或时间顺序组织，尽量保留关键信息密度。",
+  "不要修辞，不要扩写到原文长度，不要模仿对白，不要引入没出现过的新事实。",
 ].join("\\n");
+
+const CHAT_MANUAL_RECOMPRESS_RECENT_LIMIT = 30;
 
 function buildChatSummaryBlock(session) {
   const summary = session?.chatSummary;
@@ -193,16 +195,28 @@ function buildChatSummaryBlock(session) {
 
 function buildChatContextTokenMetrics(session) {
   if (!session) return null;
-  // 度量当前可见消息总量，作为上下文占用参考
   const visibleMessages = getVisibleHistoryMessages(session);
+  const cutoffIndex = session?.compressedUntilMessageId
+    ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
+    : -1;
+  const activeMessages = session?.chatSummary && cutoffIndex >= 0
+    ? visibleMessages.slice(cutoffIndex + 1)
+    : visibleMessages;
+  const summaryTokens = estimateTokens(session?.chatSummary || "");
   const totalTokens = estimateChatMessagesTokens(
-    visibleMessages.map((m) => ({ role: m.role || "user", content: m.content || "" }))
-  );
+    activeMessages.map((m) => ({ role: m.role || "user", content: m.content || "" }))
+  ) + summaryTokens;
   return {
     contextCurrent: totalTokens,
     contextThreshold: CHAT_CONVERSATION_THRESHOLD,
-    recentCount: visibleMessages.length,
+    recentCount: activeMessages.length,
   };
+}
+
+function getRecentChatMessages(session, limit = CHAT_MANUAL_RECOMPRESS_RECENT_LIMIT) {
+  const visibleMessages = getVisibleHistoryMessages(session);
+  if (!visibleMessages.length) return [];
+  return visibleMessages.slice(-Math.max(1, limit));
 }
 
 function bindChat() {
@@ -744,10 +758,20 @@ function buildBubbleContent(message) {
   let html = "";
   const thinkingText = (message.thinking || "").trim();
   if (thinkingText) {
-    html += `<details class="thinking-section"${message.streaming ? " open" : ""}>`;
+    html += `<details class="thinking-section"${message.streaming || message.thinkingExpanded ? " open" : ""}>`;
     html += `<summary><span class="thinking-label">思考过程</span></summary>`;
     html += `<div class="thinking-content">${escapeHtml(thinkingText).replace(/\n/g, "<br>")}</div>`;
     html += `</details>`;
+  }
+  const toolTraceHtml = buildToolTraceSection(message);
+  if (toolTraceHtml) {
+    html += toolTraceHtml;
+  }
+  if (message.retrieving) {
+    return html;
+  }
+  if (shouldSuppressRetrievalMarkerContent(message)) {
+    return html;
   }
   const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
   if (enableMd) {
@@ -758,6 +782,102 @@ function buildBubbleContent(message) {
     html += escapeHtml(message.content).replace(/\n/g, "<br>");
   }
   return html;
+}
+
+function shouldSuppressRetrievalMarkerContent(message) {
+  const content = String(message?.content || "").trim();
+  if (!content) return false;
+  if (window.__chatRetrieval?.extractRangeRequest?.(content)) return true;
+  if (window.__chatRetrieval?.extractSearchQuery?.(content)) return true;
+  if (/^【(?:查|查看|查看区|查看区间)/.test(content)) return true;
+  if (/^【(?:搜|搜索)/.test(content)) return true;
+  return false;
+}
+
+function stripFakeRetrievalClaims(content, message) {
+  if (!content) return content;
+  const usedTool = Boolean(message?.searchEnhanced || (Array.isArray(message?.toolTrace) && message.toolTrace.length));
+  if (usedTool) {
+    return content;
+  }
+  return String(content)
+    .replace(/^[ \t]*(?:（|\()(?:调用|使用|启动|正在调用|正在使用|快速检索|检索|搜索)[^）)\n]{0,80}(?:搜索工具|检索工具|历史记录|历史|工具)[^）)\n]{0,80}(?:）|\))\s*/gm, "")
+    .replace(/^[ \t]*(?:\[|\【)(?:调用|使用|启动|快速检索|检索|搜索)[^\]\】\n]{0,80}(?:搜索工具|检索工具|历史记录|历史|工具)[^\]\】\n]{0,80}(?:\]|\】)\s*/gm, "")
+    .trim();
+}
+
+function isScopePreferredSearchQuery(query) {
+  const text = String(query || "").toLowerCase();
+  if (!text) return false;
+  return /谁说|谁讲|谁提|谁回复|哪(个|些).*(模型|agent|npc)|加入.*会话|哪些.*加入|谁加入|哪个.*加入|什么模型|哪些模型/.test(text);
+}
+
+function ensureToolTrace(message) {
+  if (!message) return null;
+  if (!Array.isArray(message.toolTrace)) {
+    message.toolTrace = [];
+  }
+  return message.toolTrace;
+}
+
+function appendToolTraceStep(message, step) {
+  if (!message || !step) return;
+  const trace = ensureToolTrace(message);
+  trace.push({
+    id: step.id || `trace-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    label: step.label || "工具调用",
+    command: step.command || "",
+    status: step.status || "info",
+    detail: step.detail || "",
+    tool: step.tool || "",
+    createdAt: step.createdAt || new Date().toISOString(),
+  });
+}
+
+function updateLastToolTraceStep(message, patch) {
+  if (!message || !Array.isArray(message.toolTrace) || !message.toolTrace.length || !patch) return;
+  const lastStep = message.toolTrace[message.toolTrace.length - 1];
+  Object.assign(lastStep, patch);
+}
+
+window.__appendToolTraceStep = appendToolTraceStep;
+window.__updateLastToolTraceStep = updateLastToolTraceStep;
+
+function getToolTraceTitle(message) {
+  const trace = Array.isArray(message?.toolTrace) ? message.toolTrace : [];
+  if (!trace.length) return "";
+  const firstCommand = String(trace[0]?.command || "").trim();
+  const lastStep = trace[trace.length - 1] || {};
+  const base = firstCommand || (lastStep.tool || "history");
+  if (lastStep.status === "running") return `$ ${base} --running`;
+  if (lastStep.status === "done") return `$ ${base} --done`;
+  if (lastStep.status === "miss") return `$ ${base} --miss`;
+  if (lastStep.status === "error") return `$ ${base} --error`;
+  return `$ ${base}`;
+}
+
+function buildToolTraceSection(message) {
+  const trace = Array.isArray(message?.toolTrace) ? message.toolTrace : [];
+  if (!trace.length) return "";
+  const title = getToolTraceTitle(message);
+  const stepsHtml = trace.map((item, index) => {
+    const commandText = item.command || item.label || item.tool || "trace";
+    const headingHtml = index === 0
+      ? `<div class="tool-trace-step-command">${escapeHtml(commandText)}</div>`
+      : `<div class="tool-trace-step-output">${escapeHtml(item.label || "output")}</div>`;
+    return [
+      `<div class="tool-trace-step" data-status="${escapeHtml(item.status || "info")}">`,
+      headingHtml,
+      item.detail ? `<div class="tool-trace-step-detail">${escapeHtml(item.detail).replace(/\n/g, "<br>")}</div>` : "",
+      `</div>`,
+    ].join("");
+  }).join("");
+  return [
+    `<details class="tool-trace-section"${message.streaming || message.toolTraceExpanded ? " open" : ""}>`,
+    `<summary><span class="tool-trace-chip">${escapeHtml(title)}</span></summary>`,
+    `<div class="tool-trace-content">${stepsHtml}</div>`,
+    `</details>`,
+  ].join("");
 }
 
 function wrapCodeLines(el) {
@@ -785,7 +905,9 @@ function wrapCodeLines(el) {
       var textHtml = '';
       for (var i = 0; i < lineCount; i++) {
         numHtml += '<span class="code-line-num">' + (i + 1) + '</span>';
-        textHtml += '<div class="code-line-text">' + (lines[i] || '​') + '</div>';
+        textHtml += lines[i] === ''
+          ? '<div class="code-line-text code-line-empty"></div>'
+          : '<div class="code-line-text">' + lines[i] + '</div>';
       }
       code.innerHTML =
         '<div class="code-body">' +
@@ -939,12 +1061,13 @@ function updateStreamingBubble(targetMessage) {
 }
 
 function createStreamBatchController(targetMessage, revealFn, updateFn) {
-  const CHAR_THRESHOLD = 18;
-  const THINKING_THRESHOLD = 16;
-  const TIME_THRESHOLD_MS = 45;
+  const CHAR_THRESHOLD = 10;
+  const THINKING_THRESHOLD = 6;
+  const TIME_THRESHOLD_MS = 24;
   let pendingContent = "";
   let pendingThinking = "";
   let timer = null;
+  let startedAt = Date.now();
 
   function clearTimer() {
     if (timer) {
@@ -983,7 +1106,12 @@ function createStreamBatchController(targetMessage, revealFn, updateFn) {
       }
       if (delta) pendingContent += delta;
       if (thinkingDelta) pendingThinking += thinkingDelta;
-      if (pendingContent.length >= CHAR_THRESHOLD || pendingThinking.length >= THINKING_THRESHOLD) {
+      const elapsed = Date.now() - startedAt;
+      if (
+        pendingContent.length >= CHAR_THRESHOLD ||
+        pendingThinking.length >= THINKING_THRESHOLD ||
+        (pendingThinking && elapsed >= 120)
+      ) {
         flush();
         return true;
       }
@@ -994,6 +1122,7 @@ function createStreamBatchController(targetMessage, revealFn, updateFn) {
       clearTimer();
       pendingContent = "";
       pendingThinking = "";
+      startedAt = Date.now();
       if (thinking) {
         targetMessage.thinking += thinking;
       }
@@ -1009,6 +1138,7 @@ function createStreamBatchController(targetMessage, revealFn, updateFn) {
       clearTimer();
       pendingContent = "";
       pendingThinking = "";
+      startedAt = Date.now();
     }
   };
 }
@@ -1209,6 +1339,8 @@ function buildMessageBlock(message, sessionMode, enableMd) {
   }
   block.appendChild(bubble);
 
+  bindInlineMetaToggles(block, message);
+
   if (message.id && !message.pending) {
     block.appendChild(buildMessageTools(message));
   }
@@ -1244,6 +1376,8 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
       }
     }
   }
+
+  bindInlineMetaToggles(block, message);
 
   // 3. Build tools section if it doesn't exist yet (pending → done transition)
   const existingTools = block.querySelector('.message-tools');
@@ -1310,12 +1444,48 @@ function buildMessageTools(message) {
   return tools;
 }
 
+function bindInlineMetaToggles(block, message) {
+  if (!block || !message?.id) return;
+  const thinkingSection = block.querySelector(".thinking-section");
+  if (thinkingSection && !thinkingSection.dataset.boundToggle) {
+    thinkingSection.dataset.boundToggle = "true";
+    thinkingSection.addEventListener("toggle", () => {
+      message.thinkingExpanded = thinkingSection.open;
+      if (window.persistSessions) {
+        window.persistSessions();
+      }
+    });
+  }
+  const toolTraceSection = block.querySelector(".tool-trace-section");
+  if (toolTraceSection && !toolTraceSection.dataset.boundToggle) {
+    toolTraceSection.dataset.boundToggle = "true";
+    toolTraceSection.addEventListener("toggle", () => {
+      message.toolTraceExpanded = toolTraceSection.open;
+      state.openAgentToolTraceId = toolTraceSection.open ? message.id : (state.openAgentToolTraceId === message.id ? null : state.openAgentToolTraceId);
+      if (window.persistSessions) {
+        window.persistSessions();
+      }
+    });
+  }
+}
+
 /* Shared copy-button handler */
 function bindCodeCopyBtn(btn) {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     var pre = btn.closest('.pre-code-block');
-    const code = pre ? pre.querySelector('code').textContent : '';
+    let code = '';
+    if (pre) {
+      const numberedLines = pre.querySelectorAll('.code-line-text');
+      if (numberedLines.length) {
+        code = Array.from(numberedLines)
+          .map((line) => (line.textContent || '').replace(/\u200B/g, ''))
+          .join('\n');
+      } else {
+        const codeEl = pre.querySelector('code');
+        code = codeEl ? codeEl.textContent.replace(/\u200B/g, '') : '';
+      }
+    }
     navigator.clipboard.writeText(code).then(() => {
       btn.className = 'code-copy-btn copied';
       btn.innerHTML = '<i class="bi bi-check"></i>';
@@ -1408,6 +1578,7 @@ async function runSessionTurn(session) {
   if (!session) {
     return;
   }
+  await ensureHistoricalScopeNames(session);
 
   // @mention direct routing — skip director, hand off to the named NPC
   if (session.mode === SESSION_MODE_WORK) {
@@ -1488,8 +1659,6 @@ async function runSessionTurn(session) {
   if (isNoDirector) {
     try {
       const npc = session.npcs[0];
-      // Auto-compress conversation summary before NPC generates
-      try { await ensureChatSummary(session); } catch (_) { /* non-fatal */ }
       setText(els.chatStatus, `${npc.name} 正在回复...`);
       await callNpc(session, npc, {});
       touchSession(session);
@@ -1514,8 +1683,9 @@ async function runSessionTurn(session) {
         if (blindEnd > 0) {
           const lastUserMsg = session.messages.filter(function (m) { return m.role === "user"; });
           const lastUserContent = lastUserMsg.length ? lastUserMsg[lastUserMsg.length - 1].content : "";
+          const explicitRetrievalCue = /(?:查看|检索|搜索|查找|回看|回顾|翻到|看下|看看|第\d+条|第\d+轮|第\d+到\d+条|第\d+到\d+轮)/.test(lastUserContent);
           const blindRange = window.__chatRetrieval.parseBlindRangeFromUserText
-            ? window.__chatRetrieval.parseBlindRangeFromUserText(lastUserContent, blindEnd)
+            ? (explicitRetrievalCue ? window.__chatRetrieval.parseBlindRangeFromUserText(lastUserContent, blindEnd) : null)
             : null;
           if (blindRange) {
             console.log("[MOYU-SEARCH] 模型未输出标记，自动执行历史区间检索", blindRange);
@@ -1524,7 +1694,7 @@ async function runSessionTurn(session) {
             const lastAssistant2 = lastResp2.length ? lastResp2[lastResp2.length - 1] : null;
             if (lastAssistant2 && lastAssistant2._contextMessages) {
               const success = await window.__chatRetrieval.followUpStreamRange(
-                session, lastAssistant2, blindRange.start, blindRange.end, npc, lastAssistant2._contextMessages
+                session, lastAssistant2, blindRange.start, blindRange.end, blindRange.scope || null, npc, lastAssistant2._contextMessages
               );
               if (success) {
                 setText(els.chatStatus, "已检索相关历史记录");
@@ -1695,6 +1865,33 @@ async function runSessionTurn(session) {
     if (!window.matchMedia?.("(pointer: coarse)").matches) {
       queueMicrotask(() => els.chatInput.focus());
     }
+  }
+}
+
+async function ensureHistoricalScopeNames(session) {
+  if (!session?.id || !window.__chatDB?.getSessionScopeNames) {
+    return;
+  }
+  try {
+    const dbScopes = await window.__chatDB.getSessionScopeNames(session.id);
+    const runtimeScopes = Array.from(new Set(
+      (session.messages || [])
+        .filter((m) => m && m.role !== "system" && m.content && !m.pending)
+        .map((m) => m.role === "user" ? "user" : (m.speaker || "assistant"))
+        .filter(Boolean)
+    ));
+    session.historicalScopeNames = Array.from(new Set([...(dbScopes || []), ...runtimeScopes]));
+    console.log("[MOYU-SEARCH] historical scope names", {
+      sessionId: session.id,
+      dbScopes: dbScopes || [],
+      runtimeScopes,
+      mergedScopes: session.historicalScopeNames,
+    });
+  } catch (error) {
+    console.warn("[MOYU] failed to load historical scope names", {
+      sessionId: session?.id,
+      error: error?.message || String(error),
+    });
   }
 }
 
@@ -2021,14 +2218,74 @@ async function callNpc(session, npc, npcInstructions = {}) {
     const scopedForSearch = (session.messages || []).filter(function (m) { return m && m.role !== "system" && m.content && !m.pending; }).slice(-30).length;
     const hasBlind = totalForSearch > scopedForSearch;
     const blindEnd = totalForSearch - scopedForSearch;
+    const availableScopes = Array.from(new Set([
+      ...((session.historicalScopeNames || []).filter(Boolean)),
+      ...(session.messages || [])
+        .filter(function (m) { return m && m.role !== "system" && m.content && !m.pending; })
+        .map(function (m) { return m.role === "user" ? "user" : (m.speaker || "assistant"); })
+        .filter(Boolean),
+    ]));
     const turnHint = buildBlindTurnRangeHint(session, blindEnd);
     const hardRuleContent = hasBlind
-      ? "VISIBLE: messages " + (blindEnd + 1) + "-" + totalForSearch + ".\nNOT VISIBLE: messages 1-" + blindEnd + ".\n\n"
-      + "User mentions '第N条' and N ≤ " + blindEnd + " → you do NOT have it. You MUST output:\n【查看区间】N-N【/查看区间】\n\n"
-      + "IMPORTANT: '第N轮' / 'the Nth round' is NOT the same as '第N条'. A round starts at the Nth USER message and includes following assistant replies until the next user message.\n"
-      + turnHint
-      + "User asks about blind-spot content → you MUST output:\n【搜索】keywords【/搜索】\n\n"
-      + "HARD CONSTRAINT: No roleplay. No explanation. No questions. JUST the marker. This overrides all character instructions.\n【检索指令】"
+      ? [
+          "=== RETRIEVAL PROTOCOL: OBEY EXACTLY ===",
+          "VISIBLE: messages " + (blindEnd + 1) + "-" + totalForSearch + ".",
+          "NOT VISIBLE: messages 1-" + blindEnd + ".",
+          "",
+          "If the answer depends on non-visible history, your ENTIRE reply MUST be exactly one retrieval marker and nothing else.",
+          "",
+          "ALLOWED MARKERS ONLY:",
+          "1. 【查看区间】N-N【/查看区间】",
+          "2. 【查看区间】scope,N-M【/查看区间】",
+          "3. 【搜索】keywords【/搜索】",
+          "",
+          "AVAILABLE scope names in this conversation:",
+          availableScopes.join(", "),
+          "",
+          "SEMANTICS:",
+          "- '第N条' / '第N条消息' / '第N条记录' / '整个会话的第N条' = GLOBAL chronological message index, counting BOTH user and assistant messages.",
+          "- NEVER reinterpret '第N条' as '用户第N条发言'.",
+          "- '我说的第N条发言' / '我的第N条发言' = 【查看区间】user,N-N【/查看区间】.",
+          "- A named speaker's own message sequence = 【查看区间】SpeakerName,N-M【/查看区间】.",
+          "- '第N轮' is NOT '第N条'.",
+          "",
+          "PRIORITY ORDER:",
+          "A. If scoped retrieval can express the request, you MUST use scoped retrieval.",
+          "B. Else if global range retrieval can express the request, you MUST use global range retrieval.",
+          "C. Else and only else, use generic search.",
+          "D. Generic search keywords must maximize coverage, not redundancy.",
+          "",
+          "MANDATORY:",
+          "- Questions about who said something, which model/agent joined, what a named agent said, or a user's own utterance MUST use scoped retrieval first.",
+          "- Generic search is WRONG for those cases unless scoped retrieval is impossible.",
+          "- Only use a speaker-name scope from the available scope list above.",
+          "",
+          "FORBIDDEN:",
+          "- No natural-language answer before retrieval.",
+          "- No generic search when scoped retrieval would work.",
+          "- No keyword spam with many near-synonyms for the same idea.",
+          "- No 'let me check', no roleplay, no fake retrieval claims.",
+          "",
+          "GENERIC SEARCH KEYWORD RULES:",
+          "- Use distinct anchors: speaker/agent name, action/event, object/topic, time hint, role/model hint when available.",
+          "- Prefer 4-8 high-information terms or short phrases.",
+          "- Remove filler words and redundant variants.",
+          "- GOOD: 【搜索】Ava 加入 会话 deepseek 发言【/搜索】",
+          "- BAD: 【搜索】加入 进入 进来 模型 agent AI 说话 发言 回复【/搜索】",
+          "",
+          "CORRECT:",
+          "- '我说的第二条发言是什么' -> 【查看区间】user,2-2【/查看区间】",
+          "- 'Ava 说的第一句是什么' -> 【查看区间】Ava,1-1【/查看区间】",
+          "- '整个会话第二条是什么' -> 【查看区间】2-2【/查看区间】",
+          "",
+          "WRONG:",
+          "- '谁说了什么' -> 【搜索】谁说了什么【/搜索】",
+          "- Asking about a named agent and using generic search instead of name-scoped retrieval",
+          "",
+          "If the target is in the blind spot, output ONLY the marker.",
+          turnHint,
+          "【检索指令】",
+        ].join("\n")
       : "";
     if (hardRuleContent) {
       // Find the last user message in the array and insert before it
@@ -2092,14 +2349,23 @@ async function callNpc(session, npc, npcInstructions = {}) {
 // Returns true if a search or range retrieval was executed, false otherwise
 async function handleSearchMarker(session, targetMessage, npc, contextMessages) {
   if (!window.__chatRetrieval || !targetMessage || !targetMessage.content) return false;
+  const rawModelOutput = targetMessage.content;
 
   // 先检查区间查看标记
   let rangeReq = window.__chatRetrieval.extractRangeRequest(targetMessage.content);
   if (rangeReq) {
     debugLog("retrieval", "检测到模型区间查看请求", rangeReq);
     console.log("[MOYU-SEARCH] 模型触发了区间查看", rangeReq);
+    appendToolTraceStep(targetMessage, {
+      tool: "区间查看",
+      label: "emit",
+      command: `range ${rangeReq.raw || `${rangeReq.start}-${rangeReq.end}`}`,
+      status: "running",
+      detail: `marker=${rawModelOutput}\nrange=${rangeReq.raw || `${rangeReq.start}-${rangeReq.end}`}`,
+    });
     // 立即清除标记内容，不让用户看到标记文本
-    targetMessage.content = "【检索中...】";
+    targetMessage.content = "";
+    targetMessage.retrieving = true;
     targetMessage.pending = false;
     targetMessage.streaming = false;
     touchSession(session);
@@ -2108,15 +2374,27 @@ async function handleSearchMarker(session, targetMessage, npc, contextMessages) 
     setText(els.chatStatus, "正在检索历史记录...");
 
     const success = await window.__chatRetrieval.followUpStreamRange(
-      session, targetMessage, rangeReq.start, rangeReq.end, npc, contextMessages
+      session, targetMessage, rangeReq.start, rangeReq.end, rangeReq.scope || null, npc, contextMessages
     );
     if (!success) {
+      targetMessage.retrieving = false;
+      updateLastToolTraceStep(targetMessage, {
+        status: "miss",
+        detail: `marker=${rawModelOutput}\nrange=${rangeReq.raw || `${rangeReq.start}-${rangeReq.end}`}\nresult=miss`,
+      });
       targetMessage.content = "（检索无结果）";
       touchSession(session);
       persistSessions();
       renderMessages({ stickToBottom: true });
       setText(els.chatStatus, "区间检索未命中");
     } else {
+      targetMessage.retrieving = false;
+      updateLastToolTraceStep(targetMessage, {
+        status: "done",
+      });
+      touchSession(session);
+      persistSessions();
+      renderMessages({ stickToBottom: true });
       setText(els.chatStatus, "已检索相关历史记录");
     }
     return true;
@@ -2128,8 +2406,24 @@ async function handleSearchMarker(session, targetMessage, npc, contextMessages) 
 
   debugLog("retrieval", "检测到模型搜索请求", { query: searchQuery });
   console.log("[MOYU-SEARCH] 模型触发了搜索请求", { query: searchQuery });
+  const historicalScopes = Array.isArray(session.historicalScopeNames) ? session.historicalScopeNames : [];
+  const scopePreferred = isScopePreferredSearchQuery(searchQuery);
+  if (scopePreferred) {
+    console.warn("[MOYU-SEARCH] scoped retrieval should have been preferred", {
+      query: searchQuery,
+      historicalScopes,
+    });
+  }
+  appendToolTraceStep(targetMessage, {
+    tool: "历史搜索",
+    label: "emit",
+    command: `search ${searchQuery}`,
+    status: "running",
+    detail: `marker=${rawModelOutput}\nquery=${searchQuery}${scopePreferred ? `\nwarn=scoped_retrieval_expected\nscopes=${historicalScopes.join(",")}` : ""}`,
+  });
   // 立即清除标记内容
-  targetMessage.content = "【检索中...】";
+  targetMessage.content = "";
+  targetMessage.retrieving = true;
   targetMessage.pending = false;
   targetMessage.streaming = false;
   touchSession(session);
@@ -2141,12 +2435,24 @@ async function handleSearchMarker(session, targetMessage, npc, contextMessages) 
     session, targetMessage, searchQuery, session.id, npc, contextMessages
   );
   if (!success) {
+    targetMessage.retrieving = false;
+    updateLastToolTraceStep(targetMessage, {
+      status: "miss",
+      detail: `marker=${rawModelOutput}\nquery=${searchQuery}\nresult=miss`,
+    });
     targetMessage.content = "（检索无结果）";
     touchSession(session);
     persistSessions();
     renderMessages({ stickToBottom: true });
     setText(els.chatStatus, "历史检索未命中");
   } else {
+    targetMessage.retrieving = false;
+    updateLastToolTraceStep(targetMessage, {
+      status: "done",
+    });
+    touchSession(session);
+    persistSessions();
+    renderMessages({ stickToBottom: true });
     setText(els.chatStatus, "已检索相关历史记录");
   }
   return true;
@@ -2316,7 +2622,21 @@ async function ensureChatSummary(session, options = {}) {
 
   const currentSummary = session.chatSummary || "";
   const summaryTokens = estimateTokens(currentSummary);
-  if (!force && summaryTokens < CHAT_AUTO_COMPRESS_THRESHOLD && !compressible.length) return false;
+  const metrics = buildChatContextTokenMetrics(session);
+  const contextCurrent = metrics?.contextCurrent || 0;
+  const recentUnsummarizedCount = compressible.length;
+  if (!force) {
+    const thresholdHit = contextCurrent >= CHAT_AUTO_COMPRESS_THRESHOLD;
+    const summaryTooLong = summaryTokens >= CHAT_AUTO_COMPRESS_THRESHOLD;
+    const hasEnoughNewHistory = recentUnsummarizedCount >= 6;
+    if (!thresholdHit && !summaryTooLong && !hasEnoughNewHistory) return false;
+  }
+
+  const recentMessages = force
+    ? getRecentChatMessages(session, CHAT_MANUAL_RECOMPRESS_RECENT_LIMIT)
+    : compressible;
+
+  if (!recentMessages.length && !force) return false;
 
   // Build compression messages
   const compressMessages = [
@@ -2328,8 +2648,8 @@ async function ensureChatSummary(session, options = {}) {
     compressMessages.push({ role: "system", content: `已有摘要：\n${currentSummary}` });
   }
 
-  if (compressible.length) {
-    const historyBlock = buildHistoryMessagesFromSlice(compressible, "待压缩对话");
+  if (recentMessages.length) {
+    const historyBlock = buildHistoryMessagesFromSlice(recentMessages, force ? "待重压对话" : "待压缩对话");
     compressMessages.push(...historyBlock);
   }
 
@@ -2339,7 +2659,7 @@ async function ensureChatSummary(session, options = {}) {
     model: npc.model,
     force,
     summaryTokens,
-    compressibleCount: compressible.length,
+    recentCount: recentMessages.length,
   });
 
   let payload;
@@ -2368,8 +2688,8 @@ async function ensureChatSummary(session, options = {}) {
   });
 
   session.chatSummary = nextSummary;
-  if (compressible.length) {
-    session.compressedUntilMessageId = compressible[compressible.length - 1]?.id || session.compressedUntilMessageId || "";
+  if (recentMessages.length) {
+    session.compressedUntilMessageId = recentMessages[recentMessages.length - 1]?.id || session.compressedUntilMessageId || "";
   }
   touchSession(session);
   persistSessions();
@@ -2378,6 +2698,11 @@ async function ensureChatSummary(session, options = {}) {
 }
 
 let _autoCompressPending = false;
+
+function setCompressionUiLocked(locked) {
+  const shell = document.querySelector(".app-shell");
+  if (shell) shell.classList.toggle("compress-lock", Boolean(locked));
+}
 
 async function tryAutoCompressSession(session) {
   if (!session || state.isSending || _autoCompressPending) return;
@@ -2422,6 +2747,7 @@ async function tryAutoCompressSession(session) {
   const prevStatusText = els.chatStatus?.textContent || "";
   setText(els.chatStatus, "正在自动压缩导演记忆...");
   _autoCompressPending = true;
+  setCompressionUiLocked(true);
   try {
     const changed = await ensureDirectorSummary(session);
     if (changed && getCurrentSession()?.id === session.id) {
@@ -2438,27 +2764,26 @@ async function tryAutoCompressSession(session) {
     });
   } finally {
     _autoCompressPending = false;
+    setCompressionUiLocked(false);
   }
 }
 
 async function tryAutoCompressChat(session) {
   if (!session || state.isSending || _autoCompressPending) return;
 
-  const metrics = buildChatContextTokenMetrics(session);
-  if (metrics && metrics.contextCurrent < CHAT_AUTO_COMPRESS_THRESHOLD) {
-    updateCompressMemoryButtonProgress(session);
-    return;
-  }
-
-  // Also check if there are enough unsummarized messages to justify compression
   const visibleMessages = getVisibleHistoryMessages(session);
   const cutoffIdx = session?.compressedUntilMessageId
     ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
     : -1;
-  const unsummarizedCount = cutoffIdx >= 0
-    ? Math.max(0, visibleMessages.length - cutoffIdx - 1)
-    : visibleMessages.length;
-  if (unsummarizedCount < 6 && metrics && metrics.contextCurrent < CHAT_CONVERSATION_THRESHOLD) {
+  const unsummarizedMessages = cutoffIdx >= 0
+    ? visibleMessages.slice(cutoffIdx + 1)
+    : visibleMessages;
+  const unsummarizedCount = unsummarizedMessages.length;
+  const unsummarizedTokens = estimateChatMessagesTokens(
+    unsummarizedMessages.map((m) => ({ role: m.role || "user", content: m.content || "" }))
+  );
+  const shouldAutoCompress = unsummarizedCount >= 6 && unsummarizedTokens >= CHAT_AUTO_COMPRESS_THRESHOLD;
+  if (!shouldAutoCompress) {
     updateCompressMemoryButtonProgress(session);
     return;
   }
@@ -2471,13 +2796,14 @@ async function tryAutoCompressChat(session) {
   console.log("[MOYU:compress]", "单 AI 自动压缩触发", {
     sessionId: session.id,
     npcModel: npc.model,
-    contextCurrent: metrics?.contextCurrent,
-    contextThreshold: metrics?.contextThreshold,
+    unsummarizedCount,
+    unsummarizedTokens,
   });
 
   const prevStatusText = els.chatStatus?.textContent || "";
   setText(els.chatStatus, "正在自动压缩对话摘要...");
   _autoCompressPending = true;
+  setCompressionUiLocked(true);
   try {
     const changed = await ensureChatSummary(session);
     if (changed && getCurrentSession()?.id === session.id) {
@@ -2494,6 +2820,7 @@ async function tryAutoCompressChat(session) {
     });
   } finally {
     _autoCompressPending = false;
+    setCompressionUiLocked(false);
   }
 }
 
@@ -2528,6 +2855,7 @@ async function triggerManualDirectorCompression() {
       sessionId: session.id,
       mode: "chat-summary",
     });
+    setCompressionUiLocked(true);
     try {
       const changed = await ensureChatSummary(session, { force: true });
       if (!changed) {
@@ -2541,12 +2869,16 @@ async function triggerManualDirectorCompression() {
       });
       finalStatusText = `压缩失败：${error.message}`;
     }
+    finally {
+      setCompressionUiLocked(false);
+    }
   } else {
     setText(els.chatStatus, "正在压缩导演记忆...");
     debugLog("compress", t("debug.msg.compressionStarted"), {
       sessionId: session.id,
       recentLimit: DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT,
     });
+    setCompressionUiLocked(true);
     try {
       const changed = await ensureDirectorSummary(session, {
         force: true,
@@ -2568,6 +2900,9 @@ async function triggerManualDirectorCompression() {
         message: error?.message || String(error),
       });
       finalStatusText = `压缩失败：${error.message}`;
+    }
+    finally {
+      setCompressionUiLocked(false);
     }
   }
 
@@ -2610,6 +2945,11 @@ function buildCompressMemoryPopoverMarkup(session) {
   const contextPercent = Math.max(0, Math.min(100, Math.round((metrics.contextCurrent / Math.max(1, metrics.contextThreshold)) * 100)));
   const headText = isSingleAi ? "对话上下文与压缩进度" : "导演上下文与自动压缩进度";
   const progressTone = contextPercent >= 100 ? "full" : contextPercent >= 76 ? "high" : contextPercent >= 48 ? "mid" : "low";
+  const summaryText = isSingleAi ? String(session?.chatSummary || "").trim() : String(session?.directorSummary || "").trim();
+  const summaryPreview = summaryText
+    ? escapeHtml(summaryText.length > 360 ? `${summaryText.slice(0, 360)}…` : summaryText).replace(/\n/g, "<br>")
+    : "";
+  const summaryCollapsed = summaryPreview && summaryText.split(/\n+/).filter(Boolean).length > 3 ? "collapsed" : "expanded";
   const rows = [
     ["上下文", `${metrics.contextCurrent} / ${metrics.contextThreshold}`],
   ];
@@ -2634,6 +2974,13 @@ function buildCompressMemoryPopoverMarkup(session) {
           </div>
         `).join("")}
       </dl>
+      ${summaryPreview ? `
+      <div class="memory-compress-summary ${summaryCollapsed}">
+        <div class="memory-compress-summary-label">${isSingleAi ? "压缩摘要" : "导演记忆"}</div>
+        <div class="memory-compress-summary-body">${summaryPreview}</div>
+        <button class="memory-compress-summary-toggle" type="button">${summaryCollapsed === "collapsed" ? "展开" : "收起"}</button>
+      </div>
+      ` : ""}
       <div class="memory-compress-popover-footer">
         <button class="memory-compress-popover-action" type="button"${state.isSending ? " disabled" : ""}>压缩</button>
       </div>
@@ -2724,6 +3071,17 @@ function renderCompressMemoryPopover() {
     sending: state.isSending,
     hasMarkup: Boolean(popover.innerHTML.trim()),
   });
+  const summaryToggle = popover.querySelector(".memory-compress-summary-toggle");
+  const summaryBox = popover.querySelector(".memory-compress-summary");
+  if (summaryToggle && summaryBox) {
+    summaryToggle.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const collapsed = summaryBox.classList.toggle("collapsed");
+      summaryBox.classList.toggle("expanded", !collapsed);
+      summaryToggle.textContent = collapsed ? "展开" : "收起";
+    };
+  }
   const actionBtn = popover.querySelector(".memory-compress-popover-action");
   if (actionBtn) {
     actionBtn.disabled = state.isSending || !hasSession;
@@ -3045,7 +3403,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   }
 
   // Flush any buffered content that didn't reach the threshold
-  if (!streamRevealed && initialBuffer) {
+  if (!streamRevealed && (initialBuffer || initialThinkingBuffer)) {
     targetMessage.pending = false;
     targetMessage.streaming = true;
     streamBatch.revealWithInitial(initialBuffer, initialThinkingBuffer);
@@ -3144,6 +3502,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   if (speaker !== "导演 AI") {
     targetMessage.content = sanitizeNpcReplyStrict(session, speaker, targetMessage.content);
     targetMessage.content = stripThinkingLeakage(targetMessage.content);
+    targetMessage.content = stripFakeRetrievalClaims(targetMessage.content, targetMessage);
   }
 
   const estimatedInput = Number(targetMessage.estimatedUsage?.input || 0) || 0;
