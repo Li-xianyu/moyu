@@ -100,6 +100,123 @@
   color: var(--text-strong);
 }
 
+.session-transfer-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.session-transfer-modal.hidden {
+  display: none;
+}
+
+.session-transfer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 11, 13, 0.58);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.session-transfer-card {
+  position: relative;
+  width: min(460px, calc(100vw - 32px));
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(32, 34, 38, 0.96);
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.34);
+  padding: 18px 18px 16px;
+}
+
+.session-transfer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.session-transfer-head h3 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--text-strong);
+}
+
+.session-transfer-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted, #c7ccd3);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.session-transfer-body {
+  display: grid;
+  gap: 10px;
+}
+
+.session-transfer-status {
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.session-transfer-subtext,
+.session-transfer-progress-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.session-transfer-progress {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.session-transfer-progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #4da3ff 0%, #67c1ff 100%);
+  transition: width 0.18s ease;
+}
+
+.session-transfer-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.session-transfer-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.session-transfer-debug {
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #aeb5bf;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: none;
+}
+
 .chat-meta {
   display: grid;
   gap: 12px;

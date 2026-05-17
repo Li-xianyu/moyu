@@ -168,6 +168,116 @@
     return 0;
   }
 
+  function putSessionRecord(session) {
+    if (!session || !session.id) return Promise.reject(new Error("无效 session"));
+    return doPut("sessions", {
+      id: session.id,
+      title: session.title || "",
+      createdAt: session.createdAt || new Date().toISOString(),
+      updatedAt: session.updatedAt || new Date().toISOString(),
+      configId: session.configId || "",
+      host: session.host || "",
+      key: session.key || "",
+      titleSource: session.titleSource || "auto",
+      globalPrompt: session.globalPrompt || "",
+      mode: session.mode || "work",
+      directorModel: session.directorModel || "",
+      directorConfigId: session.directorConfigId || "",
+      npcs: session.npcs || [],
+      transientNpcs: session.transientNpcs || [],
+      directorMemory: session.directorMemory || null,
+      directorSummary: session.directorSummary || "",
+      chatSummary: session.chatSummary || "",
+      compressedUntilMessageId: session.compressedUntilMessageId || "",
+      suggestionGuide: session.suggestionGuide || "",
+      messageCount: countSessionMessagesForSave(session),
+      tags: extractTags(session),
+    });
+  }
+
+  function deleteSessionMessagesOnly(sessionId) {
+    if (!sessionId) return Promise.resolve();
+    return db().then(function (database) {
+      return new Promise(function (resolve, reject) {
+        var tx = database.transaction(["messages"], "readwrite");
+        var msgIndex = tx.objectStore("messages").index("sessionId");
+        var cursorReq = msgIndex.openCursor(IDBKeyRange.only(sessionId));
+        cursorReq.onsuccess = function () {
+          var cursor = cursorReq.result;
+          if (cursor) {
+            cursor.delete();
+            cursor.continue();
+          }
+        };
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+
+  function deleteSessionMessagesBatched(sessionId, options) {
+    options = options || {};
+    var batchSize = Math.max(100, Number(options.batchSize) || 3000);
+    var total = Math.max(0, Number(options.total) || 0);
+    var deleted = 0;
+    var onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
+    var shouldCancel = typeof options.shouldCancel === "function" ? options.shouldCancel : null;
+
+    function getMessageKeysBatch() {
+      return db().then(function (database) {
+        return new Promise(function (resolve, reject) {
+          var tx = database.transaction("messages", "readonly");
+          var msgIndex = tx.objectStore("messages").index("sessionId");
+          var req = msgIndex.getAllKeys(IDBKeyRange.only(sessionId), batchSize);
+          req.onsuccess = function () { resolve(req.result || []); };
+          req.onerror = function () { reject(req.error); };
+        });
+      });
+    }
+
+    function deleteKeysBatch(keys) {
+      if (!keys.length) return Promise.resolve(0);
+      return db().then(function (database) {
+        return new Promise(function (resolve, reject) {
+          var tx = database.transaction("messages", "readwrite");
+          var store = tx.objectStore("messages");
+          for (var i = 0; i < keys.length; i++) {
+            store.delete(keys[i]);
+          }
+          tx.oncomplete = function () { resolve(keys.length); };
+          tx.onerror = function () { reject(tx.error); };
+          tx.onabort = function () { reject(tx.error || new Error("message delete aborted")); };
+        });
+      });
+    }
+
+    function deleteBatch() {
+      if (shouldCancel && shouldCancel()) {
+        return Promise.reject(new Error("DELETE_ABORTED"));
+      }
+      return getMessageKeysBatch().then(function (keys) {
+        return deleteKeysBatch(keys);
+      }).then(function (batchDeleted) {
+        deleted += batchDeleted;
+        if (onProgress) {
+          onProgress({
+            deleted: deleted,
+            total: total || deleted,
+            batch: batchDeleted,
+          });
+        }
+        if (batchDeleted <= 0) {
+          return deleted;
+        }
+        return new Promise(function (resolve) {
+          setTimeout(resolve, 0);
+        }).then(deleteBatch);
+      });
+    }
+
+    return deleteBatch();
+  }
+
   function mapDbMessageToSessionMessage(m) {
     var msg = {
       id: m.id,
@@ -188,6 +298,48 @@
     if (m.toolTraceExpanded) msg.toolTraceExpanded = true;
     if (m.thinkingExpanded) msg.thinkingExpanded = true;
     return msg;
+  }
+
+  function buildMessageRecord(sessionId, msg, sequence) {
+    return {
+      id: msg.id,
+      sessionId: sessionId,
+      role: msg.role || "user",
+      speaker: msg.speaker || "",
+      content: msg.content || "",
+      timestamp: msg.createdAt ? new Date(msg.createdAt).getTime() : (Number(msg.timestamp) || Date.now()),
+      sequence: typeof sequence === "number" ? sequence : 0,
+      uiType: msg.uiType || "",
+      thinking: msg.thinking || "",
+      usage: msg.usage || null,
+      estimatedUsage: msg.estimatedUsage || null,
+      toolTrace: msg.toolTrace || null,
+      toolTraceExpanded: Boolean(msg.toolTraceExpanded),
+      thinkingExpanded: Boolean(msg.thinkingExpanded),
+    };
+  }
+
+  function bulkPutMessagesRaw(sessionId, msgs, startSeq) {
+    if (!msgs || !msgs.length) return Promise.resolve(0);
+    startSeq = typeof startSeq === "number" ? startSeq : 0;
+    return db().then(function (database) {
+      return new Promise(function (resolve, reject) {
+        var tx = database.transaction("messages", "readwrite");
+        var store = tx.objectStore("messages");
+        var saved = 0;
+
+        for (var i = 0; i < msgs.length; i++) {
+          var msg = msgs[i];
+          if (!msg || msg.role === "system" || !msg.id) continue;
+          store.put(buildMessageRecord(sessionId, msg, startSeq + i));
+          saved++;
+        }
+
+        tx.oncomplete = function () { resolve(saved); };
+        tx.onerror = function () { reject(tx.error); };
+        tx.onabort = function () { reject(tx.error || new Error("message import aborted")); };
+      });
+    });
   }
 
   function mapSessionRecordToSessionMeta(rec) {
@@ -473,11 +625,12 @@
               }
             };
             cursor.continue();
-          } else {
-            resolve();
           }
         };
         msgReq.onerror = function () { reject(msgReq.error); };
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+        tx.onabort = function () { reject(tx.error || new Error("fts delete aborted")); };
       });
     });
   }
@@ -592,7 +745,7 @@
       });
     },
 
-    deleteSession: function (sessionId) {
+    _deleteSessionLegacy: function (sessionId) {
       if (!sessionId) return Promise.reject(new Error("无效 sessionId"));
       return deleteFTSBySession(sessionId).then(function () {
         // 删除所有消息
@@ -612,6 +765,52 @@
             tx.oncomplete = function () { resolve(); };
             tx.onerror = function () { reject(tx.error); };
           });
+        });
+      });
+    },
+
+    deleteSession: function (sessionId, options) {
+      options = options || {};
+      if (!sessionId) return Promise.reject(new Error("鏃犳晥 sessionId"));
+      var onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
+      var shouldCancel = typeof options.shouldCancel === "function" ? options.shouldCancel : null;
+      var batchSize = Math.max(100, Number(options.batchSize) || 3000);
+
+      return ChatDB.getMessageCount(sessionId).then(function (total) {
+        if (onProgress) {
+          onProgress({ phase: "prepare", deleted: 0, total: total || 0, skippedFts: false });
+        }
+        var shouldSkipFTS = total > 5000 || options.skipFTS === true;
+        var ftsStep = shouldSkipFTS ? Promise.resolve() : deleteFTSBySession(sessionId);
+        return ftsStep.then(function () {
+          if (onProgress) {
+            onProgress({ phase: "messages", deleted: 0, total: total || 0, skippedFts: shouldSkipFTS });
+          }
+          return deleteSessionMessagesBatched(sessionId, {
+            batchSize: batchSize,
+            total: total,
+            shouldCancel: shouldCancel,
+            onProgress: function (info) {
+              if (onProgress) {
+                onProgress({
+                  phase: "messages",
+                  deleted: info.deleted,
+                  total: total || info.total,
+                  batch: info.batch,
+                  skippedFts: shouldSkipFTS,
+                });
+              }
+            },
+          });
+        }).then(function () {
+          if (shouldCancel && shouldCancel()) {
+            throw new Error("DELETE_ABORTED");
+          }
+          return doDelete("sessions", sessionId);
+        }).then(function () {
+          if (onProgress) {
+            onProgress({ phase: "done", deleted: total || 0, total: total || 0, skippedFts: shouldSkipFTS });
+          }
         });
       });
     },
@@ -836,22 +1035,7 @@
       msgs.forEach(function (msg, idx) {
         if (msg.role === "system") return;
         chain = chain.then(function () {
-          var record = {
-            id: msg.id,
-            sessionId: sessionId,
-            role: msg.role || "user",
-            speaker: msg.speaker || "",
-            content: msg.content || "",
-            timestamp: msg.createdAt ? new Date(msg.createdAt).getTime() : Date.now(),
-            sequence: startSeq + idx,
-            uiType: msg.uiType || "",
-            thinking: msg.thinking || "",
-            usage: msg.usage || null,
-            estimatedUsage: msg.estimatedUsage || null,
-            toolTrace: msg.toolTrace || null,
-            toolTraceExpanded: Boolean(msg.toolTraceExpanded),
-            thinkingExpanded: Boolean(msg.thinkingExpanded),
-          };
+          var record = buildMessageRecord(sessionId, msg, startSeq + idx);
           return doPut("messages", record).then(function () {
             return indexMessage(record).then(function () { saved++; });
           });
@@ -859,6 +1043,19 @@
       });
 
       return chain.then(function () { return saved; });
+    },
+
+    importMessageBatch: function (sessionId, msgs, startSeq) {
+      return bulkPutMessagesRaw(sessionId, msgs, startSeq);
+    },
+
+    prepareSessionImport: function (session) {
+      if (!session || !session.id) {
+        return Promise.reject(new Error("鏃犳晥 session"));
+      }
+      return deleteFTSBySession(session.id)
+        .then(function () { return deleteSessionMessagesOnly(session.id); })
+        .then(function () { return putSessionRecord(session); });
     },
 
     getSessionMessages: function (sessionId, options) {
@@ -916,6 +1113,52 @@
           req.onerror = function () { reject(req.error); };
         });
       });
+    },
+
+    importSessionSnapshot: function (session, options) {
+      options = options || {};
+      var chunkSize = Math.max(100, Number(options.chunkSize) || 3000);
+      var onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
+      var shouldCancel = typeof options.shouldCancel === "function" ? options.shouldCancel : null;
+      if (!session || !session.id) {
+        return Promise.reject(new Error("无效 session"));
+      }
+
+      var nonSysMessages = (session.messages || []).filter(function (m) {
+        return m && m.id && m.role !== "system";
+      });
+
+      return deleteFTSBySession(session.id)
+        .then(function () { return deleteSessionMessagesOnly(session.id); })
+        .then(function () { return putSessionRecord(session); })
+        .then(function () {
+          var offset = 0;
+          var chain = Promise.resolve();
+
+          while (offset < nonSysMessages.length) {
+            (function (start) {
+              var chunk = nonSysMessages.slice(start, start + chunkSize);
+              chain = chain.then(function () {
+                if (shouldCancel && shouldCancel()) {
+                  throw new Error("IMPORT_ABORTED");
+                }
+                return bulkPutMessagesRaw(session.id, chunk, start).then(function () {
+                  if (onProgress) {
+                    onProgress({
+                      written: Math.min(nonSysMessages.length, start + chunk.length),
+                      total: nonSysMessages.length,
+                    });
+                  }
+                });
+              });
+            })(offset);
+            offset += chunkSize;
+          }
+
+          return chain.then(function () {
+            return putSessionRecord(session);
+          });
+        });
     },
 
     getSessionScopeNames: function (sessionId) {
