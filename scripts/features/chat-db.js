@@ -120,6 +120,104 @@
   var _db = null;
   var _initPromise = null;
 
+  function estimateStoredTokens(text) {
+    var source = String(text || "");
+    if (!source.trim()) {
+      return 0;
+    }
+
+    var cjkMatches = source.match(/[\u3400-\u9FFF\uF900-\uFAFF]/g) || [];
+    var asciiWordMatches = source.match(/[A-Za-z0-9_]+/g) || [];
+    var asciiWordChars = asciiWordMatches.reduce(function (sum, chunk) { return sum + chunk.length; }, 0);
+    var punctuationChars = (source.match(/[^\sA-Za-z0-9_\u3400-\u9FFF\uF900-\uFAFF]/g) || []).length;
+    var whitespaceChars = (source.match(/\s/g) || []).length;
+    var otherChars = Math.max(0, source.length - cjkMatches.length - asciiWordChars - punctuationChars - whitespaceChars);
+
+    return Math.max(
+      1,
+      Math.round(
+        cjkMatches.length * 0.85 +
+        asciiWordChars / 3.6 +
+        punctuationChars * 0.35 +
+        otherChars * 0.7
+      )
+    );
+  }
+
+  function estimateStoredMessageTokens(message) {
+    if (!message) return 0;
+    var total = 4;
+    total += estimateStoredTokens(message.role || "");
+    total += estimateStoredTokens(message.speaker || "");
+    total += estimateStoredTokens(message.content || "");
+    total += estimateStoredTokens(message.thinking || "");
+    return total;
+  }
+
+  function countSessionMessagesForSave(session) {
+    if (session && Number.isFinite(session.messageCount) && session.messageCount >= 0) {
+      return session.messageCount;
+    }
+    return (session && session.messages || []).filter(function (m) { return m.role !== "system"; }).length;
+  }
+
+  function getSessionLoadedStartSequence(session) {
+    if (session && Number.isFinite(session.loadedStartSequence) && session.loadedStartSequence >= 0) {
+      return session.loadedStartSequence;
+    }
+    return 0;
+  }
+
+  function mapDbMessageToSessionMessage(m) {
+    var msg = {
+      id: m.id,
+      role: m.role,
+      speaker: m.speaker,
+      content: m.content,
+      createdAt: m.timestamp ? new Date(m.timestamp).toISOString() : new Date().toISOString(),
+    };
+    if (m.uiType) {
+      msg.uiType = m.uiType;
+    } else if (m.role === "assistant" && m.speaker === "瀵兼紨 AI") {
+      msg.uiType = "narration";
+    }
+    if (m.thinking) msg.thinking = m.thinking;
+    if (m.usage) msg.usage = m.usage;
+    if (m.estimatedUsage) msg.estimatedUsage = m.estimatedUsage;
+    if (m.toolTrace) msg.toolTrace = m.toolTrace;
+    if (m.toolTraceExpanded) msg.toolTraceExpanded = true;
+    if (m.thinkingExpanded) msg.thinkingExpanded = true;
+    return msg;
+  }
+
+  function mapSessionRecordToSessionMeta(rec) {
+    return {
+      id: rec.id,
+      title: rec.title || "",
+      createdAt: rec.createdAt || new Date().toISOString(),
+      updatedAt: rec.updatedAt || new Date().toISOString(),
+      configId: rec.configId || "",
+      host: rec.host || "",
+      key: rec.key || "",
+      titleSource: rec.titleSource || "auto",
+      globalPrompt: rec.globalPrompt || "",
+      mode: rec.mode || "work",
+      directorModel: rec.directorModel || "",
+      directorConfigId: rec.directorConfigId || "",
+      npcs: rec.npcs || [],
+      transientNpcs: rec.transientNpcs || [],
+      directorMemory: rec.directorMemory || null,
+      directorSummary: rec.directorSummary || "",
+      chatSummary: rec.chatSummary || "",
+      compressedUntilMessageId: rec.compressedUntilMessageId || "",
+      suggestionGuide: rec.suggestionGuide || "",
+      messageCount: Number.isFinite(rec.messageCount) ? rec.messageCount : 0,
+      messages: [],
+      messagesHydrated: false,
+      loadedStartSequence: 0,
+    };
+  }
+
   function openDB() {
     return new Promise(function (resolve, reject) {
       var req = indexedDB.open(DB_NAME, DB_VERSION);
@@ -473,7 +571,7 @@
         chatSummary: session.chatSummary || "",
         compressedUntilMessageId: session.compressedUntilMessageId || "",
         suggestionGuide: session.suggestionGuide || "",
-        messageCount: (session.messages || []).filter(function (m) { return m.role !== "system"; }).length,
+        messageCount: countSessionMessagesForSave(session),
         tags: extractTags(session),
       };
       return doPut("sessions", record);
@@ -486,7 +584,7 @@
         record.title = session.title || record.title || "";
         record.updatedAt = session.updatedAt || new Date().toISOString();
         record.mode = session.mode || record.mode || "work";
-        record.messageCount = (session.messages || []).filter(function (m) { return m.role !== "system"; }).length;
+        record.messageCount = countSessionMessagesForSave(session);
         record.tags = extractTags(session);
         record.host = session.host || record.host || "";
         if (!record.createdAt) record.createdAt = session.createdAt || new Date().toISOString();
@@ -542,6 +640,16 @@
       });
     },
 
+    loadSessionMetas: function () {
+      return doGetAll("sessions").then(function (records) {
+        var sessions = (records || []).map(mapSessionRecordToSessionMeta);
+        sessions.sort(function (a, b) {
+          return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+        });
+        return sessions;
+      });
+    },
+
     // ── 加载全量会话（含消息）：启动时调用 ──
     loadAllSessions: function () {
       return db().then(function (database) {
@@ -560,30 +668,32 @@
                 return new Promise(function (res) {
                   var mReq = msgIndex.getAll(IDBKeyRange.only(rec.id));
                   mReq.onsuccess = function () {
-                    var msgs = (mReq.result || [])
-                      .sort(function (a, b) { return a.sequence - b.sequence; })
-                      .map(function (m) {
-                        var msg = {
-                          id: m.id,
-                          role: m.role,
-                          speaker: m.speaker,
-                          content: m.content,
-                          createdAt: new Date(m.timestamp).toISOString(),
-                        };
-                        if (m.uiType) {
-                          msg.uiType = m.uiType;
-                        } else if (m.role === "assistant" && m.speaker === "导演 AI") {
-                          // 兼容旧数据：导演旁白的 uiType 可能丢失
-                          msg.uiType = "narration";
-                        }
-                        if (m.thinking) msg.thinking = m.thinking;
-                        if (m.usage) msg.usage = m.usage;
-                        if (m.estimatedUsage) msg.estimatedUsage = m.estimatedUsage;
-                        if (m.toolTrace) msg.toolTrace = m.toolTrace;
-                        if (m.toolTraceExpanded) msg.toolTraceExpanded = m.toolTraceExpanded;
-                        if (m.thinkingExpanded) msg.thinkingExpanded = m.thinkingExpanded;
-                        return msg;
-                      });
+                    var rawMsgs = mReq.result || [];
+                    rawMsgs.sort(function (a, b) { return a.sequence - b.sequence; });
+                    var msgs = new Array(rawMsgs.length);
+                    for (var i = 0; i < rawMsgs.length; i++) {
+                      var m = rawMsgs[i];
+                      var msg = {
+                        id: m.id,
+                        role: m.role,
+                        speaker: m.speaker,
+                        content: m.content,
+                        createdAt: m.timestamp ? new Date(m.timestamp).toISOString() : new Date().toISOString(),
+                      };
+                      if (m.uiType) {
+                        msg.uiType = m.uiType;
+                      } else if (m.role === "assistant" && m.speaker === "导演 AI") {
+                        // 兼容旧数据：导演旁白的 uiType 可能丢失
+                        msg.uiType = "narration";
+                      }
+                      if (m.thinking) msg.thinking = m.thinking;
+                      if (m.usage) msg.usage = m.usage;
+                      if (m.estimatedUsage) msg.estimatedUsage = m.estimatedUsage;
+                      if (m.toolTrace) msg.toolTrace = m.toolTrace;
+                      if (m.toolTraceExpanded) msg.toolTraceExpanded = true;
+                      if (m.thinkingExpanded) msg.thinkingExpanded = true;
+                      msgs[i] = msg;
+                    }
                     // 重建完整 session 对象
                     var session = {
                       id: rec.id,
@@ -657,12 +767,13 @@
               chatSummary: s.chatSummary || "",
               compressedUntilMessageId: s.compressedUntilMessageId || "",
               suggestionGuide: s.suggestionGuide || "",
-              messageCount: (s.messages || []).filter(function (m) { return m.role !== "system"; }).length,
+              messageCount: countSessionMessagesForSave(s),
               tags: extractTags(s),
             });
 
             // 安全网：同步该会话的消息（已存在的会被覆盖，不影响）
             var msgs = s.messages || [];
+            var baseSequence = getSessionLoadedStartSequence(s);
             for (var i = 0; i < msgs.length; i++) {
               var m = msgs[i];
               if (m.role === "system" || !m.id) continue;
@@ -673,7 +784,7 @@
                 speaker: m.speaker || "",
                 content: m.content || "",
                 timestamp: m.createdAt ? new Date(m.createdAt).getTime() : Date.now(),
-                sequence: i,
+                sequence: baseSequence + i,
                 uiType: m.uiType || "",
                 thinking: m.thinking || "",
                 usage: m.usage || null,
@@ -757,6 +868,54 @@
         IDBKeyRange.bound([sessionId, 0], [sessionId, Infinity]),
         { limit: limit, dir: "next" }
       );
+    },
+
+    getSessionMessagesRange: function (sessionId, startSeq, limit) {
+      startSeq = Math.max(0, Number(startSeq) || 0);
+      limit = Math.max(1, Number(limit) || 100);
+      return doGetByIndex(
+        "messages",
+        "session_seq",
+        IDBKeyRange.bound([sessionId, startSeq], [sessionId, Infinity]),
+        { limit: limit, dir: "next" }
+      ).then(function (records) {
+        return (records || []).map(mapDbMessageToSessionMessage);
+      });
+    },
+
+    getRecentSessionMessages: function (sessionId, limit) {
+      limit = Math.max(1, Number(limit) || 100);
+      return doGetByIndex(
+        "messages",
+        "session_seq",
+        IDBKeyRange.bound([sessionId, 0], [sessionId, Infinity]),
+        { limit: limit, dir: "prev" }
+      ).then(function (records) {
+        var ordered = (records || []).slice().reverse();
+        return ordered.map(mapDbMessageToSessionMessage);
+      });
+    },
+
+    estimateSessionTokens: function (sessionId) {
+      if (!sessionId) return Promise.resolve(0);
+      return db().then(function (database) {
+        return new Promise(function (resolve, reject) {
+          var tx = database.transaction("messages", "readonly");
+          var index = tx.objectStore("messages").index("sessionId");
+          var req = index.openCursor(IDBKeyRange.only(sessionId));
+          var total = 2;
+          req.onsuccess = function () {
+            var cursor = req.result;
+            if (!cursor) {
+              resolve(Math.max(0, total));
+              return;
+            }
+            total += estimateStoredMessageTokens(cursor.value);
+            cursor.continue();
+          };
+          req.onerror = function () { reject(req.error); };
+        });
+      });
     },
 
     getSessionScopeNames: function (sessionId) {

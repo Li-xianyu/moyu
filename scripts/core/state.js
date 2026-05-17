@@ -26,6 +26,9 @@
   userTopAnchorActive: false,
   userTopAnchorAutoFollow: false,
   abortController: null,
+  chatRenderWindows: {},
+  chatRenderActiveSessionId: null,
+  chatHistoryLoadPending: false,
 };
 
 const els = {
@@ -193,6 +196,15 @@ function migrateLegacySessions() {
     directorSummary: typeof session.directorSummary === "string" ? session.directorSummary : "",
     compressedUntilMessageId: session.compressedUntilMessageId || "",
     suggestionGuide: session.suggestionGuide || "",
+    messageCount: Number.isFinite(session.messageCount)
+      ? session.messageCount
+      : Array.isArray(session.messages)
+        ? session.messages.filter((message) => message.role !== "system").length
+        : 0,
+    messagesHydrated: Array.isArray(session.messages) && session.messages.length
+      ? session.messagesHydrated !== false
+      : Boolean(session.messagesHydrated),
+    loadedStartSequence: Number.isFinite(session.loadedStartSequence) ? session.loadedStartSequence : 0,
   })).map((session) => ensureSessionMessageIds(session));
 
   if (!state.currentSessionId && state.sessions.length) {

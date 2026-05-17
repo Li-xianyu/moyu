@@ -206,9 +206,11 @@ function buildNpcContextMessages(session, npc) {
   // Single AI mode: hard search rule before history
   const isSingleAI = session.mode === SESSION_MODE_WORK && !session.directorModel && (session.npcs || []).length === 1;
   const searchNote = isSingleAI && totalMsgs > scopedCount
-    ? [
+      ? [
         "=== RETRIEVAL PROTOCOL: OBEY EXACTLY ===",
         "You do NOT have access to messages 1-" + blindEnd + ". They are outside your visible window.",
+        "If the user's request can be answered from the visible messages below, the current turn, or normal conversation ability, answer normally and do NOT output any retrieval marker.",
+        "Use retrieval ONLY when the answer truly depends on blind-spot history that is not visible here.",
         "If the answer depends on blind-spot history, your ENTIRE reply MUST be exactly one retrieval marker and nothing else.",
         "",
         "ALLOWED MARKERS ONLY:",

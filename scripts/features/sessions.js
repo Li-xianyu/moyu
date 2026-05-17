@@ -5,6 +5,7 @@
   // Welcome page: don't load session content
   if (state.showWelcomeHome) {
     if (els.chatStage) els.chatStage.classList.add("empty-state");
+    state.chatRenderActiveSessionId = null;
     els.chatMessages.innerHTML = "";
     return;
   }
@@ -14,6 +15,7 @@
   }
 
   if (!session) {
+    state.chatRenderActiveSessionId = null;
     els.chatMeta.className = "chat-meta empty";
     els.chatMeta.textContent = t("chat.noActiveSession");
     els.chatInput.disabled = true;
@@ -50,6 +52,75 @@
   scrollChatToBottom();
 }
 
+function renderSessionLoadingShell(session) {
+  if (els.chatStage) {
+    els.chatStage.classList.remove("empty-state");
+  }
+  state.chatRenderActiveSessionId = null;
+  els.chatMeta.className = "chat-meta";
+  els.chatMeta.textContent = session?.title || "正在加载会话...";
+  els.chatInput.disabled = true;
+  els.sendBtn.disabled = true;
+  if (els.compressMemoryBtn) {
+    els.compressMemoryBtn.disabled = true;
+  }
+  if (els.editSessionBtn) {
+    els.editSessionBtn.disabled = false;
+  }
+  els.chatMessages.replaceChildren();
+  updateComposerMode();
+  autoResizeChatInput();
+  setText(els.chatStatus, "正在加载会话...");
+}
+
+function trimInactiveSessionBuffer(session) {
+  if (!session || !Array.isArray(session.messages) || !session.messages.length) {
+    return;
+  }
+  const keepCount = typeof getChatInitialHydrateCount === "function"
+    ? getChatInitialHydrateCount(session)
+    : 60;
+  if (session.messages.length <= keepCount) {
+    return;
+  }
+  const trimmed = session.messages.slice(-keepCount);
+  const total = Number.isFinite(session.messageCount) ? session.messageCount : trimmed.length;
+  session.messages = trimmed;
+  session.loadedStartSequence = Math.max(0, total - trimmed.length);
+  session.messagesHydrated = true;
+  if (state.chatRenderWindows && session.id) {
+    delete state.chatRenderWindows[session.id];
+  }
+}
+
+function buildSessionStatsMarkup(session) {
+  if (!session) {
+    return "";
+  }
+  const totalMessages = typeof getSessionMessageCount === "function"
+    ? getSessionMessageCount(session)
+    : (Array.isArray(session.messages) ? session.messages.length : 0);
+  const tokenState = typeof getSessionStoredTokenEstimateState === "function"
+    ? getSessionStoredTokenEstimateState(session)
+    : { label: "—" };
+
+  return `
+    <section class="chat-meta-section compact">
+      <div class="chat-meta-label">会话统计</div>
+      <dl class="chat-meta-stats">
+        <div class="chat-meta-stat">
+          <dt>消息数</dt>
+          <dd>${escapeHtml(String(totalMessages))}</dd>
+        </div>
+        <div class="chat-meta-stat">
+          <dt>全库 Token 预估</dt>
+          <dd>${escapeHtml(String(tokenState.label || "—"))}</dd>
+        </div>
+      </dl>
+    </section>
+  `.trim();
+}
+
 function renderChatMetaMarkup(session) {
   const entityType = getEntityTerm(session.mode || SESSION_MODE_STORY);
   const npcCards = (session.npcs || []).map((npc) => `
@@ -79,11 +150,22 @@ function renderChatMetaMarkup(session) {
       <div class="chat-meta-label">${escapeHtml(t("create.directorLabel"))}</div>
       <div class="chat-meta-chip">${escapeHtml(session.directorModel)}</div>
     </section>` : ""}
+    ${buildSessionStatsMarkup(session)}
     <section class="chat-meta-section">
       <div class="chat-meta-label">${escapeHtml(t("create.npcTitle", { entityType }))}</div>
       <div class="chat-meta-npc-list">${npcCards || `<div class="chat-meta-empty">${escapeHtml(t("chat.noNpcs"))}</div>`}</div>
     </section>
   `;
+}
+
+function refreshSessionMetaPanel() {
+  const session = getCurrentSession();
+  if (!els.chatMeta || !session || state.showWelcomeHome) {
+    return;
+  }
+  els.chatMeta.className = "chat-meta";
+  els.chatMeta.innerHTML = renderChatMetaMarkup(session);
+  bindChatMetaExpanders();
 }
 
 function renderCollapsibleMetaText(value, options = {}) {
@@ -176,7 +258,11 @@ function renderChatListMenu() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `chat-list-item ${(showActive && session.id === state.currentSessionId) ? "active" : ""} ${state.openChatMenuId === session.id ? "menu-open" : ""}`.trim();
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
+      if (state.currentSessionId === session.id && !state.showWelcomeHome) {
+        return;
+      }
+      const previousSession = getCurrentSession();
       if (state.renameSessionId) {
         commitRenameIfNeeded();
       }
@@ -184,10 +270,36 @@ function renderChatListMenu() {
       clearUserMessageEdit();
       state.showWelcomeHome = false;
       state.currentSessionId = session.id;
-      persistSessions();
-      renderSession();
-      switchView("chat");
-      scrollChatToBottom();
+      if (!(els.views.chat?.classList.contains("active"))) {
+        switchView("chat");
+      }
+      renderChatListMenu();
+      setTimeout(() => {
+        if (state.currentSessionId !== session.id || state.showWelcomeHome) {
+          return;
+        }
+        renderSessionLoadingShell(session);
+        setTimeout(async () => {
+          if (!session.messagesHydrated && typeof ensureSessionMessagesHydrated === "function") {
+            try {
+              await ensureSessionMessagesHydrated(session);
+            } catch (error) {
+              console.warn("[session] hydrate failed", error);
+            }
+          }
+          if (state.currentSessionId !== session.id || state.showWelcomeHome) {
+            return;
+          }
+          renderSession();
+          scrollChatToBottom();
+          setTimeout(persistSessions, 0);
+          setTimeout(() => {
+            if (previousSession && previousSession.id !== state.currentSessionId) {
+              trimInactiveSessionBuffer(previousSession);
+            }
+          }, 0);
+        }, 0);
+      }, 0);
     });
 
     const main = document.createElement("div");

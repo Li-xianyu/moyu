@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#1e1e1e">
   <meta name="color-scheme" content="dark">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.17.01";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.17.02";window.__moyuBootStart = performance.now();</script>
   <style>
     .loading-screen {
       position: fixed; inset: 0; z-index: 9999;
@@ -19,17 +19,32 @@
     }
     .loading-screen-content {
       display: grid; gap: 24px; justify-items: center; text-align: center;
+      min-height: 46px;
     }
     .loading-typewriter {
       font-size: clamp(24px, 5vw, 38px);
       color: #cccccc;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       white-space: nowrap;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 3px;
+      min-height: 1.25em;
+      min-width: 10ch;
+      justify-content: center;
+    }
+    #typewriterText {
+      display: inline-block;
+      overflow: hidden;
+      white-space: nowrap;
+      text-align: left;
+      flex: 0 0 auto;
     }
     .typewriter-cursor {
+      display: inline-block;
+      width: 0.5ch;
+      text-align: center;
+      flex: 0 0 0.5ch;
       animation: blink 1s step-end infinite;
       font-weight: 200;
       opacity: 0.7;
@@ -97,6 +112,24 @@
   var phrase = '开始摸鱼';
   var el = document.getElementById('typewriterText');
   if (!el) return;
+  var host = el.parentElement;
+  if (host) {
+    var measure = document.createElement('span');
+    var hostStyle = window.getComputedStyle(host);
+    measure.textContent = phrase;
+    measure.style.position = 'absolute';
+    measure.style.visibility = 'hidden';
+    measure.style.pointerEvents = 'none';
+    measure.style.whiteSpace = 'nowrap';
+    measure.style.font = hostStyle.font;
+    measure.style.letterSpacing = hostStyle.letterSpacing;
+    document.body.appendChild(measure);
+    var measuredWidth = Math.ceil(measure.getBoundingClientRect().width);
+    document.body.removeChild(measure);
+    if (measuredWidth > 0) {
+      el.style.width = measuredWidth + 'px';
+    }
+  }
   var charPos = 0, deleting = false;
   var writeSpd = 100, delSpd = 50, pauseWrite = 1800, pauseDel = 400;
   window.__moyuTypewriter = { cycleCount: 0 };

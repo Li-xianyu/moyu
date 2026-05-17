@@ -105,6 +105,33 @@
   gap: 12px;
 }
 
+.chat-meta-stats {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.chat-meta-stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-meta-stat dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chat-meta-stat dd {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
+
 .chat-meta.empty {
   color: var(--muted);
 }

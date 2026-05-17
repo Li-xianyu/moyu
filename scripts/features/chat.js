@@ -186,6 +186,18 @@ const CHAT_COMPRESS_PROMPT = [
 ].join("\\n");
 
 const CHAT_MANUAL_RECOMPRESS_RECENT_LIMIT = 30;
+const CHAT_VIRTUAL_RECENT_RENDER_COUNT = 60;
+const CHAT_VIRTUAL_BACKFILL_BATCH = 24;
+const CHAT_VIRTUAL_TRIM_THRESHOLD = 156;
+const CHAT_VIRTUAL_TOP_TRIGGER_DESKTOP_PX = 240;
+const CHAT_VIRTUAL_TOP_TRIGGER_MOBILE_PX = 180;
+const CHAT_DB_INITIAL_LOAD_COUNT = 96;
+const CHAT_MONSTER_SESSION_MESSAGE_COUNT = 20000;
+const CHAT_LARGE_SESSION_MESSAGE_COUNT = 5000;
+const CHAT_MONSTER_RECENT_RENDER_COUNT = 18;
+const CHAT_LARGE_RECENT_RENDER_COUNT = 24;
+const CHAT_MONSTER_INITIAL_LOAD_COUNT = 24;
+const CHAT_LARGE_INITIAL_LOAD_COUNT = 36;
 
 function buildChatSummaryBlock(session) {
   const summary = session?.chatSummary;
@@ -217,6 +229,156 @@ function getRecentChatMessages(session, limit = CHAT_MANUAL_RECOMPRESS_RECENT_LI
   const visibleMessages = getVisibleHistoryMessages(session);
   if (!visibleMessages.length) return [];
   return visibleMessages.slice(-Math.max(1, limit));
+}
+
+function formatTokenCount(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return "—";
+  }
+  return Math.round(numeric).toLocaleString("zh-CN");
+}
+
+function getSessionStoredTokenEstimateState(session) {
+  const totalMessageCount = getSessionMessageCount(session);
+  if (!session) {
+    return { label: "—", ready: false };
+  }
+  if (session.totalTokenEstimatePending) {
+    return { label: "计算中...", ready: false };
+  }
+  if (
+    Number.isFinite(session.totalTokenEstimate) &&
+    Number.isFinite(session.totalTokenEstimateMessageCount) &&
+    session.totalTokenEstimateMessageCount === totalMessageCount
+  ) {
+    return { label: formatTokenCount(session.totalTokenEstimate), ready: true };
+  }
+  return { label: "待计算", ready: false };
+}
+
+async function ensureSessionStoredTokenEstimate(session) {
+  if (!session || !window.__chatDB?.estimateSessionTokens) {
+    return null;
+  }
+  const totalMessageCount = getSessionMessageCount(session);
+  if (
+    Number.isFinite(session.totalTokenEstimate) &&
+    Number.isFinite(session.totalTokenEstimateMessageCount) &&
+    session.totalTokenEstimateMessageCount === totalMessageCount
+  ) {
+    return session.totalTokenEstimate;
+  }
+  if (session.totalTokenEstimatePending) {
+    return null;
+  }
+
+  session.totalTokenEstimatePending = true;
+  try {
+    const estimated = await window.__chatDB.estimateSessionTokens(session.id);
+    session.totalTokenEstimate = estimated;
+    session.totalTokenEstimateMessageCount = totalMessageCount;
+    return estimated;
+  } catch (error) {
+    console.warn("[session] token estimate failed", error);
+    return null;
+  } finally {
+    session.totalTokenEstimatePending = false;
+    if (getCurrentSession()?.id === session.id) {
+      renderCompressMemoryPopover();
+      if (typeof refreshSessionMetaPanel === "function") {
+        refreshSessionMetaPanel();
+      }
+    }
+  }
+}
+
+function getChatVirtualTopTriggerPx() {
+  return window.matchMedia?.("(pointer: coarse)").matches
+    ? CHAT_VIRTUAL_TOP_TRIGGER_MOBILE_PX
+    : CHAT_VIRTUAL_TOP_TRIGGER_DESKTOP_PX;
+}
+
+function getSessionMessageCount(session) {
+  if (session && Number.isFinite(session.messageCount) && session.messageCount >= 0) {
+    return session.messageCount;
+  }
+  return Array.isArray(session?.messages)
+    ? session.messages.filter((message) => message.role !== "system").length
+    : 0;
+}
+
+function getChatRecentRenderCount(session) {
+  const messageCount = getSessionMessageCount(session);
+  if (messageCount >= CHAT_MONSTER_SESSION_MESSAGE_COUNT) {
+    return CHAT_MONSTER_RECENT_RENDER_COUNT;
+  }
+  if (messageCount >= CHAT_LARGE_SESSION_MESSAGE_COUNT) {
+    return CHAT_LARGE_RECENT_RENDER_COUNT;
+  }
+  return CHAT_VIRTUAL_RECENT_RENDER_COUNT;
+}
+
+function getChatInitialHydrateCount(session) {
+  const messageCount = getSessionMessageCount(session);
+  if (messageCount >= CHAT_MONSTER_SESSION_MESSAGE_COUNT) {
+    return CHAT_MONSTER_INITIAL_LOAD_COUNT;
+  }
+  if (messageCount >= CHAT_LARGE_SESSION_MESSAGE_COUNT) {
+    return CHAT_LARGE_INITIAL_LOAD_COUNT;
+  }
+  return CHAT_DB_INITIAL_LOAD_COUNT;
+}
+
+async function ensureSessionMessagesHydrated(session, options = {}) {
+  if (!session || session.messagesHydrated || !window.__chatDB) {
+    return session?.messages || [];
+  }
+
+  const total = Number.isFinite(session.messageCount)
+    ? session.messageCount
+    : await window.__chatDB.getMessageCount(session.id);
+  session.messageCount = total;
+
+  if (!total) {
+    session.messages = [];
+    session.loadedStartSequence = 0;
+    session.messagesHydrated = true;
+    return session.messages;
+  }
+
+  const desired = Math.max(1, options.limit || getChatInitialHydrateCount(session));
+  const recent = await window.__chatDB.getRecentSessionMessages(session.id, Math.min(total, desired));
+  session.messages = recent;
+  session.loadedStartSequence = Math.max(0, total - recent.length);
+  session.messagesHydrated = true;
+  return recent;
+}
+
+async function loadOlderSessionMessages(session, batchSize = CHAT_VIRTUAL_BACKFILL_BATCH) {
+  if (!session || !window.__chatDB) return [];
+  await ensureSessionMessagesHydrated(session);
+
+  const currentStart = Number.isFinite(session.loadedStartSequence) ? session.loadedStartSequence : 0;
+  if (currentStart <= 0) {
+    return [];
+  }
+
+  const nextStart = Math.max(0, currentStart - Math.max(1, batchSize));
+  const limit = currentStart - nextStart;
+  if (limit <= 0) {
+    return [];
+  }
+
+  const older = await window.__chatDB.getSessionMessagesRange(session.id, nextStart, limit);
+  if (!older.length) {
+    session.loadedStartSequence = nextStart;
+    return [];
+  }
+
+  session.messages = older.concat(session.messages || []);
+  session.loadedStartSequence = nextStart;
+  return older;
 }
 
 function bindChat() {
@@ -435,6 +597,9 @@ function bindChat() {
       }
       const distFromBottom = getChatBottomDistance();
       state.userScrolledAway = distFromBottom > 100;
+      if (scrollEl.scrollTop <= getChatVirtualTopTriggerPx()) {
+        maybeLoadOlderRenderedMessages();
+      }
     }, { passive: true });
   }
 
@@ -1143,20 +1308,144 @@ function createStreamBatchController(targetMessage, revealFn, updateFn) {
   };
 }
 
+function ensureChatRenderWindowStore() {
+  if (!state.chatRenderWindows || typeof state.chatRenderWindows !== "object") {
+    state.chatRenderWindows = {};
+  }
+  return state.chatRenderWindows;
+}
+
+function getChatRenderWindow(session) {
+  const store = ensureChatRenderWindowStore();
+  const sessionId = session?.id || "__default__";
+  const total = Array.isArray(session?.messages) ? session.messages.length : 0;
+  if (!store[sessionId]) {
+    const recentCount = getChatRecentRenderCount(session);
+    store[sessionId] = {
+      start: Math.max(0, total - recentCount),
+      total,
+    };
+  }
+  return store[sessionId];
+}
+
+function clampChatRenderWindow(session) {
+  const windowState = getChatRenderWindow(session);
+  const total = Array.isArray(session?.messages) ? session.messages.length : 0;
+  const maxStart = Math.max(0, total - 1);
+  const recentCount = getChatRecentRenderCount(session);
+  if (!Number.isFinite(windowState.start)) {
+    windowState.start = Math.max(0, total - recentCount);
+  }
+  windowState.start = Math.max(0, Math.min(windowState.start, maxStart));
+  windowState.total = total;
+  return windowState;
+}
+
+function collapseRenderedMessageWindow(session, recentCount = CHAT_VIRTUAL_RECENT_RENDER_COUNT) {
+  if (!session) return false;
+  const total = Array.isArray(session.messages) ? session.messages.length : 0;
+  const windowState = getChatRenderWindow(session);
+  const nextStart = Math.max(0, total - Math.max(1, recentCount));
+  const changed = windowState.start !== nextStart;
+  windowState.start = nextStart;
+  windowState.total = total;
+  return changed;
+}
+
+function syncRenderedMessageWindow(session, options = {}) {
+  if (!session) return { start: 0, total: 0 };
+  const windowState = clampChatRenderWindow(session);
+  const sessionChanged = state.chatRenderActiveSessionId !== session.id;
+  const total = Array.isArray(session.messages) ? session.messages.length : 0;
+
+  if (sessionChanged) {
+    state.chatRenderActiveSessionId = session.id;
+    if (!options.keepWindow) {
+      windowState.start = Math.max(0, total - getChatRecentRenderCount(session));
+    }
+  } else if (options.forceRecent) {
+    const renderedCount = total - windowState.start;
+    if (renderedCount > CHAT_VIRTUAL_TRIM_THRESHOLD || options.alwaysTrim) {
+      collapseRenderedMessageWindow(session, getChatRecentRenderCount(session));
+    }
+  }
+
+  windowState.total = total;
+  return windowState;
+}
+
+function getRenderedMessagesForSession(session) {
+  const windowState = clampChatRenderWindow(session);
+  return (session?.messages || []).slice(windowState.start);
+}
+
+async function maybeLoadOlderRenderedMessages() {
+  const session = getCurrentSession();
+  const scrollEl = getChatScrollElement();
+  if (!session || !scrollEl || state.chatHistoryLoadPending) {
+    return false;
+  }
+  if (state.userTopAnchorActive && state.isSending && els.chatMessages.querySelector(".scroll-spacer")) {
+    return false;
+  }
+  if (scrollEl.scrollTop > getChatVirtualTopTriggerPx()) {
+    return false;
+  }
+
+  const windowState = syncRenderedMessageWindow(session, { keepWindow: true });
+  if (windowState.start <= 0) {
+    state.chatHistoryLoadPending = true;
+    try {
+      const older = await loadOlderSessionMessages(session, CHAT_VIRTUAL_BACKFILL_BATCH);
+      if (!older.length) {
+        return false;
+      }
+      windowState.start = 0;
+      windowState.total = Array.isArray(session.messages) ? session.messages.length : 0;
+      renderMessages({ preserveScrollOnPrepend: true, keepWindow: true });
+      return true;
+    } finally {
+      state.chatHistoryLoadPending = false;
+    }
+  }
+
+  const nextStart = Math.max(0, windowState.start - CHAT_VIRTUAL_BACKFILL_BATCH);
+  if (nextStart === windowState.start) {
+    return false;
+  }
+
+  state.chatHistoryLoadPending = true;
+  windowState.start = nextStart;
+  windowState.total = Array.isArray(session.messages) ? session.messages.length : 0;
+  renderMessages({ preserveScrollOnPrepend: true, keepWindow: true });
+  state.chatHistoryLoadPending = false;
+  return true;
+}
+
 function renderMessages(options = {}) {
   const shouldStickToBottom = Boolean(options.stickToBottom);
+  const preserveScrollOnPrepend = Boolean(options.preserveScrollOnPrepend);
+  const keepWindow = Boolean(options.keepWindow);
   const scrollEl = getChatScrollElement();
   const previousScrollTop = scrollEl.scrollTop;
   const previousScrollHeight = scrollEl.scrollHeight;
   const session = getCurrentSession();
 
   if (!session) {
+    state.chatRenderActiveSessionId = null;
     els.chatMessages.innerHTML = "";
     return;
   }
 
   const sessionMode = session.mode || SESSION_MODE_STORY;
   const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
+  syncRenderedMessageWindow(session, {
+    keepWindow,
+    forceRecent: !keepWindow && (shouldStickToBottom || state.isSending),
+    alwaysTrim: shouldStickToBottom && !state.userScrolledAway,
+  });
+  const renderedMessages = getRenderedMessagesForSession(session);
 
   // Index existing DOM by messageId — avoid destroying/recreating unchanged nodes
   const oldNodes = new Map();
@@ -1166,7 +1455,7 @@ function renderMessages(options = {}) {
 
   const fragment = document.createDocumentFragment();
 
-  session.messages.forEach((message) => {
+  renderedMessages.forEach((message) => {
     // system-notice: no stable ID, always rebuild (rare, not worth diffing)
     if (message.uiType === "system-notice") {
       const notice = document.createElement("div");
@@ -1206,6 +1495,12 @@ function renderMessages(options = {}) {
 
   // Replace children — existing nodes are MOVED, not destroyed
   els.chatMessages.replaceChildren(fragment);
+
+  if (preserveScrollOnPrepend) {
+    const heightDelta = scrollEl.scrollHeight - previousScrollHeight;
+    scrollEl.scrollTop = previousScrollTop + Math.max(0, heightDelta);
+    return;
+  }
 
   // --- Scroll handling (unchanged) ---
   if (shouldStickToBottom) {
@@ -2239,6 +2534,9 @@ async function callNpc(session, npc, npcInstructions = {}) {
           "VISIBLE: messages " + (blindEnd + 1) + "-" + totalForSearch + ".",
           "NOT VISIBLE: messages 1-" + blindEnd + ".",
           "",
+          "If the user's request can be answered from the visible messages, the current turn, or normal conversation ability, answer normally and do NOT output any retrieval marker.",
+          "Use retrieval ONLY when the answer truly depends on non-visible history.",
+          "",
           "If the answer depends on non-visible history, your ENTIRE reply MUST be exactly one retrieval marker and nothing else.",
           "",
           "ALLOWED MARKERS ONLY:",
@@ -2958,7 +3256,7 @@ function buildCompressMemoryPopoverMarkup(session) {
     : "";
   const summaryCollapsed = summaryPreview && summaryText.split(/\n+/).filter(Boolean).length > 3 ? "collapsed" : "expanded";
   const rows = [
-    ["上下文", `${metrics.contextCurrent} / ${metrics.contextThreshold}`],
+    ["上下文", `${formatTokenCount(metrics.contextCurrent)} / ${formatTokenCount(metrics.contextThreshold)}`],
   ];
   if (isSingleAi && metrics.recentCount > 0) {
     rows.push(["消息数", String(metrics.recentCount)]);
@@ -3066,6 +3364,9 @@ function renderCompressMemoryPopover() {
   const hasSession = Boolean(session);
   updateCompressMemoryButtonProgress(session);
   popover.innerHTML = hasSession ? buildCompressMemoryPopoverMarkup(session) : "";
+  if (hasSession) {
+    void ensureSessionStoredTokenEstimate(session);
+  }
   popover.classList.remove("is-positioned");
   popover.classList.toggle("hidden", !hasSession);
   els.compressMemoryBtn.classList.toggle("info-open", state.openCompressMemoryInfo && hasSession);

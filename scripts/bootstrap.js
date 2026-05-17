@@ -251,10 +251,9 @@ function init() {
 
 (async function boot() {
   // 1. 从 IDB 加载全量会话
-  var loaded = 0;
   if (window.__chatDB) {
     try {
-      var sessions = await window.__chatDB.loadAllSessions();
+      var sessions = await window.__chatDB.loadSessionMetas();
       if (sessions && sessions.length) {
         state.sessions = sessions;
       }
@@ -266,7 +265,7 @@ function init() {
     try {
       var migrated = await window.__chatDB.migrateFromLocalStorage();
       if (migrated > 0 || (!state.sessions.length)) {
-        var reloaded = await window.__chatDB.loadAllSessions();
+        var reloaded = await window.__chatDB.loadSessionMetas();
         if (reloaded && reloaded.length) {
           state.sessions = reloaded;
         }
@@ -278,6 +277,17 @@ function init() {
 
   // 3. 标准化会话
   migrateLegacySessions();
+  if (window.__chatDB) {
+    var current = getCurrentSession();
+    var shouldHydrateInitialSession = state.settings?.startup?.initialPage === "last-chat";
+    if (current && shouldHydrateInitialSession && !current.messagesHydrated && typeof ensureSessionMessagesHydrated === "function") {
+      try {
+        await ensureSessionMessagesHydrated(current);
+      } catch (e) {
+        console.warn("[boot] current session hydrate failed", e);
+      }
+    }
+  }
 
   // 4. 启动
   init();

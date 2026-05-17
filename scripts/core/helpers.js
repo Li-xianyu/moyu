@@ -82,8 +82,11 @@ var _idbPersistTimer = null;
 function _flushIDBPersist() {
   _idbPersistTimer = null;
   if (window.__chatDB && state.sessions) {
-    window.__chatDB.saveAllSessionBlobs(state.sessions).catch(function (err) {
-      console.warn("[persist] IDB sync failed", err);
+    Promise.all((state.sessions || []).map(function (session) {
+      if (!session || !session.id) return Promise.resolve();
+      return window.__chatDB.updateSessionMeta(session);
+    })).catch(function (err) {
+      console.warn("[persist] IDB meta sync failed", err);
     });
   }
 }
@@ -112,7 +115,12 @@ window.addEventListener("beforeunload", function () {
   if (_idbPersistTimer) {
     clearTimeout(_idbPersistTimer);
     if (window.__chatDB && state.sessions) {
-      window.__chatDB.saveAllSessionBlobs(state.sessions);
+      Promise.all((state.sessions || []).map(function (session) {
+        if (!session || !session.id) return Promise.resolve();
+        return window.__chatDB.updateSessionMeta(session);
+      })).catch(function (err) {
+        console.warn("[persist] IDB meta sync failed", err);
+      });
     }
   }
 });
