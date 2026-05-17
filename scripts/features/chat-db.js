@@ -16,7 +16,81 @@
   var DB_NAME = "moyu_chat";
   var DB_VERSION = 1;
 
+  // ── 智能配速器 ──
+  // 根据每批次实际耗时动态调整 batch/chunk 大小
+  function createAdaptiveBatcher(options) {
+    options = options || {};
+    var min = Math.max(50, Number(options.minSize) || 100);
+    var max = Math.max(min, Number(options.maxSize) || 5000);
+    var size = Math.max(min, Math.min(max, Number(options.initialSize) || 1000));
+    var targetMs = Number(options.targetMs) || 260;
+    var hardSlowMs = Number(options.hardSlowMs) || 900;
+    var emaMs = 0;
+    var fastMs = Number(options.fastThreshold) || 150;
+    var slowMs = Number(options.slowThreshold) || 600;
+    var consecutiveFast = 0;
+
+    return {
+      getSize: function () { return size; },
+      reportBatch: function (elapsedMs) {
+        // 持续偏快 → 加量（加法递增）
+        if (elapsedMs < fastMs) {
+          consecutiveFast++;
+          if (consecutiveFast >= 2) {
+            var increment = Math.max(100, Math.ceil(size * 0.15));
+            size = Math.min(max, size + increment);
+            consecutiveFast = 0;
+          }
+        } else if (elapsedMs > slowMs) {
+          // 偏慢 → 减量（乘法递减）
+          size = Math.max(min, Math.floor(size * 0.6));
+          consecutiveFast = 0;
+        } else {
+          consecutiveFast = 0;
+        }
+        return size;
+      },
+      reset: function (initialSize) {
+        size = Math.max(min, Math.min(max, Number(initialSize) || 1000));
+        consecutiveFast = 0;
+      },
+    };
+  }
+
   // ── 停用词（索引时跳过，缩小体积） ──
+  function createAdaptiveBatcherV2(options) {
+    options = options || {};
+    var min = Math.max(50, Number(options.minSize) || 100);
+    var max = Math.max(min, Number(options.maxSize) || 5000);
+    var size = Math.max(min, Math.min(max, Number(options.initialSize) || 1000));
+    var targetMs = Number(options.targetMs) || 260;
+    var hardSlowMs = Number(options.hardSlowMs) || 900;
+    var emaMs = 0;
+
+    return {
+      getSize: function () { return size; },
+      getAverageMs: function () { return Math.round(emaMs || 0); },
+      reportBatch: function (elapsedMs) {
+        elapsedMs = Math.max(1, Number(elapsedMs) || targetMs);
+        emaMs = emaMs ? (emaMs * 0.65 + elapsedMs * 0.35) : elapsedMs;
+        if (elapsedMs > hardSlowMs) {
+          size = Math.max(min, Math.floor(size * 0.55));
+          return size;
+        }
+        if (emaMs < targetMs * 0.72) {
+          size = Math.min(max, Math.ceil(size * 1.35 + 64));
+        } else if (emaMs < targetMs * 0.95) {
+          size = Math.min(max, Math.ceil(size * 1.15 + 32));
+        } else if (emaMs > targetMs * 1.55) {
+          size = Math.max(min, Math.floor(size * 0.72));
+        } else if (emaMs > targetMs * 1.18) {
+          size = Math.max(min, Math.floor(size * 0.9));
+        }
+        return size;
+      },
+    };
+  }
+
   var STOP_WORDS = new Set(
     // 中文高频虚词
     "的了在是我有和就不人都一一个上也也很到说要会着没有看好自己这他她它们那"
@@ -217,18 +291,25 @@
 
   function deleteSessionMessagesBatched(sessionId, options) {
     options = options || {};
-    var batchSize = Math.max(100, Number(options.batchSize) || 3000);
     var total = Math.max(0, Number(options.total) || 0);
     var deleted = 0;
     var onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
     var shouldCancel = typeof options.shouldCancel === "function" ? options.shouldCancel : null;
+    var adaptive = createAdaptiveBatcherV2({
+      initialSize: Math.max(100, Number(options.batchSize) || 3000),
+      minSize: 100,
+      maxSize: 5000,
+      targetMs: 180,
+      hardSlowMs: 800,
+    });
 
     function getMessageKeysBatch() {
+      var size = adaptive.getSize();
       return db().then(function (database) {
         return new Promise(function (resolve, reject) {
           var tx = database.transaction("messages", "readonly");
           var msgIndex = tx.objectStore("messages").index("sessionId");
-          var req = msgIndex.getAllKeys(IDBKeyRange.only(sessionId), batchSize);
+          var req = msgIndex.getAllKeys(IDBKeyRange.only(sessionId), size);
           req.onsuccess = function () { resolve(req.result || []); };
           req.onerror = function () { reject(req.error); };
         });
@@ -251,23 +332,48 @@
       });
     }
 
+    function countRemainingMessages() {
+      return db().then(function (database) {
+        return new Promise(function (resolve, reject) {
+          var tx = database.transaction("messages", "readonly");
+          var msgIndex = tx.objectStore("messages").index("sessionId");
+          var req = msgIndex.count(IDBKeyRange.only(sessionId));
+          req.onsuccess = function () { resolve(req.result || 0); };
+          req.onerror = function () { reject(req.error); };
+        });
+      });
+    }
+
     function deleteBatch() {
       if (shouldCancel && shouldCancel()) {
         return Promise.reject(new Error("DELETE_ABORTED"));
       }
+      var start = Date.now();
       return getMessageKeysBatch().then(function (keys) {
         return deleteKeysBatch(keys);
       }).then(function (batchDeleted) {
         deleted += batchDeleted;
+        adaptive.reportBatch(Date.now() - start);
         if (onProgress) {
           onProgress({
             deleted: deleted,
             total: total || deleted,
             batch: batchDeleted,
+            nextBatchSize: adaptive.getSize(),
+            avgMs: adaptive.getAverageMs(),
           });
         }
         if (batchDeleted <= 0) {
           return deleted;
+        }
+        if (total > 0 && deleted >= total) {
+          return countRemainingMessages().then(function (remaining) {
+            if (remaining <= 0) return deleted;
+            total = deleted + remaining;
+            return new Promise(function (resolve) {
+              setTimeout(resolve, 0);
+            }).then(deleteBatch);
+          });
         }
         return new Promise(function (resolve) {
           setTimeout(resolve, 0);
@@ -814,6 +920,9 @@
           if (shouldCancel && shouldCancel()) {
             throw new Error("DELETE_ABORTED");
           }
+          if (onProgress) {
+            onProgress({ phase: "session", deleted: total || 0, total: total || 0, skippedFts: shouldSkipFTS });
+          }
           return doDelete("sessions", sessionId);
         }).then(function () {
           if (onProgress) {
@@ -1125,7 +1234,6 @@
 
     importSessionSnapshot: function (session, options) {
       options = options || {};
-      var chunkSize = Math.max(100, Number(options.chunkSize) || 3000);
       var onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
       var shouldCancel = typeof options.shouldCancel === "function" ? options.shouldCancel : null;
       if (!session || !session.id) {
@@ -1135,35 +1243,39 @@
       var nonSysMessages = (session.messages || []).filter(function (m) {
         return m && m.id && m.role !== "system";
       });
+      var adaptive = createAdaptiveBatcherV2({
+        initialSize: Math.max(100, Number(options.chunkSize) || 3000),
+        minSize: 100,
+        maxSize: 5000,
+        targetMs: 260,
+        hardSlowMs: 1000,
+      });
+
+      function writeNextChunk(index) {
+        if (index >= nonSysMessages.length) return Promise.resolve();
+        var size = adaptive.getSize();
+        var chunk = nonSysMessages.slice(index, index + size);
+        var start = Date.now();
+        return bulkPutMessagesRaw(session.id, chunk, index).then(function () {
+          adaptive.reportBatch(Date.now() - start);
+          if (onProgress) {
+            onProgress({
+              written: Math.min(nonSysMessages.length, index + chunk.length),
+              total: nonSysMessages.length,
+            });
+          }
+          return new Promise(function (r) { setTimeout(r, 0); }).then(function () {
+            return writeNextChunk(index + size);
+          });
+        });
+      }
 
       return deleteFTSBySession(session.id)
         .then(function () { return deleteSessionMessagesOnly(session.id); })
         .then(function () { return putSessionRecord(session); })
         .then(function () {
-          var offset = 0;
-          var chain = Promise.resolve();
-
-          while (offset < nonSysMessages.length) {
-            (function (start) {
-              var chunk = nonSysMessages.slice(start, start + chunkSize);
-              chain = chain.then(function () {
-                if (shouldCancel && shouldCancel()) {
-                  throw new Error("IMPORT_ABORTED");
-                }
-                return bulkPutMessagesRaw(session.id, chunk, start).then(function () {
-                  if (onProgress) {
-                    onProgress({
-                      written: Math.min(nonSysMessages.length, start + chunk.length),
-                      total: nonSysMessages.length,
-                    });
-                  }
-                });
-              });
-            })(offset);
-            offset += chunkSize;
-          }
-
-          return chain.then(function () {
+          return writeNextChunk(0).then(function () {
+            if (shouldCancel && shouldCancel()) throw new Error("IMPORT_ABORTED");
             return putSessionRecord(session);
           });
         });

@@ -558,20 +558,21 @@ async function deleteSession(sessionId) {
 
   try {
     if (window.__chatDB?.deleteSession) {
-      const DELETE_TIMEOUT_MS = 30000;
-      const deletePromise = window.__chatDB.deleteSession(sessionId, {
+      await window.__chatDB.deleteSession(sessionId, {
         batchSize: getDeleteTransactionBatchSize(),
-        onProgress: ({ phase, deleted, total, batch, skippedFts }) => {
+        onProgress: ({ phase, deleted, total, batch, nextBatchSize, avgMs, skippedFts }) => {
           const safeTotal = Math.max(1, Number(total) || Number(deleted) || 1);
           const percent = phase === "done"
             ? 99
             : phase === "prepare"
               ? 3
+              : phase === "session"
+                ? 98
               : Math.max(5, Math.min(96, 5 + Math.round((Number(deleted) || 0) / safeTotal * 91)));
           task.fakeProgress = percent;
           updateSessionTransferModal({
             title: "删除会话",
-            status: phase === "prepare" ? "正在统计消息..." : "正在删除消息...",
+            status: phase === "prepare" ? "正在统计消息..." : phase === "session" ? "正在删除会话记录..." : "正在删除消息...",
             subtext: title,
             percent,
             detail: `${Math.min(Number(deleted) || 0, safeTotal).toLocaleString("zh-CN")} / ${safeTotal.toLocaleString("zh-CN")} 消息`,
@@ -579,18 +580,14 @@ async function deleteSession(sessionId) {
               `mode: delete`,
               `phase: ${phase}`,
               `batch: ${batch || 0}`,
+              nextBatchSize ? `next batch: ${nextBatchSize}` : "",
+              avgMs ? `avg: ${avgMs}ms` : "",
               skippedFts ? "note: large session, search index cleanup skipped" : "",
             ].filter(Boolean).join("\n"),
             disableCancel: true,
           });
         },
       });
-      await Promise.race([
-        deletePromise,
-        new Promise(function (_, reject) {
-          setTimeout(function () { reject(new Error("删除超时，请重试")); }, DELETE_TIMEOUT_MS);
-        }),
-      ]);
     }
 
     state.sessions = state.sessions.filter((item) => item.id !== sessionId);
