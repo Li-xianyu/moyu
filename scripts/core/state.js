@@ -124,8 +124,7 @@ const els = {
   exportBackupBtn: document.getElementById("exportBackupBtn"),
   importBackupBtn: document.getElementById("importBackupBtn"),
   importBackupInput: document.getElementById("importBackupInput"),
-  scanCorruptBtn: document.getElementById("scanCorruptBtn"),
-  cleanCorruptBtn: document.getElementById("cleanCorruptBtn"),
+  clearAllDataBtn: document.getElementById("clearAllDataBtn"),
 };
 
 function normalizeDirectorMemory(memory) {

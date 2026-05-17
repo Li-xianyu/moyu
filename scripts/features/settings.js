@@ -256,52 +256,11 @@ function bindSettings() {
     els.importBackupInput.addEventListener("change", importSettingsBackup);
   }
 
-  if (els.scanCorruptBtn) {
-    els.scanCorruptBtn.addEventListener("click", scanCorruptData);
-  }
-  if (els.cleanCorruptBtn) {
-    els.cleanCorruptBtn.addEventListener("click", cleanCorruptData);
+  if (els.clearAllDataBtn) {
+    els.clearAllDataBtn.addEventListener("click", clearAllData);
   }
 
   preventToggleWhileTyping();
-}
-
-function scanCorruptData() {
-  var infoEl = document.getElementById("corruptDataInfo");
-  if (!infoEl || !window.__chatDB?.scanCorruptData) return;
-  var btn = document.getElementById("scanCorruptBtn");
-  if (btn) btn.disabled = true;
-  infoEl.textContent = "正在扫描数据库中...";
-  window.__chatDB.scanCorruptData().then(function (result) {
-    if (btn) btn.disabled = false;
-    if (result.total === 0) {
-      infoEl.textContent = "未发现无效数据。";
-    } else {
-      infoEl.textContent = "发现 " + result.total + " 条无效数据。（无归属消息: " + result.messageNoSession + "，孤立消息: " + result.messageOrphaned + "，孤立索引: " + result.ftsOrphaned + "）";
-    }
-  }).catch(function (err) {
-    if (btn) btn.disabled = false;
-    infoEl.textContent = "扫描失败: " + (err.message || "未知错误");
-  });
-}
-
-function cleanCorruptData() {
-  var infoEl = document.getElementById("corruptDataInfo");
-  if (!infoEl || !window.__chatDB?.cleanCorruptData) return;
-  var btn = document.getElementById("cleanCorruptBtn");
-  if (btn) btn.disabled = true;
-  infoEl.textContent = "正在清理...";
-  window.__chatDB.cleanCorruptData().then(function (result) {
-    if (btn) btn.disabled = false;
-    if (result.total === 0) {
-      infoEl.textContent = "未发现无效数据。";
-    } else {
-      infoEl.textContent = "已清理 " + result.total + " 条无效数据。（消息: " + result.messages + "，索引: " + result.fts + "）";
-    }
-  }).catch(function (err) {
-    if (btn) btn.disabled = false;
-    infoEl.textContent = "清理失败: " + (err.message || "未知错误");
-  });
 }
 
 // 移动端设置页：输入框有焦点时，点开关只收起键盘，不触发切换。
@@ -700,4 +659,25 @@ function importSettingsBackup(event) {
   };
   reader.readAsText(file);
   event.target.value = "";
+}
+
+function clearAllData() {
+  if (window.__chatDB?.clearAll) {
+    if (!confirm("确定要清空所有会话和消息数据吗？此操作不可撤销！")) return;
+    if (!confirm("再次确认：所有聊天记录将被永久删除。")) return;
+    var btn = document.getElementById("clearAllDataBtn");
+    if (btn) btn.disabled = true;
+    window.__chatDB.clearAll().then(function () {
+      state.sessions = [];
+      state.currentSessionId = null;
+      persistSessions();
+      renderSession();
+      renderChatListMenu();
+      setText(els.settingsStatus, "所有会话消息已清空");
+    }).catch(function (err) {
+      setText(els.settingsStatus, "清理失败: " + (err.message || "未知错误"));
+    }).finally(function () {
+      if (btn) btn.disabled = false;
+    });
+  }
 }

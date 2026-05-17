@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#1e1e1e">
   <meta name="color-scheme" content="dark">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.17.08";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.17.09";window.__moyuBootStart = performance.now();</script>
   <style>
     .loading-screen {
       position: fixed; inset: 0; z-index: 9999;
@@ -334,16 +334,12 @@
                 <section class="settings-global-section">
                   <div class="sub-panel-head">
                     <div>
-                      <h3 data-i18n="settings.dbMaintainTitle">数据库维护</h3>
-                      <p class="hint-text" data-i18n="settings.dbMaintainHint">扫描并清理本地数据库中的无效数据。</p>
+                      <h3>危险操作</h3>
+                      <p class="hint-text">清空本地所有会话和消息数据，此操作不可撤销。</p>
                     </div>
                   </div>
                   <div class="settings-field-row">
-                    <button id="scanCorruptBtn" class="secondary-btn" data-i18n="settings.scanBtn">查询</button>
-                    <button id="cleanCorruptBtn" class="danger-btn" data-i18n="settings.cleanBtn">清理</button>
-                  </div>
-                  <div id="corruptDataInfo" class="hint-text" style="margin-top:8px">
-                    <span data-i18n="settings.scanResult">未发现无效数据。</span>
+                    <button id="clearAllDataBtn" class="danger-btn">清理所有会话消息</button>
                   </div>
                 </section>
               </div>
