@@ -256,7 +256,52 @@ function bindSettings() {
     els.importBackupInput.addEventListener("change", importSettingsBackup);
   }
 
+  if (els.scanCorruptBtn) {
+    els.scanCorruptBtn.addEventListener("click", scanCorruptData);
+  }
+  if (els.cleanCorruptBtn) {
+    els.cleanCorruptBtn.addEventListener("click", cleanCorruptData);
+  }
+
   preventToggleWhileTyping();
+}
+
+function scanCorruptData() {
+  var infoEl = document.getElementById("corruptDataInfo");
+  if (!infoEl || !window.__chatDB?.scanCorruptData) return;
+  var btn = document.getElementById("scanCorruptBtn");
+  if (btn) btn.disabled = true;
+  infoEl.textContent = "正在扫描数据库中...";
+  window.__chatDB.scanCorruptData().then(function (result) {
+    if (btn) btn.disabled = false;
+    if (result.total === 0) {
+      infoEl.textContent = "未发现无效数据。";
+    } else {
+      infoEl.textContent = "发现 " + result.total + " 条无效数据。（无归属消息: " + result.messageNoSession + "，孤立消息: " + result.messageOrphaned + "，孤立索引: " + result.ftsOrphaned + "）";
+    }
+  }).catch(function (err) {
+    if (btn) btn.disabled = false;
+    infoEl.textContent = "扫描失败: " + (err.message || "未知错误");
+  });
+}
+
+function cleanCorruptData() {
+  var infoEl = document.getElementById("corruptDataInfo");
+  if (!infoEl || !window.__chatDB?.cleanCorruptData) return;
+  var btn = document.getElementById("cleanCorruptBtn");
+  if (btn) btn.disabled = true;
+  infoEl.textContent = "正在清理...";
+  window.__chatDB.cleanCorruptData().then(function (result) {
+    if (btn) btn.disabled = false;
+    if (result.total === 0) {
+      infoEl.textContent = "未发现无效数据。";
+    } else {
+      infoEl.textContent = "已清理 " + result.total + " 条无效数据。（消息: " + result.messages + "，索引: " + result.fts + "）";
+    }
+  }).catch(function (err) {
+    if (btn) btn.disabled = false;
+    infoEl.textContent = "清理失败: " + (err.message || "未知错误");
+  });
 }
 
 // 移动端设置页：输入框有焦点时，点开关只收起键盘，不触发切换。

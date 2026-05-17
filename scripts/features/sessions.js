@@ -558,7 +558,8 @@ async function deleteSession(sessionId) {
 
   try {
     if (window.__chatDB?.deleteSession) {
-      await window.__chatDB.deleteSession(sessionId, {
+      const DELETE_TIMEOUT_MS = 30000;
+      const deletePromise = window.__chatDB.deleteSession(sessionId, {
         batchSize: getDeleteTransactionBatchSize(),
         onProgress: ({ phase, deleted, total, batch, skippedFts }) => {
           const safeTotal = Math.max(1, Number(total) || Number(deleted) || 1);
@@ -584,6 +585,12 @@ async function deleteSession(sessionId) {
           });
         },
       });
+      await Promise.race([
+        deletePromise,
+        new Promise(function (_, reject) {
+          setTimeout(function () { reject(new Error("删除超时，请重试")); }, DELETE_TIMEOUT_MS);
+        }),
+      ]);
     }
 
     state.sessions = state.sessions.filter((item) => item.id !== sessionId);

@@ -608,22 +608,30 @@
       return new Promise(function (resolve, reject) {
         var tx = database.transaction(["fts", "messages"], "readwrite");
         var store = tx.objectStore("fts");
-        var index = store.index("idx_msgId"); // 我们从 messages 找所有 msg id
         var msgStore = tx.objectStore("messages");
         var msgIndex = msgStore.index("sessionId");
         var msgReq = msgIndex.openCursor(IDBKeyRange.only(sessionId));
         msgReq.onsuccess = function () {
           var cursor = msgReq.result;
-          if (cursor) {
-            var mid = cursor.value.id;
-            var ftsReq = store.index("idx_msgId").openCursor(IDBKeyRange.only(mid));
-            ftsReq.onsuccess = function () {
-              var ftsCursor = ftsReq.result;
-              if (ftsCursor) {
-                store.delete(ftsCursor.primaryKey);
-                ftsCursor.continue();
-              }
-            };
+          if (!cursor) return;
+          var mid = cursor.value && cursor.value.id;
+          if (mid) {
+            try {
+              var ftsReq = store.index("idx_msgId").openCursor(IDBKeyRange.only(mid));
+              ftsReq.onsuccess = function () {
+                var ftsCursor = ftsReq.result;
+                if (ftsCursor) {
+                  store.delete(ftsCursor.primaryKey);
+                  ftsCursor.continue();
+                } else {
+                  cursor.continue();
+                }
+              };
+              ftsReq.onerror = function () { cursor.continue(); };
+            } catch (e) {
+              cursor.continue();
+            }
+          } else {
             cursor.continue();
           }
         };
@@ -1415,6 +1423,125 @@
           messages: counts[1],
           indexedTerms: counts[2],
         };
+      });
+    },
+
+    // ── 脏数据扫描 ──
+    scanCorruptData: function () {
+      return db().then(function (database) {
+        return new Promise(function (resolve, reject) {
+          var result = {
+            messageNoSession: 0,
+            messageOrphaned: 0,
+            ftsOrphaned: 0,
+            total: 0,
+          };
+          var tx = database.transaction(["sessions", "messages", "fts"], "readonly");
+          var sessionIds = {};
+          var msgIds = {};
+          var done = 0;
+          function tryResolve() {
+            done++;
+            if (done < 3) return;
+            var msgCursor = tx.objectStore("messages").openCursor();
+            msgCursor.onsuccess = function () {
+              var c = msgCursor.result;
+              if (!c) {
+                var ftsCursor = tx.objectStore("fts").openCursor();
+                ftsCursor.onsuccess = function () {
+                  var fc = ftsCursor.result;
+                  if (!fc) {
+                    result.total = result.messageNoSession + result.messageOrphaned + result.ftsOrphaned;
+                    resolve(result);
+                    return;
+                  }
+                  var f = fc.value;
+                  if (f.msgId && !msgIds[String(f.msgId)]) result.ftsOrphaned++;
+                  fc.continue();
+                };
+                ftsCursor.onerror = function () { reject(ftsCursor.error); };
+                return;
+              }
+              var m = c.value;
+              if (!m.sessionId) result.messageNoSession++;
+              else if (!sessionIds[String(m.sessionId)]) result.messageOrphaned++;
+              c.continue();
+            };
+            msgCursor.onerror = function () { reject(msgCursor.error); };
+          }
+          var sReq = tx.objectStore("sessions").getAllKeys();
+          sReq.onsuccess = function () {
+            var keys = sReq.result || [];
+            for (var i = 0; i < keys.length; i++) sessionIds[String(keys[i])] = true;
+            tryResolve();
+          };
+          sReq.onerror = function () { reject(sReq.error); };
+          var mReq = tx.objectStore("messages").getAllKeys();
+          mReq.onsuccess = function () {
+            var keys = mReq.result || [];
+            for (var i = 0; i < keys.length; i++) msgIds[String(keys[i])] = true;
+            tryResolve();
+          };
+          mReq.onerror = function () { reject(mReq.error); };
+          tryResolve();
+        });
+      });
+    },
+
+    // ── 脏数据清理 ──
+    cleanCorruptData: function (onProgress) {
+      return db().then(function (database) {
+        return new Promise(function (resolve, reject) {
+          var result = { messages: 0, fts: 0, total: 0 };
+          var tx = database.transaction(["sessions", "messages", "fts"], "readwrite");
+          var msgStore = tx.objectStore("messages");
+          var ftsStore = tx.objectStore("fts");
+          var sessionIds = {};
+          var msgIds = {};
+          var msgCursorDone = false, ftsCursorDone = false, keysDone = false;
+          function checkDone() {
+            if (!msgCursorDone || !ftsCursorDone || !keysDone) return;
+            result.total = result.messages + result.fts;
+            resolve(result);
+          }
+          var sReq = tx.objectStore("sessions").getAllKeys();
+          sReq.onsuccess = function () {
+            var keys = sReq.result || [];
+            for (var i = 0; i < keys.length; i++) sessionIds[String(keys[i])] = true;
+            keysDone = true;
+            checkDone();
+          };
+          sReq.onerror = function () { reject(sReq.error); };
+          var mReq = tx.objectStore("messages").getAllKeys();
+          mReq.onsuccess = function () {
+            var keys = mReq.result || [];
+            for (var i = 0; i < keys.length; i++) msgIds[String(keys[i])] = true;
+          };
+          mReq.onerror = function () { reject(mReq.error); };
+          var msgCursor = msgStore.openCursor();
+          msgCursor.onsuccess = function () {
+            var c = msgCursor.result;
+            if (!c) { msgCursorDone = true; checkDone(); return; }
+            var m = c.value;
+            if (!m.sessionId || !sessionIds[String(m.sessionId)]) {
+              msgStore.delete(c.primaryKey);
+              result.messages++;
+            }
+            c.continue();
+          };
+          msgCursor.onerror = function () { reject(msgCursor.error); };
+          var ftsCursor = ftsStore.openCursor();
+          ftsCursor.onsuccess = function () {
+            var c = ftsCursor.result;
+            if (!c) { ftsCursorDone = true; checkDone(); return; }
+            if (!msgIds[String(c.value.msgId)]) {
+              ftsStore.delete(c.primaryKey);
+              result.fts++;
+            }
+            c.continue();
+          };
+          ftsCursor.onerror = function () { reject(ftsCursor.error); };
+        });
       });
     },
 

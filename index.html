@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#1e1e1e">
   <meta name="color-scheme" content="dark">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.17.07";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.17.08";window.__moyuBootStart = performance.now();</script>
   <style>
     .loading-screen {
       position: fixed; inset: 0; z-index: 9999;
@@ -328,6 +328,22 @@
                     <button id="exportBackupBtn" class="secondary-btn" data-i18n="settings.exportBackup">导出设置备份</button>
                     <button id="importBackupBtn" class="secondary-btn" data-i18n="settings.importBackup">导入设置备份</button>
                     <input id="importBackupInput" type="file" accept=".json,application/json" style="display: none">
+                  </div>
+                </section>
+
+                <section class="settings-global-section">
+                  <div class="sub-panel-head">
+                    <div>
+                      <h3 data-i18n="settings.dbMaintainTitle">数据库维护</h3>
+                      <p class="hint-text" data-i18n="settings.dbMaintainHint">扫描并清理本地数据库中的无效数据。</p>
+                    </div>
+                  </div>
+                  <div class="settings-field-row">
+                    <button id="scanCorruptBtn" class="secondary-btn" data-i18n="settings.scanBtn">查询</button>
+                    <button id="cleanCorruptBtn" class="danger-btn" data-i18n="settings.cleanBtn">清理</button>
+                  </div>
+                  <div id="corruptDataInfo" class="hint-text" style="margin-top:8px">
+                    <span data-i18n="settings.scanResult">未发现无效数据。</span>
                   </div>
                 </section>
               </div>
