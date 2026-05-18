@@ -448,6 +448,29 @@
     });
   }
 
+  function getNextSessionMessageSequence(sessionId) {
+    return db().then(function (database) {
+      return new Promise(function (resolve, reject) {
+        var tx = database.transaction("messages", "readonly");
+        var index = tx.objectStore("messages").index("session_seq");
+        var req = index.openCursor(
+          IDBKeyRange.bound([sessionId, 0], [sessionId, Infinity]),
+          "prev"
+        );
+        req.onsuccess = function () {
+          var cursor = req.result;
+          if (!cursor) {
+            resolve(0);
+            return;
+          }
+          var sequence = Number(cursor.value && cursor.value.sequence);
+          resolve(Number.isFinite(sequence) ? sequence + 1 : 0);
+        };
+        req.onerror = function () { reject(req.error); };
+      });
+    });
+  }
+
   function mapSessionRecordToSessionMeta(rec) {
     return {
       id: rec.id,
@@ -1140,6 +1163,21 @@
       };
       return doPut("messages", record).then(function () {
         return indexMessage(record);
+      });
+    },
+
+    appendMessage: function (sessionId, msg) {
+      if (!msg || !msg.id) return Promise.reject(new Error("invalid message"));
+      return getNextSessionMessageSequence(sessionId).then(function (sequence) {
+        return ChatDB.saveMessage(sessionId, msg, sequence).then(function () {
+          return sequence;
+        }, function () {
+          return getNextSessionMessageSequence(sessionId).then(function (freshSequence) {
+            return ChatDB.saveMessage(sessionId, msg, freshSequence).then(function () {
+              return freshSequence;
+            });
+          });
+        });
       });
     },
 

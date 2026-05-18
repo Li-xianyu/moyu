@@ -357,8 +357,11 @@ function formatHistoryLine(message) {
     return "";
   }
 
-  const tag = message.role === "user" ? "{user}" : "{npc}";
-  return tag + " " + message.content;
+  if (message.role === "user") {
+    return "{user} " + message.content;
+  }
+  const speaker = String(message.speaker || "NPC").trim();
+  return `{npc:${speaker}} ${message.content}`;
 }
 
 
@@ -528,10 +531,11 @@ function parseDirectorDirective(content, session) {
   const npcInstructions = parsed.npc_instructions && typeof parsed.npc_instructions === "object" && !Array.isArray(parsed.npc_instructions)
     ? parsed.npc_instructions
     : {};
-  return sanitizeDirectorDirective(session, narration, responders, spawnNpcs, npcInstructions);
+  const parallelGroups = Array.isArray(parsed.parallel_groups) ? parsed.parallel_groups : [];
+  return sanitizeDirectorDirective(session, narration, responders, spawnNpcs, npcInstructions, parallelGroups);
 }
 
-function sanitizeDirectorDirective(session, narration, responders, spawnNpcs = [], npcInstructions = {}) {
+function sanitizeDirectorDirective(session, narration, responders, spawnNpcs = [], npcInstructions = {}, parallelGroups = []) {
   const existingNpcNames = getSceneNpcs(session).map((npc) => npc.name);
   const spawnMap = new Map();
 
@@ -559,6 +563,32 @@ function sanitizeDirectorDirective(session, narration, responders, spawnNpcs = [
     throw new Error("导演返回了未声明的 responder");
   }
 
+  const responderSet = new Set(normalizedResponders);
+  const usedInGroups = new Set();
+  const normalizedParallelGroups = [];
+  if (Array.isArray(parallelGroups)) {
+    parallelGroups.forEach((rawGroup) => {
+      if (!Array.isArray(rawGroup)) return;
+      const group = [];
+      rawGroup.forEach((rawName) => {
+        const name = String(rawName || "").trim();
+        if (!responderSet.has(name) || usedInGroups.has(name)) return;
+        usedInGroups.add(name);
+        group.push(name);
+      });
+      if (group.length) {
+        normalizedParallelGroups.push(group);
+      }
+    });
+  }
+  if (normalizedParallelGroups.length) {
+    normalizedResponders.forEach((name) => {
+      if (!usedInGroups.has(name)) {
+        normalizedParallelGroups.push([name]);
+      }
+    });
+  }
+
   validateDirectorNarration(cleanedNarration, knownNpcNames);
 
   // 过滤 npcInstructions，只保留针对已知 NPC 的指令（纯调度模式下直接丢弃）
@@ -574,6 +604,7 @@ function sanitizeDirectorDirective(session, narration, responders, spawnNpcs = [
   return {
     narration: cleanedNarration,
     responders: normalizedResponders,
+    parallelGroups: normalizedParallelGroups,
     spawnNpcs: requestedSpawnNpcs,
     npcInstructions: filteredInstructions,
   };
@@ -738,7 +769,11 @@ function sanitizeNpcReplyStrict(session, speaker, content) {
     return cleaned;
   }
 
-  cleaned = cleaned.replace(/^旁白[：:]\s*/u, "").trim();
+  const startsWithNarrationLabel = /^(?:[\[【]\s*旁白\s*[\]】]|旁白[：:])/u.test(cleaned);
+  cleaned = cleaned
+    .replace(/^[\[【]\s*旁白\s*[\]】]\s*/u, "")
+    .replace(/^旁白[：:]\s*/u, "")
+    .trim();
   const allNpcNames = getSceneNpcs(session).map((npc) => npc.name);
   const labelPattern = new RegExp(`^(${allNpcNames.map(escapeRegExp).join("|")})[：:]\\s*`);
   const lines = cleaned
@@ -747,21 +782,42 @@ function sanitizeNpcReplyStrict(session, speaker, content) {
     .filter(Boolean);
 
   const keptLines = [];
+  let skippingNarrationBlock = startsWithNarrationLabel;
+  let skipLikelyOtherDialogue = false;
+  const narrationLabelPattern = /^(?:[\[【]\s*旁白\s*[\]】]|旁白[：:])/u;
+  const quoteLinePattern = /^[“"].+[”"]$/u;
+  const selfLinePattern = new RegExp(`(?:^|[（(，,。\\s])(?:我|${escapeRegExp(speaker)})(?:[）)，,。\\s]|$)`, "u");
+  const otherActionPattern = /^（?[^）\n]{1,16}(?:拱手|行礼|开口|说道|问道|喝道|冷声|沉声|皱眉|颔首|抬头|看向|落在|站在|走来|破空|现身|拔剑|跪下|跪倒|抱拳|叹道|笑道|怒道|喝问)[^）\n]{0,80}）?$/u;
   for (const line of lines) {
-    if (/^旁白[：:]/u.test(line)) {
+    if (narrationLabelPattern.test(line)) {
       if (keptLines.length > 0) {
         break;
       }
+      skippingNarrationBlock = true;
       continue;
     }
 
     const match = line.match(labelPattern);
     if (!match) {
+      if (skippingNarrationBlock && !selfLinePattern.test(line)) {
+        if (otherActionPattern.test(line)) {
+          skipLikelyOtherDialogue = true;
+        }
+        continue;
+      }
+      if (skipLikelyOtherDialogue && quoteLinePattern.test(line)) {
+        skipLikelyOtherDialogue = false;
+        continue;
+      }
+      skippingNarrationBlock = false;
+      skipLikelyOtherDialogue = false;
       keptLines.push(line);
       continue;
     }
 
     if (match[1] === speaker) {
+      skippingNarrationBlock = false;
+      skipLikelyOtherDialogue = false;
       keptLines.push(line.replace(labelPattern, "").trim());
       continue;
     }
@@ -772,6 +828,10 @@ function sanitizeNpcReplyStrict(session, speaker, content) {
   }
 
   cleaned = keptLines.join("\n").trim() || cleaned.replace(labelPattern, "").trim();
+  cleaned = cleaned.replace(
+    /^(（|\()我(?=[^）)]*(?:扶|站|坐|跪|退|躲|看|望|盯|瞪|低|抬|皱|咽|攥|握|按|拉|拽|松|僵|愣|颤|抖|喘|笑|冷|脸|眼|手|肩|身|心|额|汗|声|语|步|头|眉|唇))/u,
+    `$1${speaker}`
+  );
   const selfReplayPattern = new RegExp(`(?:^|\\n)${escapeRegExp(speaker)}[：:]`, "g");
   if ((cleaned.match(selfReplayPattern) || []).length > 0) {
     cleaned = cleaned.split(/\n/)[0].replace(labelPattern, "").trim();

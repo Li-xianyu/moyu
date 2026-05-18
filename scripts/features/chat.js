@@ -150,6 +150,7 @@ function finishUserTopAnchor() {
 const DIRECTOR_RECENT_HISTORY_LIMIT = 8;
 const DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT = 4;
 const DIRECTOR_AUTO_COMPRESS_THRESHOLD_DEFAULT = 1800;
+const DIRECTOR_AUTO_COMPRESS_MIN_UNSUMMARIZED = 6;
 const DIRECTOR_MEMORY_TARGET_MIN = 260;
 const DIRECTOR_MEMORY_TARGET_MAX = 720;
 const DIRECTOR_SUMMARY_PROMPT = [
@@ -306,6 +307,34 @@ function getSessionMessageCount(session) {
   return Array.isArray(session?.messages)
     ? session.messages.filter((message) => message.role !== "system").length
     : 0;
+}
+
+function getLoadedMessageBaseSequence(session) {
+  return Number.isFinite(session?.loadedStartSequence) && session.loadedStartSequence >= 0
+    ? session.loadedStartSequence
+    : 0;
+}
+
+function getLoadedNonSystemMessages(session) {
+  return Array.isArray(session?.messages)
+    ? session.messages.filter((message) => message && message.role !== "system")
+    : [];
+}
+
+function getMessageSequenceInSession(session, message) {
+  const loaded = getLoadedNonSystemMessages(session);
+  const index = loaded.indexOf(message);
+  if (index < 0) {
+    return Math.max(0, getLoadedMessageBaseSequence(session) + loaded.length - 1);
+  }
+  return getLoadedMessageBaseSequence(session) + index;
+}
+
+function syncLoadedSessionMessageCount(session) {
+  if (!session) return 0;
+  const count = getLoadedMessageBaseSequence(session) + getLoadedNonSystemMessages(session).length;
+  session.messageCount = Math.max(Number(session.messageCount) || 0, count);
+  return session.messageCount;
 }
 
 function getChatRecentRenderCount(session) {
@@ -915,6 +944,8 @@ function applyUserMessageEdit(session, messageId, content) {
 
   session.messages = session.messages.slice(0, targetIndex + 1);
   session.transientNpcs = [];
+  const nextCount = getLoadedMessageBaseSequence(session) + getLoadedNonSystemMessages(session).length;
+  session.messageCount = Math.max(0, nextCount);
 }
 
 function buildBubbleContent(message) {
@@ -1830,7 +1861,8 @@ async function sendUserMessage() {
   els.chatInput.disabled = true;
   updateComposerMode();
 
-  if (state.editingUserMessageId) {
+  const editingUserMessageId = state.editingUserMessageId;
+  if (editingUserMessageId) {
     applyUserMessageEdit(session, state.editingUserMessageId, content);
     state.editingUserMessageId = null;
   } else {
@@ -1842,16 +1874,32 @@ async function sendUserMessage() {
       createdAt: new Date().toISOString(),
     });
   }
+  syncLoadedSessionMessageCount(session);
 
   touchSession(session);
   persistSessions();
   // 保存用户消息到 IndexedDB
   if (window.__chatDB) {
-    const userMsgs = session.messages.filter(function (m) { return m.role === "user"; });
-    const userIdx = userMsgs.length - 1;
     const lastUser = session.messages[session.messages.length - 1];
     if (lastUser && lastUser.role === "user") {
-      window.__chatDB.saveMessage(session.id, lastUser, userIdx).catch(function () {});
+      try {
+        if (!editingUserMessageId && window.__chatDB.appendMessage) {
+          const savedSeq = await window.__chatDB.appendMessage(session.id, lastUser);
+          session.messageCount = Math.max(Number(session.messageCount) || 0, savedSeq + 1);
+        } else {
+          const userSeq = getMessageSequenceInSession(session, lastUser);
+          await window.__chatDB.saveMessage(session.id, lastUser, userSeq);
+        }
+        await window.__chatDB.updateSessionMeta(session);
+      } catch (err) {
+        console.error("[chat] save user message failed", err);
+        setText(els.chatStatus, "用户消息保存失败，请稍后重试");
+        state.isSending = false;
+        els.sendBtn.disabled = false;
+        els.chatInput.disabled = false;
+        updateComposerMode();
+        return;
+      }
     }
   }
   els.chatInput.value = "";
@@ -2064,6 +2112,13 @@ async function runSessionTurn(session) {
       touchSession(session);
       persistSessions();
     }
+    if (!directive.narration && !directive.responders?.length && session.mode === SESSION_MODE_STORY && getLatestUserMessageText(session).trim()) {
+      directive.narration = "片刻的沉默落在场间，气氛随之有了细微变化。";
+      debugLog("director", "导演空响应旁白兜底", {
+        narration: directive.narration,
+        reason: "story turn needs narration or responders",
+      });
+    }
     if (directive.narration) {
       const narrationMessage = {
         id: `narration-${Date.now()}`,
@@ -2097,7 +2152,7 @@ async function runSessionTurn(session) {
       persistSessions();
     }
 
-    const responders = getResponderNpcs(session, directive.responders);
+    let responders = getResponderNpcs(session, directive.responders);
     debugLog("director", t("debug.msg.respondersResolved"), responders.map((npc) => ({
       name: npc.name,
       model: npc.model,
@@ -2106,8 +2161,10 @@ async function runSessionTurn(session) {
     if (!responders.length) {
       setText(els.chatStatus, directive.narration ? "旁白已更新，本轮没有 NPC 需要回答" : "本轮没有 NPC 需要回答");
     } else {
-      for (const npc of responders) {
-        await callNpc(session, npc, directive.npcInstructions);
+      const parallelGroups = resolveNpcParallelGroups(session, responders, directive);
+      debugLog("director", "NPC 并行分组", parallelGroups.map((group) => group.map((npc) => npc.name)));
+      for (const group of parallelGroups) {
+        await callNpcGroup(session, group, directive.npcInstructions);
       }
       debugLog("turn", t("debug.msg.npcRepliesCompleted"), responders.map((npc) => npc.name));
       setText(els.chatStatus, "本轮回复已完成");
@@ -2201,6 +2258,39 @@ async function callDirector(session) {
     { role: "system", content: "场内 NPC：" + JSON.stringify(sceneNpcNames) },
     { role: "system", content: "NPC 资料：" + buildDirectorNpcRoster(session) },
     { role: "system", content: "全局设定：" + session.globalPrompt },
+    ...(session.mode === SESSION_MODE_STORY ? [{
+      role: "system",
+      content: [
+        "重要修正：创作模式里，用户发出普通对话、动作、询问、试探、寒暄时，本轮必须产生推进。",
+        "每次调度前，先在心里根据最近历史确认当前现场参与者：用户本人、仍在同一场景同行/对峙/围观的固定 NPC、刚由旁白登场且未离开的临时 NPC。",
+        "历史格式 {npc:名字} 表示该 NPC 曾经发言；只要最近没有明确离场/分开/消失，就默认仍在当前场景。",
+        "推进可以是 narration 旁白，也可以是 responders 中的 NPC 回应，也可以两者都有。",
+        "responders 可以为空，但前提是 narration 必须承担这一拍的场景推进、气氛反应或动作描写。",
+        "除非用户明确要求等待、沉默、无人回应，禁止同时返回空 narration 和空 responders。",
+        "用户不是镜头外旁观者，而是当前场景中的在场参与者；历史里的“你/用户/我们/三人/同行”都包含用户本人。",
+        "旁白或调度描述队伍、人数、来意、站位、同行关系时，必须把所有现场参与者算进去；禁止漏掉同行 NPC，也禁止只数 NPC 导致用户像不存在。",
+        "例如用户与李文、张铁同行到山门，即使用户飞起来震慑山门，现场仍是用户、李文、张铁三人；新登场长老看向他们时应理解为三人，而不是两人。",
+        "这不代表替用户说话或行动。只能承认用户在场、被看见、被 NPC 回应，用户的具体发言和动作仍由用户自己决定。",
+      ].join("\n"),
+    }] : []),
+    {
+      role: "system",
+      content: [
+        "你可以额外输出 parallel_groups 字段，用来声明 NPC 回复并行分组。",
+        "格式：\"parallel_groups\":[[\"NPC甲\",\"NPC乙\"],[\"NPC丙\"]]。",
+        "parallel_groups 必须只包含 responders 中已经出现的 NPC 名字；没有把握时可以省略，系统会按 responders 串行执行。",
+        "判断规则：用户要求“分别、各自、都说说、一起回答、每个人”这类独立观点时，可以把这些 NPC 放进同一个并行组。",
+        "用户要求“接着、反驳、吵、轮流、先后、总结、回应他/她”这类互相接话时，必须拆成多个单人组，保持串行。",
+      ].join("\n"),
+    },
+    ...(session.mode === SESSION_MODE_STORY ? [{
+      role: "system",
+      content: [
+        "创作调度原则：你只安排本轮谁说、顺序和具体任务，不要把所有 NPC 调成同一种语气。",
+        "npc_instructions 应当保留每个 NPC 的人物 Prompt、欲望、关系立场和说话习惯。",
+        "多人同场时，给不同 NPC 分配不同角度：有人推进事件、有人暴露情绪、有人质疑、有人遮掩或转移话题。不要全部写成“简洁解释”。",
+      ].join("\n"),
+    }] : []),
     ...buildDirectorContextMessages(session),
   ];
 
@@ -2229,7 +2319,9 @@ async function callDirector(session) {
               "检查用户最新消息中的名字。",
               '"小夏荷"匹配"夏荷"，"春桃姐"匹配"春桃"——昵称/简称也要算。',
               "上一轮有 NPC 回复过用户，用户在追问 → 该 NPC 必须进 responders。",
-              "如果用户没提任何 NPC、也没接任何人的话 → responders 可以是 []。",
+              "创作模式中，如果用户只是没点名 NPC，但发出了普通对话/动作/询问 → narration 或 responders 至少一个必须非空。",
+              "如果 responders 为空，narration 必须写出这一拍的场景推进、气氛反应或动作描写。",
+              "只有用户明确要求等待、沉默、无人回应时，narration 和 responders 才可以同时为空。",
             ].join("\n"),
           },
         ];
@@ -2398,7 +2490,60 @@ async function generateSessionTitle(session) {
   }
 }
 
-async function callNpc(session, npc, npcInstructions = {}) {
+function hashStringForPrompt(value) {
+  const text = String(value || "");
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function buildNpcVoiceRules(session, npc, turnContext) {
+  if (!session || !npc) return "";
+  const isStoryMode = session.mode === SESSION_MODE_STORY;
+  const peers = getSceneNpcs(session)
+    .filter((item) => item && item.name && item.name !== npc.name)
+    .map((item) => {
+      const prompt = String(item.prompt || "").replace(/\s+/g, " ").slice(0, 42);
+      return prompt ? `${item.name}(${prompt})` : item.name;
+    })
+    .slice(0, 4);
+
+  const storyLanes = [
+    "短句、克制、先观察再开口；情绪藏在动作里，不急着解释。",
+    "反应快、语气带刺或俏皮；先给态度，再补一句真实想法。",
+    "说话慢、有分寸；喜欢用具体物件、天气、距离感承接情绪。",
+    "直白、务实、少修饰；先处理眼前问题，不主动抒情。",
+    "敏感、细腻、容易捕捉别人没说出口的东西；少下结论。",
+    "有压迫感或主导欲；句子干净，行动比解释更重。",
+  ];
+  const workLanes = [
+    "先给判断，再给理由；少寒暄，保持自己的专业角度。",
+    "先拆问题，再指出风险；语气冷静，不抢结论。",
+    "先补充盲点，再给可执行建议；避免泛泛总结。",
+    "先确认目标，再推进下一步；表达简洁但不模板化。",
+  ];
+  const lanes = isStoryMode ? storyLanes : workLanes;
+  const lane = lanes[hashStringForPrompt(`${npc.name}|${npc.prompt || ""}`) % lanes.length];
+  const repeatedGuard = turnContext?.previousSpeakers?.length
+    ? "你前面已经有人发言，本轮必须接住现场变化，换角度推进，不要复述上一位的话。"
+    : "你是本轮第一个发言，要给后续角色留下可接的话口，不要一次说满。";
+
+  return [
+    "=== 角色声纹（防撞脸） ===",
+    `稳定声纹：${lane}`,
+    "人物要求优先；如果人物 Prompt 没写细，以上声纹用于补足你的表达习惯。",
+    peers.length ? `和你同场的其他角色：${peers.join("；")}。不要模仿他们的词汇、句式、态度和关注点。` : "",
+    isStoryMode
+      ? `每次回应至少体现两项：你的欲望、顾虑、关系态度、身体动作、当下误解或隐瞒。动作描写用第三人称写 ${npc.name} 或“他/她”，台词里才用“我”。不要使用通用助手腔、总结腔、鸡汤腔。`
+      : "每次回应要体现你的职责边界和判断方式，不要变成泛泛的全能助手。",
+    repeatedGuard,
+  ].filter(Boolean).join("\n");
+}
+
+async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = []) {
   const targetMessage = {
     id: `msg-${npc.name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role: "assistant",
@@ -2410,6 +2555,7 @@ async function callNpc(session, npc, npcInstructions = {}) {
     streaming: false,
   };
   session.messages.push(targetMessage);
+  syncLoadedSessionMessageCount(session);
   touchSession(session);
   persistSessions();
   renderMessages({ stickToBottom: true });
@@ -2418,6 +2564,21 @@ async function callNpc(session, npc, npcInstructions = {}) {
   const priorRepliesText = turnContext.previousSpeakers.length
     ? `本轮在你之前已经发言的 NPC：${turnContext.previousSpeakers.join("、")}（他们和你一样仍在现场，没有离开，你们正在一起交谈）。`
     : "你是本轮第一个发言的 NPC。";
+  const parallelPeersText = parallelPeerNames.length
+    ? `本轮你会和 ${parallelPeerNames.join("、")} 同时回答。你看不到他们这一轮刚生成的内容，不要假装接住他们的具体台词；只从自己的角度独立回应。`
+    : "";
+  const voiceRulesText = buildNpcVoiceRules(session, npc, turnContext);
+  const playerPresenceText = session.mode === SESSION_MODE_STORY
+    ? [
+        "=== 用户在场规则 ===",
+        "用户不是镜头外旁观者，而是当前场景中的在场参与者；历史里的“你/用户/我们/三人/同行”都包含用户本人。",
+        "历史格式 {npc:名字} 表示该 NPC 曾经发言；只要最近没有明确离场/分开/消失，就默认仍在当前场景。",
+        "当你提到队伍、人数、来意、同行者、站位或一起行动时，必须把用户算进去，不能只列 NPC。",
+        "也必须把仍在场的同行 NPC 算进去。比如用户与李文、张铁同行到山门，旁人看向他们时应是三人，不是只看用户和张铁两人。",
+        "如果历史显示用户与多个 NPC 同行，可以称用户为“你”“这位朋友”“这位兄台”“同行之人”等，不要凭空给用户起名。",
+        "禁止替用户说话、行动或做决定；但可以看见用户、回应用户、把用户纳入现场关系。",
+      ].join("\n")
+    : "";
 
   // 导演给这个 NPC 的额外指令
   const directorInstruction = npcInstructions && typeof npcInstructions === "object" && npcInstructions[npc.name]
@@ -2439,18 +2600,32 @@ async function callNpc(session, npc, npcInstructions = {}) {
     ? [
         `你现在扮演 ${npc.name}。`,
         npc.prompt ? `人物要求：${npc.prompt}` : "请根据全局设定自然回应。",
+        voiceRulesText,
+        playerPresenceText,
         priorRepliesText,
+        parallelPeersText,
         directorInstruction,
         directorInstruction ? "严格按照导演指令回应。" : "",
         "禁止输出思考过程，禁止任何形式的说话人标签。",
         `直接输出 ${npc.name} 的回应内容，不要写"${npc.name}："或"模型："或"AI："等前缀。`,
         "禁止替用户说话或行动，用户会自己发言。",
-        ...(session.mode === SESSION_MODE_STORY ? ["对话用双引号包起来，动作和想法用圆括号包起来。例如：\"你好吗？\"（她推开门）"] : []),
+        ...(session.mode === SESSION_MODE_STORY ? [
+          "你可以写一小句自己的动作、神态或感受，再写自己的台词；只允许写你自己的镜头。",
+          `动作/神态/感受描写用第三人称写自己，例如“（${npc.name}扶住石柱，脸色发白）”或“（他咽了口唾沫）”；不要写“（我扶住石柱）”。`,
+          "台词里可以自然使用第一人称，例如“我怕啊”“咱不是来拜师的吗”。",
+          `正确示例：（${npc.name}扶住石柱，脸色发白）“我差点被你吓死，咱不是来拜师的吗？”`,
+          "错误示例：（我扶住石柱，脸色发白）“我差点被你吓死。”",
+          "禁止输出[旁白]、旁白：、全局场景调度、远处发生了什么、其他新角色登场或其他角色台词。",
+          "对话用双引号包起来，动作和想法用圆括号包起来。例如：\"你好吗？\"（她推开门）",
+        ] : []),
       ].filter(Boolean)
     : [
         `你现在扮演 ${npc.name}。`,
         npc.prompt ? `人物要求：${npc.prompt}` : "请根据全局设定和当前聊天自然回应。",
+        voiceRulesText,
+        playerPresenceText,
         priorRepliesText,
+        parallelPeersText,
         ...(directiveSection ? ["", directiveSection] : []),
         "",
         "=== 绝对禁止 ===",
@@ -2469,6 +2644,13 @@ async function callNpc(session, npc, npcInstructions = {}) {
         "=== 输出格式 ===",
         `直接输出 ${npc.name} 说的话，禁止加任何前缀标签。不要包含说话人标识。`,
         ...(session.mode === SESSION_MODE_STORY ? [
+          "可以在台词前写一小句你自己的动作、神态、语气、感受或对现场的即时观察。",
+          `动作/神态/感受描写必须用第三人称写自己，例如“（${npc.name}扶住石柱，脸色发白）”或“（他咽了口唾沫）”；不要写“（我扶住石柱）”。`,
+          "台词内部可以自然使用第一人称，例如“我怕啊”“咱不是来拜师的吗”。",
+          `正确示例：（${npc.name}扶住石柱，脸色发白）“我差点被你吓死，咱不是来拜师的吗？”`,
+          "错误示例：（我扶住石柱，脸色发白）“我差点被你吓死。”",
+          "禁止输出[旁白]或旁白：。禁止写全局旁白、场景调度、远处动静、其他新角色登场、其他角色说话。",
+          "禁止代替导演推进外部事件；需要掌门、长老、路人、守卫登场时，只能由导演旁白安排，不由你安排。",
           "对话用双引号包起来，例如\"你好吗？\"。动作和想法用圆括号包起来，例如（她推开门）(他在想什么)。",
           "禁止替用户做动作——用户进门你写\"（听到门响）\"就好，不要写\"（推开门）\"这个动作本身。只写你自己的动作和感知。",
           "禁止使用 Markdown 格式，禁止输出代码块。",
@@ -2643,9 +2825,12 @@ async function callNpc(session, npc, npcInstructions = {}) {
 
   // ── 保存 AI 响应到 IndexedDB ──
   if (window.__chatDB && !targetMessage.streaming) {
-    const allMsgs = session.messages.filter(function (m) { return m.role !== "system"; });
-    const aiIdx = allMsgs.indexOf(targetMessage);
-    window.__chatDB.saveMessage(session.id, targetMessage, aiIdx).catch(function () {});
+    const saveAssistant = window.__chatDB.appendMessage
+      ? window.__chatDB.appendMessage(session.id, targetMessage)
+      : window.__chatDB.saveMessage(session.id, targetMessage, getMessageSequenceInSession(session, targetMessage));
+    saveAssistant.catch(function (err) {
+      console.warn("[chat] save assistant message failed", err);
+    });
     window.__chatDB.updateSessionMeta(session).catch(function () {});
   }
 }
@@ -2783,6 +2968,7 @@ async function ensureDirectorSummary(session, options = {}) {
   const recentLimit = options.recentLimit ?? DIRECTOR_RECENT_HISTORY_LIMIT;
   const force = Boolean(options.force);
   const mode = options.mode || (force ? "manual" : "auto");
+  const allowAutoMerge = Boolean(options.allowAutoMerge);
   const candidateMessages = getCompressibleDirectorMessages(session, recentLimit);
 
   if (mode !== "manual") {
@@ -2806,6 +2992,15 @@ async function ensureDirectorSummary(session, options = {}) {
     }
 
     if (!candidateMessages.length) {
+      return false;
+    }
+
+    if (!allowAutoMerge) {
+      console.log("[MOYU:compress]", "跳过自动合并新增历史", {
+        reason: "auto-merge-not-allowed",
+        candidateCount: candidateMessages.length,
+        recentLimit,
+      });
       return false;
     }
   }
@@ -3021,7 +3216,8 @@ async function tryAutoCompressSession(session) {
 
   if (!session.directorModel) return;
 
-  const metrics = buildDirectorContextTokenMetrics(session);
+  let metrics = buildDirectorContextTokenMetrics(session);
+  let unsummarizedCount = 0;
   if (metrics) {
     const needsRecompress = metrics.contextCurrent >= metrics.contextThreshold;
     // 算未压缩消息数，超过 recentLimit 才有合并价值
@@ -3029,11 +3225,13 @@ async function tryAutoCompressSession(session) {
     const cutoffIdx = session?.compressedUntilMessageId
       ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
       : -1;
-    const unsummarizedCount = cutoffIdx >= 0
+    unsummarizedCount = cutoffIdx >= 0
       ? Math.max(0, visibleMessages.length - cutoffIdx - 1)
       : visibleMessages.length;
     const needsMerge = unsummarizedCount > DIRECTOR_RECENT_HISTORY_LIMIT;
-    if (!needsRecompress && !needsMerge) {
+    const hasEnoughFreshMessages = unsummarizedCount >= DIRECTOR_AUTO_COMPRESS_MIN_UNSUMMARIZED;
+    const shouldAutoCompress = needsRecompress && hasEnoughFreshMessages;
+    if (!shouldAutoCompress) {
       updateCompressMemoryButtonProgress(session);
       return;
     }
@@ -3047,6 +3245,9 @@ async function tryAutoCompressSession(session) {
     directorModel: session.directorModel,
     contextCurrent: metrics?.contextCurrent,
     contextThreshold: metrics?.contextThreshold,
+    unsummarizedCount,
+    minUnsummarized: DIRECTOR_AUTO_COMPRESS_MIN_UNSUMMARIZED,
+    needsMerge,
   });
 
   const prevStatusText = els.chatStatus?.textContent || "";
@@ -3054,7 +3255,7 @@ async function tryAutoCompressSession(session) {
   _autoCompressPending = true;
   setCompressionUiLocked(true);
   try {
-    const changed = await ensureDirectorSummary(session);
+    const changed = await ensureDirectorSummary(session, { allowAutoMerge: true });
     if (changed && getCurrentSession()?.id === session.id) {
       updateCompressMemoryButtonProgress(session);
       renderCompressMemoryPopover();
@@ -3538,6 +3739,92 @@ function buildModelThinkingExtra(modelName) {
 
 
 
+function getNpcResponseTemperature(session, model) {
+  const weak = isWeakModel(model);
+  if (session?.mode === SESSION_MODE_STORY) {
+    return weak ? 0.45 : 0.72;
+  }
+  return weak ? 0.25 : 0.5;
+}
+
+const NPC_PARALLEL_GROUP_LIMIT = 2;
+
+function getLatestUserMessageText(session) {
+  const messages = Array.isArray(session?.messages) ? session.messages : [];
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message && message.role === "user" && message.content) {
+      return String(message.content || "");
+    }
+  }
+  return "";
+}
+
+function shouldPreferParallelNpcReply(text) {
+  return /分别|各自|都说说|一起回答|一起说|每个人|每位|各说|同时|各抒己见|都回答/u.test(String(text || ""));
+}
+
+function shouldForceSerialNpcReply(text) {
+  return /接着|反驳|吵|争吵|轮流|先后|总结|回应他|回应她|回应它|接话|插话|打断|辩论|质问|追问|收尾/u.test(String(text || ""));
+}
+
+function buildFallbackParallelGroups(session, responders) {
+  if (!responders.length) return [];
+  const text = getLatestUserMessageText(session);
+  if (responders.length <= 1 || shouldForceSerialNpcReply(text)) {
+    return responders.map((npc) => [npc]);
+  }
+  if (shouldPreferParallelNpcReply(text)) {
+    return [responders];
+  }
+  return responders.map((npc) => [npc]);
+}
+
+function resolveNpcParallelGroups(session, responders, directive) {
+  const byName = new Map(responders.map((npc) => [npc.name, npc]));
+  const used = new Set();
+  const groups = [];
+
+  if (Array.isArray(directive?.parallelGroups) && directive.parallelGroups.length) {
+    directive.parallelGroups.forEach((group) => {
+      if (!Array.isArray(group)) return;
+      const resolved = group
+        .map((name) => byName.get(name))
+        .filter((npc) => npc && !used.has(npc.name));
+      resolved.forEach((npc) => used.add(npc.name));
+      if (resolved.length) {
+        groups.push(resolved);
+      }
+    });
+    responders.forEach((npc) => {
+      if (!used.has(npc.name)) {
+        groups.push([npc]);
+      }
+    });
+    return groups;
+  }
+
+  return buildFallbackParallelGroups(session, responders);
+}
+
+async function callNpcGroup(session, group, npcInstructions) {
+  if (!group.length) return;
+  if (group.length === 1) {
+    await callNpc(session, group[0], npcInstructions);
+    return;
+  }
+
+  for (let index = 0; index < group.length; index += NPC_PARALLEL_GROUP_LIMIT) {
+    const chunk = group.slice(index, index + NPC_PARALLEL_GROUP_LIMIT);
+    await Promise.all(chunk.map((npc) => callNpc(
+      session,
+      npc,
+      npcInstructions,
+      chunk.filter((item) => item.name !== npc.name).map((item) => item.name)
+    )));
+  }
+}
+
 async function streamChatCompletion(session, speaker, model, messages, configId = "") {
   const targetMessage = findLatestAssistantMessage(session, speaker);
   if (!targetMessage) {
@@ -3566,7 +3853,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
       stream: true,
     };
     if (withTemp) {
-      body.temperature = isWeakModel(model) ? 0.1 : 0.5;
+      body.temperature = getNpcResponseTemperature(session, model);
     }
     if (withUsage) {
       body.stream_options = { include_usage: true };
