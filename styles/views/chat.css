@@ -2173,7 +2173,7 @@
 /* ===== Mobile-responsive composer ===== */
 @media (max-width: 960px) {
   #chatInput {
-    min-height: 52px;
+    min-height: 56px;
     max-height: 130px;
     padding: 10px;
     font-size: 16px;
@@ -2216,7 +2216,7 @@
 
 @media (max-width: 640px) {
   #chatInput {
-    min-height: 44px;
+    min-height: 48px;
     max-height: 108px;
     padding: 8px;
     font-size: 15px;
