@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#1e1e1e">
   <meta name="color-scheme" content="dark">
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=2026.05.19.04">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.19.02";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.19.01";window.__moyuBootStart = performance.now();</script>
   <style>
     .loading-screen {
       position: fixed; inset: 0; z-index: 9999;
@@ -34,11 +35,9 @@
       justify-content: center;
     }
     #typewriterText {
-      display: inline-block;
-      overflow: hidden;
+      display: inline;
       white-space: nowrap;
       text-align: left;
-      flex: 0 0 auto;
     }
     .typewriter-cursor {
       display: inline-block;
@@ -109,27 +108,13 @@
 </div>
 <script>
 (function() {
-  var phrase = '开始摸鱼';
+  var _phrases = {"zh-CN": "开始摸鱼", "en-US": "Start Moyu"};
+  var _locale = "zh-CN";
+  try { var _stored = JSON.parse(localStorage.getItem("moyu-locale")); if (_stored && _phrases[_stored]) _locale = _stored; } catch(e) {}
+  var phrase = _phrases[_locale];
   var el = document.getElementById('typewriterText');
   if (!el) return;
   var host = el.parentElement;
-  if (host) {
-    var measure = document.createElement('span');
-    var hostStyle = window.getComputedStyle(host);
-    measure.textContent = phrase;
-    measure.style.position = 'absolute';
-    measure.style.visibility = 'hidden';
-    measure.style.pointerEvents = 'none';
-    measure.style.whiteSpace = 'nowrap';
-    measure.style.font = hostStyle.font;
-    measure.style.letterSpacing = hostStyle.letterSpacing;
-    document.body.appendChild(measure);
-    var measuredWidth = Math.ceil(measure.getBoundingClientRect().width);
-    document.body.removeChild(measure);
-    if (measuredWidth > 0) {
-      el.style.width = measuredWidth + 'px';
-    }
-  }
   var charPos = 0, deleting = false;
   var writeSpd = 100, delSpd = 50, pauseWrite = 1800, pauseDel = 400;
   window.__moyuTypewriter = { cycleCount: 0 };
@@ -354,7 +339,7 @@
                   </div>
                   <div class="settings-card-body">
                     <div class="settings-field-row">
-                      <button id="clearAllDataBtn" class="danger-btn settings-danger-btn">清理所有会话消息</button>
+                      <button id="clearAllDataBtn" class="danger-btn settings-danger-btn" data-i18n="settings.clearAllData">清理所有会话消息</button>
                     </div>
                   </div>
                 </section>
@@ -546,18 +531,18 @@
 
       <section id="createView" class="view view-with-shell-offset">
         <div class="panel">
+          <div id="sessionEditTopbar" class="session-edit-topbar hidden">
+            <button id="cancelEditBtn" class="session-edit-exit-btn" type="button">
+              <i class="bi bi-arrow-left" aria-hidden="true"></i>
+              <span id="sessionEditExitLabel" data-i18n="create.exitEdit">退出编辑</span>
+            </button>
+          </div>
+
           <div class="panel-head">
             <div>
               <h2 data-i18n="create.title">创建新聊天</h2>
               <p data-i18n="create.subtitle">先选择会话模式，再填写设定和 NPC 配置。</p>
             </div>
-          </div>
-
-          <div id="sessionEditTopbar" class="session-edit-topbar hidden">
-            <button id="cancelEditBtn" class="session-edit-exit-btn" type="button">
-              <i class="bi bi-arrow-left" aria-hidden="true"></i>
-              <span data-i18n="create.exitEdit">退出编辑</span>
-            </button>
           </div>
 
           <div id="sessionEditTabs" class="session-edit-tabs hidden" role="tablist" aria-label="编辑当前会话">
@@ -795,17 +780,17 @@
               <textarea id="chatInput" rows="3" enterkeyhint="send" data-i18n-placeholder="chat.inputPlaceholder" placeholder="输入你想说的话..." disabled></textarea>
               <div class="composer-footer">
                 <div class="composer-footer-left">
-                  <button id="compressMemoryBtn" class="secondary-btn memory-compress-btn" type="button" disabled aria-label="压缩记忆">
+                  <button id="compressMemoryBtn" class="secondary-btn memory-compress-btn" type="button" disabled aria-label="压缩记忆" data-i18n-aria-label="chat.compressMemory" data-i18n-title="chat.compressMemory">
                     <span class="memory-compress-ring" aria-hidden="true">
                       <span class="memory-compress-ring-inner">
                         <span class="memory-compress-glyph"></span>
                       </span>
                     </span>
                   </button>
-                  <button id="thinkingToggleBtn" class="thinking-toggle-btn" type="button">思考设置</button>
+                  <button id="thinkingToggleBtn" class="thinking-toggle-btn" type="button" data-i18n="chat.thinkingSettings">思考设置</button>
                   <div id="thinkingPopover" class="thinking-popover hidden">
                     <button id="directorThinkingBtn" class="secondary-btn director-thinking-btn" type="button" disabled data-i18n="chat.directorThinking">导演思考</button>
-                    <button id="modelThinkingBtn" class="secondary-btn model-thinking-btn" type="button" disabled data-state="disabled">Agent思考</button>
+                    <button id="modelThinkingBtn" class="secondary-btn model-thinking-btn" type="button" disabled data-state="disabled" data-i18n="chat.agentThinking">Agent思考</button>
                   </div>
                 </div>
                 <button id="mobileNewlineBtn" class="mobile-newline-btn" type="button" disabled aria-label="换行" title="换行"><i class="bi bi-arrow-return-left"></i></button>
@@ -837,8 +822,17 @@
   <template id="npcTemplate">
     <article class="npc-card">
       <button class="npc-accordion-toggle" type="button">
-        <span class="npc-accordion-name" data-i18n="npc.unnamed">未命名 NPC</span>
-        <span class="npc-accordion-arrow" aria-hidden="true">⌄</span>
+        <div class="npc-agent-summary">
+          <div class="npc-agent-main">
+            <span class="npc-agent-indicator"></span>
+            <span class="npc-accordion-name" data-i18n="npc.unnamed">未命名 NPC</span>
+          </div>
+          <div class="npc-agent-meta">
+            <span class="npc-agent-model-chip"></span>
+            <span class="npc-agent-badge badge-prompt"></span>
+          </div>
+        </div>
+        <span class="npc-accordion-arrow">⌄</span>
       </button>
       <div class="npc-accordion-body">
       <div class="npc-top">
@@ -853,13 +847,13 @@
       </div>
       <label class="field">
         <span data-i18n="npc.promptLabel">NPC Prompt</span>
-        <textarea class="npc-prompt" rows="3" data-i18n-placeholder="npc.promptPlaceholder" placeholder="可选：人物口吻、秘密、目标、说话风格。"></textarea>
+        <textarea class="npc-prompt" rows="4" data-i18n-placeholder="npc.promptPlaceholder" placeholder="可选：人物口吻、秘密、目标、说话风格。"></textarea>
       </label>
       <div class="npc-footer">
         <span class="hint-text" data-i18n="npc.footer">所有 NPC 都会看到全局 Prompt 和完整聊天记录。</span>
-        <button class="ghost-btn remove-npc-btn" type="button" data-i18n="npc.remove">删除</button>
       </div>
       </div>
+      <button class="remove-npc-btn" type="button" title="删除">×</button>
     </article>
   </template>
 
@@ -952,6 +946,7 @@
         "./scripts/features/chat-db.js",
         "./scripts/features/chat-retrieval.js",
         "./scripts/features/chat.js",
+        "./scripts/features/custom-select.js",
         "./scripts/bootstrap.js"
       ];
       (function load(i) {

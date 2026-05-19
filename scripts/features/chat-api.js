@@ -131,12 +131,30 @@ function supportsThinkingParam(modelName) {
   return name.includes("deepseek") || name.includes("claude") || name.includes("doubao") || name.includes("chatgpt");
 }
 
+function isClaudeAdaptiveThinkingModel(modelName) {
+  const name = (modelName || "").toLowerCase();
+  return (
+    name.includes("claude-opus-4-6") ||
+    name.includes("claude-opus-4-7") ||
+    name.includes("claude-sonnet-4-6")
+  );
+}
+
 function buildThinkingExtra(modelName, value) {
   if (!supportsThinkingParam(modelName)) return {};
   // value can be boolean (director: true/false) or string (model: "auto"/"enabled"/"disabled")
   let type = "disabled";
   if (value === true || value === "enabled") type = "enabled";
   else if (value === "auto") type = "auto";
+  if (type !== "disabled" && isClaudeAdaptiveThinkingModel(modelName)) {
+    return {
+      thinking: {
+        type: "adaptive",
+        effort: type === "enabled" ? "medium" : "minimal",
+        display: "summarized",
+      },
+    };
+  }
   return { thinking: { type } };
 }
 
@@ -166,7 +184,7 @@ async function createChatCompletionPayload(host, key, model, messages, stream = 
   if (!response.ok) {
     detail = await safeReadError(response);
     if (/temperature|unsupported param|not support/i.test(detail)) {
-      console.warn("[MOYU] temperature not supported, retrying without it", { model, detail });
+      debugWarn("[MOYU] temperature not supported, retrying without it", { model, detail });
       response = await doPayloadFetch(false);
       detail = "";
     }

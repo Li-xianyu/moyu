@@ -172,7 +172,7 @@ function _flushIDBPersist() {
       if (!session || !session.id) return Promise.resolve();
       return window.__chatDB.updateSessionMeta(session);
     })).catch(function (err) {
-      console.warn("[persist] IDB meta sync failed", err);
+      debugWarn("[persist] IDB meta sync failed", err);
     });
   }
 }
@@ -188,7 +188,7 @@ function persistSessions() {
     var current = getCurrentSession();
     if (current) {
       window.__chatDB.saveSession(current).catch(function (err) {
-        console.warn("[persist] save session failed", err);
+        debugWarn("[persist] save session failed", err);
       });
     }
     // 全量防抖保存（同步所有会话的排序/标题）
@@ -205,7 +205,7 @@ window.addEventListener("beforeunload", function () {
         if (!session || !session.id) return Promise.resolve();
         return window.__chatDB.updateSessionMeta(session);
       })).catch(function (err) {
-        console.warn("[persist] IDB meta sync failed", err);
+        debugWarn("[persist] IDB meta sync failed", err);
       });
     }
   }
@@ -439,4 +439,18 @@ function debugLog(scope, message, payload) {
   console.group(prefix, ...styles);
   console.log(payload);
   console.groupEnd();
+}
+
+function debugInfo(...args) {
+  if (!isDebugModeEnabled()) {
+    return;
+  }
+  console.info(...args);
+}
+
+function debugWarn(...args) {
+  if (!isDebugModeEnabled()) {
+    return;
+  }
+  console.warn(...args);
 }

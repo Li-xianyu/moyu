@@ -106,7 +106,7 @@ function updateMobileViewportFix() {
   const _t = Date.now();
   if (!window.__moyuVpLogTs || _t - window.__moyuVpLogTs > 150) {
     window.__moyuVpLogTs = _t;
-    console.log("[MOYU-VP]", JSON.stringify({
+    debugInfo("[MOYU-VP]", JSON.stringify({
       t: _t, vp: viewportHeight, full: fullH,
       diff: fullH - viewportHeight, ko: keyboardOpen,
       pko: prevKeyboardOpen, tt: typingTarget,
@@ -138,7 +138,7 @@ function loadErudaScript() {
     script.src = "https://cdn.jsdelivr.net/npm/eruda";
     script.async = true;
     script.onload = () => {
-      console.info("[MOYU] Eruda script loaded");
+      debugInfo("[MOYU] Eruda script loaded");
       resolve(window.eruda);
     };
     script.onerror = () => {
@@ -167,8 +167,8 @@ function syncMobileDebugConsole() {
         return;
       }
       eruda.init();
-      console.info("[MOYU] Eruda initialized");
-      console.info("[MOYU] Mobile console ready", {
+      debugInfo("[MOYU] Eruda initialized");
+      debugInfo("[MOYU] Mobile console ready", {
         href: location.href,
         userAgent: navigator.userAgent,
         viewport: {
@@ -217,7 +217,7 @@ function resolveInitialView() {
   return "chat";
 }
 
-function init() {
+async function init() {
   applyI18n();
   mountSessionEditButton();
   mountComposerCancelButton();
@@ -228,7 +228,18 @@ function init() {
   bindFileDrop();
 
   const initialView = resolveInitialView();
-  switchView(initialView);
+  if (initialView === "create") {
+    await _loadScript("./scripts/features/create.js");
+    initCreateView();
+    prepareCreateViewForNewSession();
+    switchView("create");
+  } else if (initialView === "settings") {
+    await _loadScript("./scripts/features/settings.js");
+    initSettingsView();
+    switchView("settings");
+  } else {
+    switchView(initialView);
+  }
   renderChatListMenu();
   renderSession();
   updateMobileViewportFix();
@@ -258,7 +269,7 @@ function init() {
         state.sessions = sessions;
       }
     } catch (e) {
-      console.warn("[boot] IDB load failed", e);
+      debugWarn("[boot] IDB load failed", e);
     }
     // 2. 总是尝试迁移 localStorage 旧数据（内部有 flag 防重复）
     //    修复旧版本迁移时 uiType 字段丢失的问题
@@ -271,7 +282,7 @@ function init() {
         }
       }
     } catch (e) {
-      console.warn("[boot] migration failed", e);
+      debugWarn("[boot] migration failed", e);
     }
   }
 
@@ -284,11 +295,11 @@ function init() {
       try {
         await ensureSessionMessagesHydrated(current);
       } catch (e) {
-        console.warn("[boot] current session hydrate failed", e);
+        debugWarn("[boot] current session hydrate failed", e);
       }
     }
   }
 
   // 4. 启动
-  init();
+  await init();
 })();

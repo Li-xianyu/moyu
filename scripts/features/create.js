@@ -184,6 +184,46 @@ function bindSessionOverrideControls() {
   });
 }
 
+function getCreateExitMeta() {
+  if (state.editingSessionId) {
+    return {
+      label: state.locale === "en-US" ? "Exit Editing" : "退出编辑",
+      target: "chat",
+      welcome: false,
+    };
+  }
+
+  const hasCurrentSession = Boolean(state.currentSessionId && getCurrentSession());
+  if (hasCurrentSession) {
+    return {
+      label: state.locale === "en-US" ? "Back to Chat" : "返回聊天",
+      target: "chat",
+      welcome: false,
+    };
+  }
+
+  return {
+    label: state.locale === "en-US" ? "Back to Home" : "返回主页",
+    target: "welcome",
+    welcome: true,
+  };
+}
+
+function updateCreateExitButton() {
+  const meta = getCreateExitMeta();
+  if (els.sessionEditTopbar) {
+    els.sessionEditTopbar.classList.remove("hidden");
+  }
+  if (els.sessionEditExitLabel) {
+    els.sessionEditExitLabel.textContent = meta.label;
+  }
+  if (els.cancelEditBtn) {
+    els.cancelEditBtn.setAttribute("aria-label", meta.label);
+    els.cancelEditBtn.title = meta.label;
+    els.cancelEditBtn.dataset.targetView = meta.target;
+  }
+}
+
 function syncCreateEditNavigation() {
   const isEditing = Boolean(state.editingSessionId);
   const activeSection = isEditing ? getCurrentCreateEditSection() : "details";
@@ -191,11 +231,9 @@ function syncCreateEditNavigation() {
   const tabButtons = [els.sessionEditInfoTabBtn, els.sessionEditOverridesTabBtn];
   const navButtons = [els.sessionEditInfoNavBtn, els.sessionEditOverridesNavBtn];
 
-  if (els.sessionEditTopbar) {
-    els.sessionEditTopbar.classList.toggle("hidden", !isEditing);
-  }
+  updateCreateExitButton();
   if (els.sessionEditTabs) {
-    els.sessionEditTabs.classList.toggle("hidden", !isEditing);
+    els.sessionEditTabs.classList.add("hidden");
   }
   if (els.sessionEditSidebar) {
     els.sessionEditSidebar.classList.toggle("hidden", !isEditing);
@@ -247,12 +285,17 @@ function bindCreateEditNavigation() {
     });
 
   els.cancelEditBtn?.addEventListener("click", () => {
-    if (!state.editingSessionId) {
+    if (state.editingSessionId) {
+      state.editingSessionId = null;
+      state.currentSessionEditSection = "details";
+      updateCreateViewMode();
+      renderSession();
+      switchView("chat");
       return;
     }
-    state.editingSessionId = null;
+
     state.currentSessionEditSection = "details";
-    updateCreateViewMode();
+    state.showWelcomeHome = !state.currentSessionId;
     renderSession();
     switchView("chat");
   });
@@ -439,7 +482,8 @@ function addNpcCard(prefill = {}, options = {}) {
     });
   }
 
-  removeBtn.addEventListener("click", () => {
+  removeBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
     if (els.npcList.children.length <= getModeMinNpcs()) {
       setCreateStatus(getMinNpcWarning(), "warning");
       return;
@@ -468,6 +512,29 @@ function addNpcCard(prefill = {}, options = {}) {
   els.npcList.appendChild(fragment);
   bindAccordionBody(card);
   populateModelSelect(modelSelect, buildModelOptionValue(prefill.model, prefill.configId || prefill.modelConfigId));
+
+  // ── Agent summary sync ──
+  const modelChip = card.querySelector(".npc-agent-model-chip");
+  const promptBadge = card.querySelector(".badge-prompt");
+
+  function syncModelChip() {
+    if (!modelChip) return;
+    const opt = modelSelect.options[modelSelect.selectedIndex];
+    modelChip.textContent = opt ? opt.text : "";
+  }
+  function syncPromptBadge() {
+    if (!promptBadge) return;
+    const ok = promptInput.value.trim().length > 0;
+    promptBadge.textContent = ok ? "Prompt" : "";
+    promptBadge.classList.toggle("badge-prompt-on", ok);
+    promptBadge.classList.toggle("badge-prompt-off", !ok);
+  }
+
+  modelSelect.addEventListener("change", syncModelChip);
+  promptInput.addEventListener("input", syncPromptBadge);
+  syncModelChip();
+  syncPromptBadge();
+
   if (options.expandOnMount) {
     toggleNpcAccordion(card, { force: true });
   }

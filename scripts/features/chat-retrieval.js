@@ -406,7 +406,7 @@
         query: searchQuery,
         count: searchResult.count,
       });
-      console.log("[MOYU-SEARCH] 搜索命中，发起二次调用", {
+        debugInfo("[MOYU-SEARCH] 搜索命中，发起二次调用", {
         query: searchQuery,
         count: searchResult.count,
         resultPreview: (searchResult.text || "").slice(0, 200),
@@ -595,7 +595,7 @@
             } catch (e) {}
 
             debugLog("retrieval", "搜索跟进完成", { contentLength: content.length });
-            console.log("[MOYU-SEARCH] 搜索跟进响应", {
+            debugInfo("[MOYU-SEARCH] 搜索跟进响应", {
               contentPreview: content.slice(0, 300),
               contentLength: content.length,
             });
@@ -823,7 +823,7 @@
       if (window.debugLog) {
         window.debugLog(category, message, data);
       } else {
-        console.log("[MOYU:retrieval]", message, data || "");
+        debugInfo("[MOYU:retrieval]", message, data || "");
       }
     } catch (e) {}
   }

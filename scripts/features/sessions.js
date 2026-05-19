@@ -291,7 +291,7 @@ function renderChatListMenu() {
             try {
               await ensureSessionMessagesHydrated(session);
             } catch (error) {
-              console.warn("[session] hydrate failed", error);
+              debugWarn("[session] hydrate failed", error);
             }
           }
           if (state.currentSessionId !== session.id || state.showWelcomeHome) {
@@ -377,6 +377,9 @@ function renderChatListMenu() {
           window._loadScript("./scripts/features/create.js"),
           window._loadScript("./scripts/features/settings.js"),
         ]);
+      }
+      if (typeof initCreateView === "function") {
+        initCreateView();
       }
       openSessionEditor(session.id);
     });

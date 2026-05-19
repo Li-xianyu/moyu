@@ -542,7 +542,7 @@
         if (tx) {
           tx.addEventListener("complete", function () {
             rebuildFTS().catch(function (err) {
-              console.warn("[chat-db] FTS rebuild on upgrade:", err);
+              debugWarn("[chat-db] FTS rebuild on upgrade:", err);
             });
           });
         }
@@ -1678,7 +1678,7 @@
               total += saved;
             });
           }).catch(function (err) {
-            console.warn("[chat-db] migrate session", session.id, err);
+            debugWarn("[chat-db] migrate session", session.id, err);
           });
         });
       });
@@ -1713,16 +1713,16 @@
             return ChatDB.saveMessages(session.id, msgs, 0).then(function (saved) {
               fixed += saved;
             }).catch(function (err) {
-              console.warn("[chat-db] repair session", session.id, err);
+              debugWarn("[chat-db] repair session", session.id, err);
             });
           });
         });
 
         return chain.then(function () {
-          console.log("[chat-db] 修复完成", fixed, "条消息");
+          debugInfo("[chat-db] 修复完成", fixed, "条消息");
           // 重建 FTS
           return ChatDB.rebuildFTS().then(function (ftsCount) {
-            console.log("[chat-db] FTS 重建", ftsCount, "条索引");
+            debugInfo("[chat-db] FTS 重建", ftsCount, "条索引");
             return fixed;
           });
         });
@@ -1930,7 +1930,7 @@
   // 页面加载后自动初始化（仅打开 DB）
   function autoInit() {
     ChatDB.init().catch(function (err) {
-      console.warn("[chat-db] init:", err);
+      debugWarn("[chat-db] init:", err);
     });
   }
 

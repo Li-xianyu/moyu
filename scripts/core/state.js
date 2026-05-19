@@ -80,6 +80,7 @@ const els = {
   createChatBtn: document.getElementById("createChatBtn"),
   createStatus: document.getElementById("createStatus"),
   sessionEditTopbar: document.getElementById("sessionEditTopbar"),
+  sessionEditExitLabel: document.getElementById("sessionEditExitLabel"),
   sessionEditTabs: document.getElementById("sessionEditTabs"),
   sessionEditInfoTabBtn: document.getElementById("sessionEditInfoTabBtn"),
   sessionEditOverridesTabBtn: document.getElementById("sessionEditOverridesTabBtn"),
@@ -240,6 +241,8 @@ function applyI18n() {
   const defaultParams = { entityType };
 
   document.querySelectorAll("[data-i18n]").forEach((node) => {
+    /* skip typewriter loading text — managed by its own animation */
+    if (node.closest("#loadingScreen")) return;
     node.textContent = t(node.dataset.i18n, defaultParams);
     if (node.id === "chatStatus" && typeof getChatStatusTone === "function") {
       node.dataset.tone = getChatStatusTone(node.textContent);
@@ -249,6 +252,19 @@ function applyI18n() {
   document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
     node.placeholder = t(node.dataset.i18nPlaceholder);
   });
+
+  document.querySelectorAll("[data-i18n-aria-label]").forEach((node) => {
+    node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
+  });
+
+  document.querySelectorAll("[data-i18n-title]").forEach((node) => {
+    node.title = t(node.dataset.i18nTitle);
+  });
+
+  const localeSelect = document.getElementById("localeSelect");
+  if (localeSelect) {
+    localeSelect.value = state.locale || "zh-CN";
+  }
 
   document.documentElement.lang = state.locale || "zh-CN";
   document.title = t("app.title");

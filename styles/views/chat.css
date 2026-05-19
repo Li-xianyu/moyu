@@ -916,7 +916,8 @@
   color: #ccc;
   background: rgba(255, 255, 255, 0.08);
 }
-.code-copy-btn.copied {
+.code-copy-btn.copied,
+.message-edit-icon-copied {
   color: #73c991;
 }
 .message blockquote {
@@ -2227,12 +2228,7 @@
 }
 
 .session-edit-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 0 0 18px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: none !important;
 }
 
 .session-edit-tab-btn {

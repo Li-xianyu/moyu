@@ -306,7 +306,7 @@ async function ensureSessionStoredTokenEstimate(session) {
     session.totalTokenEstimateMessageCount = totalMessageCount;
     return estimated;
   } catch (error) {
-    console.warn("[session] token estimate failed", error);
+    debugWarn("[session] token estimate failed", error);
     return null;
   } finally {
     session.totalTokenEstimatePending = false;
@@ -680,13 +680,13 @@ function startPlaceholderRotation() {
     const session = getCurrentSession();
     const isStory = session?.mode === SESSION_MODE_STORY;
     const tips = [
-      "输入你想说的话...",
-      "点击输入框左上角 ✨ 生成推荐回复",
-      "Shift+Enter 换行，Enter 发送",
-      "支持 Markdown 格式和代码块高亮",
+      t("chat.tip1"),
+      t("chat.tip2"),
+      t("chat.tip3"),
+      t("chat.tip4"),
     ];
     if (!isStory) {
-      tips.splice(1, 0, "在输入中键入 @ 可快速调用 Agent");
+      tips.splice(1, 0, t("chat.tipAt"));
     }
     return tips;
   }
@@ -789,7 +789,7 @@ function updateComposerMode() {
     if (composerShell) composerShell.classList.remove("editing");
     if (els.cancelEditBtn) els.cancelEditBtn.classList.add("hidden");
     if (els.compressMemoryBtn) els.compressMemoryBtn.disabled = true;
-    setText(els.chatStatus, state.chatInlineStatus || "正在处理中...");
+    setText(els.chatStatus, state.chatInlineStatus || t("chat.statusProcessing"));
     return;
   }
 
@@ -848,13 +848,13 @@ function updateComposerMode() {
   updateThinkingToggleMode();
   renderCompressMemoryPopover();
   els.sendBtn.innerHTML = '<i class="bi bi-arrow-up"></i>';
-  setText(els.chatStatus, state.isSending ? "正在处理中..." : "所有单位已就绪");
+  setText(els.chatStatus, state.isSending ? t("chat.statusProcessing") : t("chat.statusReady"));
   updateSuggestBtn();
 }
 
 function setInlineChatStatus(message) {
   state.chatInlineStatus = String(message || "").trim();
-  setText(els.chatStatus, state.chatInlineStatus || "正在处理中...");
+  setText(els.chatStatus, state.chatInlineStatus || t("chat.statusProcessing"));
 }
 
 function clearInlineChatStatus() {
@@ -872,6 +872,395 @@ function getNpcGroupDebugLabel(groups) {
   const list = Array.isArray(groups) ? groups : [];
   const hasParallelGroup = list.some((group) => Array.isArray(group) && group.length > 1);
   return hasParallelGroup ? "NPC 并行分组" : "NPC 串行顺序";
+}
+
+function ensureDirectorTraceMessage(session, existingMessage) {
+  if (existingMessage) {
+    return existingMessage;
+  }
+  const traceMessage = {
+    id: `narration-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role: "assistant",
+    speaker: "导演 AI",
+    uiType: "narration",
+    content: "",
+    createdAt: new Date().toISOString(),
+    pending: false,
+    streaming: true,
+    toolTraceExpanded: true,
+    retrieving: false,
+  };
+  session.messages.push(traceMessage);
+  renderMessages({ stickToBottom: true });
+  return traceMessage;
+}
+
+function insertSystemMessageBeforeLastUser(messages, systemContent) {
+  if (!systemContent) {
+    return messages;
+  }
+  const result = Array.isArray(messages) ? messages.slice() : [];
+  let lastUserIdx = -1;
+  for (let i = result.length - 1; i >= 0; i -= 1) {
+    if (result[i]?.role === "user") {
+      lastUserIdx = i;
+      break;
+    }
+  }
+  const insertAt = lastUserIdx >= 0 ? lastUserIdx : result.length;
+  result.splice(insertAt, 0, { role: "system", content: systemContent });
+  return result;
+}
+
+function buildDirectorRetrievalRule(session) {
+  if (!window.__chatRetrieval) {
+    return "";
+  }
+  const visibleMessages = getVisibleHistoryMessages(session);
+  const recentMessages = getDirectorRecentMessages(session);
+  const totalVisible = visibleMessages.length;
+  const visibleRecent = recentMessages.length;
+  const blindEnd = totalVisible - visibleRecent;
+  if (blindEnd <= 0) {
+    return "";
+  }
+  const availableScopes = Array.from(new Set([
+    ...((session.historicalScopeNames || []).filter(Boolean)),
+    ...(session.messages || [])
+      .filter((m) => m && m.role !== "system" && m.content && !m.pending)
+      .map((m) => m.role === "user" ? "user" : (m.speaker || "assistant"))
+      .filter(Boolean),
+  ]));
+  const turnHint = buildBlindTurnRangeHint(session, blindEnd);
+  return [
+    "=== DIRECTOR RETRIEVAL PROTOCOL: OBEY EXACTLY ===",
+    `VISIBLE DETAIL WINDOW: messages ${blindEnd + 1}-${totalVisible}.`,
+    `DETAIL BLIND SPOT: messages 1-${blindEnd}.`,
+    "",
+    "If recent visible history, director memory, compression segments, or normal reasoning already suffice, output JSON directly and do NOT retrieve.",
+    "Use retrieval ONLY when this turn's narration/responders/spawn_npcs/parallel_groups truly depends on non-visible older details.",
+    "",
+    "If retrieval is needed, your ENTIRE reply MUST be exactly one retrieval marker and nothing else.",
+    "After the system returns retrieved records, you MUST continue by outputting only the JSON object.",
+    "",
+    "ALLOWED MARKERS ONLY:",
+    "1. 【查看区间】N-N【/查看区间】",
+    "2. 【查看区间】scope,N-M【/查看区间】",
+    "3. 【搜索】keywords【/搜索】",
+    "",
+    "AVAILABLE scope names in this conversation:",
+    availableScopes.join(", "),
+    "",
+    "PRIORITY ORDER:",
+    "A. If scoped retrieval can express the request, you MUST use scoped retrieval.",
+    "B. Else if global range retrieval can express the request, use global range retrieval.",
+    "C. Else and only else, use generic search.",
+    "",
+    "MANDATORY:",
+    "- Questions about who said something, what a named NPC/agent said, who joined, or what the user said MUST prefer scoped retrieval first.",
+    "- Never fabricate blind-spot facts just to keep the scene moving.",
+    "- Never answer with natural language before retrieval if the needed detail is outside the visible window.",
+    "",
+    "FORBIDDEN:",
+    "- No JSON plus marker in the same reply.",
+    "- No markdown, no explanation, no fake 'I checked'.",
+    "- No generic search when a range/scoped marker would work.",
+    "",
+    "CORRECT:",
+    "- '李文之前第一句说了什么' -> 【查看区间】李文,1-1【/查看区间】",
+    "- '本次会话第一条我发的' -> 【查看区间】user,1-1【/查看区间】",
+    "- '把我最早那句翻出来' -> 优先理解成用户自己的发言序列，再决定区间。",
+    "- '整个会话第二条是什么' -> 【查看区间】2-2【/查看区间】",
+    "",
+    "If the target detail is in the blind spot, output ONLY the marker.",
+    turnHint,
+    "【检索指令】",
+  ].join("\n");
+}
+
+function parseRequestedRangeFromText(text, maxEnd) {
+  const raw = String(text || "");
+  if (!raw) return null;
+  const upperBound = Number.isFinite(maxEnd) && maxEnd > 0 ? maxEnd : Number.MAX_SAFE_INTEGER;
+  if (window.__chatRetrieval?.parseBlindRangeFromUserText) {
+    const parsed = window.__chatRetrieval.parseBlindRangeFromUserText(raw, upperBound);
+    if (parsed?.start && parsed?.end) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function inferScopedRangePreference(session, latestUserContent) {
+  const text = String(latestUserContent || "").trim();
+  if (!text) return null;
+  const visibleMessages = getVisibleHistoryMessages(session);
+  const maxEnd = visibleMessages.length || Number.MAX_SAFE_INTEGER;
+  const requestedRange = parseRequestedRangeFromText(text, maxEnd);
+  if (!requestedRange) {
+    return null;
+  }
+
+  const asksUserOwnUtterance = /(?:我(?:说的|发的|写的)|我的(?:发言|消息|话|那句|那条)|我最早那句|我第一条|我第二条|我第\d+条)/.test(text);
+  if (asksUserOwnUtterance) {
+    return {
+      scope: "user",
+      start: requestedRange.start,
+      end: requestedRange.end,
+      reason: "user-utterance-semantics",
+    };
+  }
+
+  const availableScopes = Array.from(new Set([
+    ...((session.historicalScopeNames || []).filter(Boolean)),
+    ...(session.messages || [])
+      .filter((m) => m && m.role !== "system" && m.content && !m.pending)
+      .map((m) => m.role === "user" ? "user" : (m.speaker || "assistant"))
+      .filter(Boolean),
+  ]));
+  const matchedScope = availableScopes.find((scopeName) => {
+    if (!scopeName || scopeName === "user" || scopeName === "assistant") return false;
+    return text.includes(scopeName);
+  });
+  if (matchedScope) {
+    return {
+      scope: matchedScope,
+      start: requestedRange.start,
+      end: requestedRange.end,
+      reason: "named-speaker-semantics",
+    };
+  }
+
+  return null;
+}
+
+function maybeNormalizeDirectorRangeRequest(session, latestUserContent, rangeReq) {
+  if (!rangeReq) return null;
+  if (rangeReq.scope) return rangeReq;
+  const preferred = inferScopedRangePreference(session, latestUserContent);
+  if (!preferred) return rangeReq;
+  if (preferred.start !== rangeReq.start || preferred.end !== rangeReq.end) {
+    return rangeReq;
+  }
+  return {
+    start: rangeReq.start,
+    end: rangeReq.end,
+    scope: preferred.scope,
+    raw: `${preferred.scope},${rangeReq.start}-${rangeReq.end}`,
+    normalizedFrom: rangeReq.raw || `${rangeReq.start}-${rangeReq.end}`,
+    normalizedReason: preferred.reason,
+  };
+}
+
+function buildDirectorRetryInstruction() {
+  return [
+    "你的上一条输出不是 JSON，已被丢弃。",
+    "现在重新输出，只输出 JSON 对象，一行。",
+    "不要自然语言、不要解释、不要 markdown、不要\"旁白：\"前缀。",
+    "",
+    "⚠️ 重新判断 responders：",
+    "检查用户最新消息中的名字。",
+    '"小夏荷"匹配"夏荷"，"春桃姐"匹配"春桃"——昵称/简称也要算。',
+    "上一轮有 NPC 回复过用户，用户在追问 → 该 NPC 必须进 responders。",
+    "创作模式中，如果用户只是没点名 NPC，但发出了普通对话/动作/询问 → narration 或 responders 至少一个必须非空。",
+    "如果 responders 为空，narration 必须写出这一拍的场景推进、气氛反应或动作描写。",
+    "只有用户明确要求等待、沉默、无人回应时，narration 和 responders 才可以同时为空。",
+  ].join("\n");
+}
+
+function buildDirectorRetrievalFollowUpMessages(retrievedText, latestUserContent, typeLabel) {
+  const messages = [
+    { role: "system", content: retrievedText },
+    {
+      role: "system",
+      content: [
+        `The ${typeLabel} block above is authoritative retrieved history for the director.`,
+        "Use it to decide narration/responders/spawn_npcs/parallel_groups.",
+        "Now output ONLY the JSON object. Do not output another retrieval marker unless the retrieved block is still insufficient.",
+      ].join(" "),
+    },
+  ];
+  if (latestUserContent) {
+    messages.push({
+      role: "user",
+      content: [
+        "用户当前最新输入：",
+        latestUserContent,
+        "",
+        "请结合上面的检索结果继续调度，并且只输出 JSON 对象。",
+      ].join("\n"),
+    });
+  }
+  return messages;
+}
+
+async function executeDirectorRetrieval(session, traceMessage, content) {
+  if (!window.__chatRetrieval || !traceMessage) {
+    return null;
+  }
+  const rawOutput = String(content || "");
+  const latestUserContent = getLatestUserMessageText(session).trim();
+  const rawRangeReq = window.__chatRetrieval.extractRangeRequest(rawOutput);
+  const rangeReq = maybeNormalizeDirectorRangeRequest(session, latestUserContent, rawRangeReq);
+  if (rangeReq) {
+    debugLog("director", "导演触发区间查看", rangeReq);
+    appendToolTraceStep(traceMessage, {
+      tool: "区间查看",
+      label: "emit",
+      command: `range ${rangeReq.raw || `${rangeReq.start}-${rangeReq.end}`}`,
+      status: "running",
+      detail: [
+        `marker=${rawOutput}`,
+        `range=${rangeReq.raw || `${rangeReq.start}-${rangeReq.end}`}`,
+        rangeReq.normalizedFrom ? `normalized_from=${rangeReq.normalizedFrom}` : "",
+        rangeReq.normalizedReason ? `normalized_reason=${rangeReq.normalizedReason}` : "",
+      ].filter(Boolean).join("\n"),
+    });
+    traceMessage.content = "";
+    traceMessage.retrieving = true;
+    traceMessage.streaming = false;
+    touchSession(session);
+    persistSessions();
+    renderMessages({ stickToBottom: true });
+    setInlineChatStatus("导演正在检索历史...");
+    const rangeResult = window.__chatRetrieval.executeRangeRetrieval(
+      session,
+      rangeReq.start,
+      rangeReq.end,
+      rangeReq.scope || null
+    );
+    if (!rangeResult?.text) {
+      updateLastToolTraceStep(traceMessage, {
+        status: "miss",
+        detail: `marker=${rawOutput}\nrange=${rangeReq.raw || `${rangeReq.start}-${rangeReq.end}`}\nresult=miss`,
+      });
+      traceMessage.retrieving = false;
+      traceMessage.streaming = false;
+      touchSession(session);
+      persistSessions();
+      renderMessages({ stickToBottom: true });
+      return {
+        injectedMessages: [{
+          role: "system",
+          content: `你刚才请求的区间 ${rangeReq.raw || `${rangeReq.start}-${rangeReq.end}`} 没有检索到结果。请不要重复同一请求；若无必要，直接基于当前可见上下文输出 JSON。`,
+        }],
+        traceMessage,
+      };
+    }
+    appendToolTraceStep(traceMessage, {
+      tool: "区间查看",
+      label: "hit",
+      status: "running",
+      detail: [
+        `range=${rangeReq.raw || `${rangeReq.start}-${rangeReq.end}`}`,
+        `count=${rangeResult.count}`,
+        "preview=",
+        buildToolTracePreviewDetail(rangeResult.text),
+      ].join("\n"),
+    });
+    appendToolTraceStep(traceMessage, {
+      tool: "区间查看",
+      label: "inject",
+      status: "running",
+      detail: `system_len=${(rangeResult.text || "").length}\ncount=${rangeResult.count}`,
+    });
+    updateLastToolTraceStep(traceMessage, { status: "done" });
+    traceMessage.retrieving = false;
+    traceMessage.streaming = true;
+    touchSession(session);
+    persistSessions();
+    renderMessages({ stickToBottom: true });
+    return {
+      injectedMessages: buildDirectorRetrievalFollowUpMessages(rangeResult.text, latestUserContent, "historical range"),
+      traceMessage,
+    };
+  }
+
+  const searchQuery = window.__chatRetrieval.extractSearchQuery(rawOutput);
+  if (!searchQuery) {
+    return null;
+  }
+  const preferredRange = inferScopedRangePreference(session, latestUserContent);
+  if (preferredRange) {
+    const normalizedRangeReq = {
+      start: preferredRange.start,
+      end: preferredRange.end,
+      scope: preferredRange.scope,
+      raw: `${preferredRange.scope},${preferredRange.start}-${preferredRange.end}`,
+      normalizedFrom: searchQuery,
+      normalizedReason: preferredRange.reason,
+    };
+    return executeDirectorRetrieval(
+      session,
+      traceMessage,
+      `【查看区间】${normalizedRangeReq.raw}【/查看区间】`
+    );
+  }
+  debugLog("director", "导演触发历史搜索", { query: searchQuery });
+  appendToolTraceStep(traceMessage, {
+    tool: "历史搜索",
+    label: "emit",
+    command: `search ${searchQuery}`,
+    status: "running",
+    detail: `marker=${rawOutput}\nquery=${searchQuery}`,
+  });
+  traceMessage.content = "";
+  traceMessage.retrieving = true;
+  traceMessage.streaming = false;
+  touchSession(session);
+  persistSessions();
+  renderMessages({ stickToBottom: true });
+  setInlineChatStatus("导演正在检索历史...");
+  const searchResult = await window.__chatRetrieval.executeSearch(searchQuery, {
+    maxResults: 8,
+    contextRange: 4,
+    sessionId: session.id,
+  });
+  if (!searchResult?.text) {
+    updateLastToolTraceStep(traceMessage, {
+      status: "miss",
+      detail: `marker=${rawOutput}\nquery=${searchQuery}\nresult=miss`,
+    });
+    traceMessage.retrieving = false;
+    traceMessage.streaming = false;
+    touchSession(session);
+    persistSessions();
+    renderMessages({ stickToBottom: true });
+    return {
+      injectedMessages: [{
+        role: "system",
+        content: `你刚才请求搜索“${searchQuery}”，但没有命中结果。请不要重复同一搜索；若无必要，直接基于当前可见上下文输出 JSON。`,
+      }],
+      traceMessage,
+    };
+  }
+  appendToolTraceStep(traceMessage, {
+    tool: "历史搜索",
+    label: "hit",
+    status: "running",
+    detail: [
+      `query=${searchQuery}`,
+      `count=${searchResult.count}`,
+      "preview=",
+      buildToolTracePreviewDetail(searchResult.text),
+    ].join("\n"),
+  });
+  appendToolTraceStep(traceMessage, {
+    tool: "历史搜索",
+    label: "inject",
+    status: "running",
+    detail: `system_len=${(searchResult.text || "").length}\ncount=${searchResult.count}`,
+  });
+  updateLastToolTraceStep(traceMessage, { status: "done" });
+  traceMessage.retrieving = false;
+  traceMessage.streaming = true;
+  touchSession(session);
+  persistSessions();
+  renderMessages({ stickToBottom: true });
+  return {
+    injectedMessages: buildDirectorRetrievalFollowUpMessages(searchResult.text, latestUserContent, "search result"),
+    traceMessage,
+  };
 }
 
 function beginUserMessageEdit(messageId) {
@@ -914,7 +1303,7 @@ function clearUserMessageEdit() {
   renderMessages();
 }
 
-function copyMessageContent(messageId) {
+function copyMessageContent(messageId, iconEl) {
   const session = getCurrentSession();
   if (!session) {
     return;
@@ -924,9 +1313,17 @@ function copyMessageContent(messageId) {
     return;
   }
 
-  navigator.clipboard.writeText(message.content).then(() => {
+  const showCopied = () => {
     setText(els.chatStatus, t("chat.copied"));
-  }, () => {
+    if (iconEl) {
+      iconEl.className = "bi bi-check-lg message-edit-icon message-edit-icon-copied";
+      setTimeout(() => {
+        iconEl.className = "bi bi-copy message-edit-icon";
+      }, 3000);
+    }
+  };
+
+  navigator.clipboard.writeText(message.content).then(showCopied, () => {
     const textarea = document.createElement("textarea");
     textarea.value = message.content;
     textarea.style.position = "fixed";
@@ -935,7 +1332,7 @@ function copyMessageContent(messageId) {
     textarea.select();
     document.execCommand("copy");
     document.body.removeChild(textarea);
-    setText(els.chatStatus, t("chat.copied"));
+    showCopied();
   });
 }
 
@@ -951,7 +1348,7 @@ async function regenerateFromUserMessage(messageId) {
   }
 
   state.isSending = true;
-  setInlineChatStatus("正在处理中...");
+  setInlineChatStatus(t("chat.statusProcessing"));
   if (els.thinkingPopover && !els.thinkingPopover.classList.contains("hidden")) {
     els.thinkingPopover.classList.add("hidden");
     els.thinkingPopover.classList.remove("visible");
@@ -1135,6 +1532,29 @@ function buildToolTraceSection(message) {
   ].join("");
 }
 
+function buildNarrationContent(message) {
+  if (!message) return "";
+  const narrationText = sanitizeNarrationText(message.content);
+  let html = buildToolTraceSection(message);
+  if (message.pending) {
+    return html + `<span class="typing-row"><span></span><span></span><span></span></span>`;
+  }
+  if (message.retrieving) {
+    return html;
+  }
+  if (narrationText) {
+    html += escapeHtml(narrationText).replace(/\n/g, "<br>");
+  }
+  return html;
+}
+
+function buildToolTracePreviewDetail(text, limit = 1200) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  if (raw.length <= limit) return raw;
+  return `${raw.slice(0, limit)}\n...(truncated)`;
+}
+
 function wrapCodeLines(el) {
   if (getSessionSetting("showLineNumbers") !== true) return;
   var codes = el.tagName === 'CODE' ? [el] : el.querySelectorAll('pre code');
@@ -1147,7 +1567,7 @@ function wrapCodeLines(el) {
       for (var di = Math.max(0, lines.length - 5); di < lines.length; di++) {
         tail.push(JSON.stringify(lines[di]));
       }
-      console.log('[LN] total=' + lines.length + ' tail=' + tail.join(', '));
+      debugInfo('[LN] total=' + lines.length + ' tail=' + tail.join(', '));
     }
     // 去掉末尾空白行（streaming 过程中内容末尾换行产生的伪影）
     while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
@@ -1620,10 +2040,9 @@ function buildNarrationNode(message) {
   wrapper.className = `narration-block ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
   if (message.id) wrapper.dataset.messageId = message.id;
   const narration = document.createElement("div");
-  narration.className = `narration ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${!message.pending && !/[\r\n]/.test(narrationText) ? "single-line" : ""}`.trim();
-  narration.innerHTML = message.pending
-    ? `<span class="typing-row"><span></span><span></span><span></span></span>`
-    : escapeHtml(narrationText).replace(/\n/g, "<br>");
+  const isSingleLine = !message.pending && narrationText && !/[\r\n]/.test(narrationText);
+  narration.className = `narration ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${isSingleLine ? "single-line" : ""}`.trim();
+  narration.innerHTML = buildNarrationContent(message);
   if (message.id && tokenLabel && isMobileTokenToggleMode()) {
     narration.addEventListener("click", () => {
       if (window.getSelection().toString().trim()) return;
@@ -1648,10 +2067,9 @@ function refreshNarrationNode(wrapper, message) {
   wrapper.className = `narration-block ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
   const bubble = wrapper.querySelector('.narration');
   if (bubble) {
-    bubble.className = `narration ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${!message.pending && !/[\r\n]/.test(narrationText) ? "single-line" : ""}`.trim();
-    const body = message.pending
-      ? `<span class="typing-row"><span></span><span></span><span></span></span>`
-      : escapeHtml(narrationText).replace(/\n/g, "<br>");
+    const isSingleLine = !message.pending && narrationText && !/[\r\n]/.test(narrationText);
+    bubble.className = `narration ${message.pending ? "pending" : ""} ${message.streaming ? "streaming" : ""} ${isSingleLine ? "single-line" : ""}`.trim();
+    const body = buildNarrationContent(message);
     if (bubble.innerHTML !== body) bubble.innerHTML = body;
   }
   const tokenBar = wrapper.querySelector('.message-token-bar');
@@ -1807,7 +2225,7 @@ function buildMessageTools(message) {
   copyBtn.className = "message-edit-btn";
   copyBtn.title = t("chat.copy");
   copyBtn.innerHTML = `<i class="bi bi-copy message-edit-icon"></i>`;
-  copyBtn.addEventListener("click", () => copyMessageContent(message.id));
+  copyBtn.addEventListener("click", () => copyMessageContent(message.id, copyBtn.querySelector(".message-edit-icon")));
   tools.appendChild(copyBtn);
 
   if (message.role === "user") {
@@ -1938,6 +2356,11 @@ async function sendUserMessage() {
 
   touchSession(session);
   persistSessions();
+  els.chatInput.value = "";
+  autoResizeChatInput();
+  renderMessages();
+  renderChatListMenu();
+  pinLastUserMessageToTop();
   // 保存用户消息到 IndexedDB
   if (window.__chatDB) {
     const lastUser = session.messages[session.messages.length - 1];
@@ -1963,17 +2386,15 @@ async function sendUserMessage() {
         clearInlineChatStatus();
         els.sendBtn.disabled = false;
         els.chatInput.disabled = false;
+        els.chatInput.value = content;
+        autoResizeChatInput();
         updateComposerMode();
+        renderMessages();
         setText(els.chatStatus, "用户消息保存失败，请稍后重试");
         return;
       }
     }
   }
-  els.chatInput.value = "";
-  autoResizeChatInput();
-  renderMessages();
-  renderChatListMenu();
-  pinLastUserMessageToTop();
   debugLog("turn", t("debug.msg.userMessageSubmitted"), {
     sessionId: session.id,
     editingMessageId: state.editingUserMessageId,
@@ -2100,7 +2521,7 @@ async function runSessionTurn(session) {
             ? (explicitRetrievalCue ? window.__chatRetrieval.parseBlindRangeFromUserText(lastUserContent, blindEnd) : null)
             : null;
           if (blindRange) {
-            console.log("[MOYU-SEARCH] 模型未输出标记，自动执行历史区间检索", blindRange);
+            debugInfo("[MOYU-SEARCH] 模型未输出标记，自动执行历史区间检索", blindRange);
             setText(els.chatStatus, "正在检索历史记录...");
             const lastResp2 = session.messages.filter(function (m) { return m.role === "assistant" && !m.uiType; });
             const lastAssistant2 = lastResp2.length ? lastResp2[lastResp2.length - 1] : null;
@@ -2176,7 +2597,9 @@ async function runSessionTurn(session) {
       messageCount: session.messages.length,
       transientNpcCount: (session.transientNpcs || []).length,
     });
-    const directive = await callDirector(session);
+    const directorResult = await callDirector(session);
+    const directive = directorResult?.directive || directorResult;
+    const directorTraceMessage = directorResult?.traceMessage || null;
     debugLog("director", t("debug.msg.directiveAccepted"), directive);
     if (directive.spawnNpcs?.length) {
       upsertTransientNpcs(session, directive.spawnNpcs);
@@ -2192,7 +2615,7 @@ async function runSessionTurn(session) {
       });
     }
     if (directive.narration) {
-      const narrationMessage = {
+      const narrationMessage = directorTraceMessage || {
         id: `narration-${Date.now()}`,
         role: "assistant",
         speaker: "导演 AI",
@@ -2201,27 +2624,40 @@ async function runSessionTurn(session) {
         createdAt: new Date().toISOString(),
         pending: false,
         streaming: true,
-        usage: directive.usage || null,
-        estimatedUsage: directive.usage ? null : {
-          input: estimateChatMessagesTokens([
-            { role: "system", content: getDirectorSystemPrompt(session) },
-            { role: "system", content: "固定 NPC 列表：" + JSON.stringify(session.npcs.map((npc) => npc.name)) },
-            { role: "system", content: "场内 NPC：" + JSON.stringify(getSceneNpcs(session).map((npc) => npc.name)) },
-            { role: "system", content: "全局设定：" + session.globalPrompt },
-            ...buildDirectorContextMessages(session),
-          ]),
-          output: estimateTokens(directive.narration),
-          total: 0,
-        },
+      };
+      narrationMessage.usage = directive.usage || null;
+      narrationMessage.estimatedUsage = directive.usage ? null : {
+        input: estimateChatMessagesTokens([
+          { role: "system", content: getDirectorSystemPrompt(session) },
+          { role: "system", content: "固定 NPC 列表：" + JSON.stringify(session.npcs.map((npc) => npc.name)) },
+          { role: "system", content: "场内 NPC：" + JSON.stringify(getSceneNpcs(session).map((npc) => npc.name)) },
+          { role: "system", content: "全局设定：" + session.globalPrompt },
+          ...buildDirectorContextMessages(session),
+        ]),
+        output: estimateTokens(directive.narration),
+        total: 0,
       };
       if (narrationMessage.estimatedUsage) {
         narrationMessage.estimatedUsage.total = narrationMessage.estimatedUsage.input + narrationMessage.estimatedUsage.output;
       }
-      session.messages.push(narrationMessage);
+      narrationMessage.pending = false;
+      narrationMessage.streaming = true;
+      narrationMessage.retrieving = false;
+      if (!directorTraceMessage) {
+        session.messages.push(narrationMessage);
+      }
       renderMessages({ stickToBottom: true });
       await streamLocalText(narrationMessage, directive.narration);
       touchSession(session);
       persistSessions();
+    } else if (directorTraceMessage) {
+      directorTraceMessage.content = "";
+      directorTraceMessage.pending = false;
+      directorTraceMessage.streaming = false;
+      directorTraceMessage.retrieving = false;
+      touchSession(session);
+      persistSessions();
+      renderMessages({ stickToBottom: true });
     }
 
     let responders = getResponderNpcs(session, directive.responders);
@@ -2307,14 +2743,14 @@ async function ensureHistoricalScopeNames(session) {
         .filter(Boolean)
     ));
     session.historicalScopeNames = Array.from(new Set([...(dbScopes || []), ...runtimeScopes]));
-    console.log("[MOYU-SEARCH] historical scope names", {
+    debugInfo("[MOYU-SEARCH] historical scope names", {
       sessionId: session.id,
       dbScopes: dbScopes || [],
       runtimeScopes,
       mergedScopes: session.historicalScopeNames,
     });
   } catch (error) {
-    console.warn("[MOYU] failed to load historical scope names", {
+    debugWarn("[MOYU] failed to load historical scope names", {
       sessionId: session?.id,
       error: error?.message || String(error),
     });
@@ -2326,7 +2762,7 @@ async function callDirector(session) {
   const sceneNpcNames = getSceneNpcs(session).map((npc) => npc.name);
   const fixedNpcNames = session.npcs.map((npc) => npc.name);
 
-  const messages = [
+  let messages = [
     { role: "system", content: getDirectorSystemPrompt(session) },
     { role: "system", content: "固定 NPC 列表：" + JSON.stringify(fixedNpcNames) },
     { role: "system", content: "场内 NPC：" + JSON.stringify(sceneNpcNames) },
@@ -2373,33 +2809,28 @@ async function callDirector(session) {
     messages.push({ role: "system", content: "你只负责调度。禁止输出 npc_instructions 字段——NPC 不需要你的指挥，让他们自由发挥。" });
   }
 
+  const directorRetrievalRule = buildDirectorRetrievalRule(session);
+  if (directorRetrievalRule) {
+    messages = insertSystemMessageBeforeLastUser(messages, directorRetrievalRule);
+  }
+
+  const retryInstruction = buildDirectorRetryInstruction();
+  let retrievalMessages = [];
+  let retrievalHops = 0;
+  let needsRetryInstruction = false;
+  let directorTraceMessage = null;
+
   for (let attempt = 0; attempt < 4; attempt += 1) {
     debugLog("director", t("debug.msg.requestAttempt"), {
       sessionId: session.id,
       attempt: attempt + 1,
       model: session.directorModel,
     });
-    const requestMessages = attempt === 0
-      ? messages
-      : [
-          ...messages,
-          {
-            role: "system",
-            content: [
-              "你的上一条输出不是 JSON，已被丢弃。",
-              "现在重新输出——只输出 JSON 对象，一行。",
-              "不要自然语言、不要解释、不要 markdown、不要\"旁白：\"前缀。",
-              "",
-              "⚠️ 重新判断 responders：",
-              "检查用户最新消息中的名字。",
-              '"小夏荷"匹配"夏荷"，"春桃姐"匹配"春桃"——昵称/简称也要算。',
-              "上一轮有 NPC 回复过用户，用户在追问 → 该 NPC 必须进 responders。",
-              "创作模式中，如果用户只是没点名 NPC，但发出了普通对话/动作/询问 → narration 或 responders 至少一个必须非空。",
-              "如果 responders 为空，narration 必须写出这一拍的场景推进、气氛反应或动作描写。",
-              "只有用户明确要求等待、沉默、无人回应时，narration 和 responders 才可以同时为空。",
-            ].join("\n"),
-          },
-        ];
+    const requestMessages = [
+      ...messages,
+      ...retrievalMessages,
+      ...(needsRetryInstruction ? [{ role: "system", content: retryInstruction }] : []),
+    ];
 
     const directorConfig = resolveModelConfig(session.directorConfigId, session.directorModel, session.configId);
     const directorExtra = buildThinkingExtra(session.directorModel, state.directorThinking);
@@ -2413,6 +2844,26 @@ async function callDirector(session) {
       content,
     });
 
+    if (window.__chatRetrieval) {
+      const retrievalMarker = window.__chatRetrieval.extractRangeRequest(content) || window.__chatRetrieval.extractSearchQuery(content);
+      if (retrievalMarker) {
+        if (retrievalHops >= 3) {
+          throw new Error("导演检索次数过多，已停止继续检索");
+        }
+        directorTraceMessage = ensureDirectorTraceMessage(session, directorTraceMessage);
+        const retrievalResult = await executeDirectorRetrieval(session, directorTraceMessage, content);
+        if (!retrievalResult?.injectedMessages?.length) {
+          throw new Error("导演检索执行失败");
+        }
+        retrievalMessages = retrievalMessages.concat(retrievalResult.injectedMessages);
+        retrievalHops += 1;
+        needsRetryInstruction = false;
+        setInlineChatStatus("导演正在调度...");
+        attempt -= 1;
+        continue;
+      }
+    }
+
     try {
       const directive = parseDirectorDirective(content, session);
       directive.usage = normalizeUsage(payload.usage) || {
@@ -2420,7 +2871,10 @@ async function callDirector(session) {
         output: estimateTokens(content),
         total: estimateChatMessagesTokens(requestMessages) + estimateTokens(content),
       };
-      return directive;
+      return {
+        directive,
+        traceMessage: directorTraceMessage,
+      };
     } catch (jsonError) {
       debugLog("director", t("debug.msg.invalidResponseRetrying"), {
         attempt: attempt + 1,
@@ -2430,9 +2884,12 @@ async function callDirector(session) {
 
       if (attempt >= 1) {
         try {
-          const repaired = await repairDirectorDirective(session, messages, content, attempt + 1);
+          const repaired = await repairDirectorDirective(session, [...messages, ...retrievalMessages], content, attempt + 1);
           debugLog("director", t("debug.msg.repairResponseAccepted"), repaired);
-          return repaired;
+          return {
+            directive: repaired,
+            traceMessage: directorTraceMessage,
+          };
         } catch (repairError) {
           debugLog("director", t("debug.msg.repairResponseFailed"), {
             attempt: attempt + 1,
@@ -2444,6 +2901,7 @@ async function callDirector(session) {
       if (attempt === 3) {
         throw jsonError;
       }
+      needsRetryInstruction = true;
       await wait(180);
     }
   }
@@ -2912,7 +3370,7 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
       ? window.__chatDB.appendMessage(session.id, targetMessage)
       : window.__chatDB.saveMessage(session.id, targetMessage, getMessageSequenceInSession(session, targetMessage));
     saveAssistant.catch(function (err) {
-      console.warn("[chat] save assistant message failed", err);
+      debugWarn("[chat] save assistant message failed", err);
     });
     window.__chatDB.updateSessionMeta(session).catch(function () {});
   }
@@ -2928,7 +3386,7 @@ async function handleSearchMarker(session, targetMessage, npc, contextMessages) 
   let rangeReq = window.__chatRetrieval.extractRangeRequest(targetMessage.content);
   if (rangeReq) {
     debugLog("retrieval", "检测到模型区间查看请求", rangeReq);
-    console.log("[MOYU-SEARCH] 模型触发了区间查看", rangeReq);
+    debugInfo("[MOYU-SEARCH] 模型触发了区间查看", rangeReq);
     appendToolTraceStep(targetMessage, {
       tool: "区间查看",
       label: "emit",
@@ -2978,11 +3436,11 @@ async function handleSearchMarker(session, targetMessage, npc, contextMessages) 
   if (!searchQuery) return false;
 
   debugLog("retrieval", "检测到模型搜索请求", { query: searchQuery });
-  console.log("[MOYU-SEARCH] 模型触发了搜索请求", { query: searchQuery });
+  debugInfo("[MOYU-SEARCH] 模型触发了搜索请求", { query: searchQuery });
   const historicalScopes = Array.isArray(session.historicalScopeNames) ? session.historicalScopeNames : [];
   const scopePreferred = isScopePreferredSearchQuery(searchQuery);
   if (scopePreferred) {
-    console.warn("[MOYU-SEARCH] scoped retrieval should have been preferred", {
+    debugWarn("[MOYU-SEARCH] scoped retrieval should have been preferred", {
       query: searchQuery,
       historicalScopes,
     });
@@ -3061,7 +3519,7 @@ async function ensureDirectorSummary(session, options = {}) {
     const threshold = DIRECTOR_MEMORY_TARGET_MAX;
     const memoryTokens = estimateChatMessagesTokens(memoryOnlyContext);
 
-    console.log("[MOYU:compress]", mode, "mode", {
+    debugInfo("[MOYU:compress]", mode, "mode", {
       memoryTokens,
       threshold,
       candidateCount: candidateMessages.length,
@@ -3070,7 +3528,7 @@ async function ensureDirectorSummary(session, options = {}) {
 
     if (memoryTokens >= threshold) {
       // 记忆超阈值 → 全量重压缩（像手动压缩一样收紧记忆）
-      console.warn("[MOYU:compress] 记忆超阈值，触发全量重压缩", { memoryTokens, threshold });
+      debugWarn("[MOYU:compress] 记忆超阈值，触发全量重压缩", { memoryTokens, threshold });
       return ensureDirectorSummary(session, { force: true, mode: "manual", recentLimit: DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT });
     }
 
@@ -3079,7 +3537,7 @@ async function ensureDirectorSummary(session, options = {}) {
     }
 
     if (!allowAutoMerge) {
-      console.log("[MOYU:compress]", "跳过自动合并新增历史", {
+      debugInfo("[MOYU:compress]", "跳过自动合并新增历史", {
         reason: "auto-merge-not-allowed",
         candidateCount: candidateMessages.length,
         recentLimit,
@@ -3112,7 +3570,7 @@ async function ensureDirectorSummary(session, options = {}) {
   const beforeMemoryTokens = estimateTokens(currentMemoryBlock || String(session.directorSummary || ""));
   const beforeManualBudget = beforeMemoryTokens + beforeRecentTokens;
 
-  console.log("[MOYU:compress]", "调用压缩模型", {
+  debugInfo("[MOYU:compress]", "调用压缩模型", {
     model: session.directorModel,
     mode,
     targetTokens,
@@ -3133,11 +3591,11 @@ async function ensureDirectorSummary(session, options = {}) {
     throw apiError;
   }
 
-  console.log("[MOYU:compress]", "压缩模型返回", {
+  debugInfo("[MOYU:compress]", "压缩模型返回", {
     contentLength: payload.content?.length || 0,
     usage: payload.usage,
   });
-  console.log("[MOYU:compress]", "压缩结果文本", payload.content);
+  debugInfo("[MOYU:compress]", "压缩结果文本", payload.content);
   const nextMemory = parseDirectorMemoryPayload(payload.content, session);
   const segmentSummary = mode === "manual" ? "" : extractDirectorSegmentSummary(payload.content, nextMemory);
   const nextMemoryBlock = buildDirectorMemoryBlock(nextMemory);
@@ -3147,7 +3605,7 @@ async function ensureDirectorSummary(session, options = {}) {
     || !currentMemoryBlock
     || nextMemoryTokens <= Math.max(DIRECTOR_MEMORY_TARGET_MIN, beforeManualBudget);
 
-  console.log("[MOYU:compress]", "解析结果", {
+  debugInfo("[MOYU:compress]", "解析结果", {
     mode,
     beforeMemoryTokens,
     nextMemoryTokens,
@@ -3155,7 +3613,7 @@ async function ensureDirectorSummary(session, options = {}) {
   });
 
   if (!shouldApplyManualSummary) {
-    console.warn("[MOYU:compress]", "未应用压缩结果", {
+    debugWarn("[MOYU:compress]", "未应用压缩结果", {
       reason: mode === "manual" ? "新记忆token超预算" : "非手动模式且无变更",
     });
     return false;
@@ -3179,7 +3637,7 @@ async function ensureDirectorSummary(session, options = {}) {
   touchSession(session);
   persistSessions();
 
-  console.log("[MOYU:compress]", "压缩完成", {
+  debugInfo("[MOYU:compress]", "压缩完成", {
     mode,
     beforeMemoryTokens,
     nextMemoryTokens,
@@ -3250,7 +3708,7 @@ async function ensureChatSummary(session, options = {}) {
 
   compressMessages.push({ role: "user", content: "请基于已有摘要和新增对话，输出一份更新的简洁摘要。" });
 
-  console.log("[MOYU:compress]", "单 AI 摘要压缩调用", {
+  debugInfo("[MOYU:compress]", "单 AI 摘要压缩调用", {
     model: npc.model,
     force,
     summaryTokens,
@@ -3276,7 +3734,7 @@ async function ensureChatSummary(session, options = {}) {
   const nextTokens = estimateTokens(nextSummary);
   const beforeTokens = estimateTokens(currentSummary);
 
-  console.log("[MOYU:compress]", "单 AI 摘要压缩结果", {
+  debugInfo("[MOYU:compress]", "单 AI 摘要压缩结果", {
     beforeTokens,
     nextTokens,
     summaryLength: nextSummary.length,
@@ -3406,7 +3864,7 @@ async function tryAutoCompressSession(session) {
   // Show state immediately
   updateCompressMemoryButtonProgress(session);
 
-  console.log("[MOYU:compress]", "自动压缩触发", {
+  debugInfo("[MOYU:compress]", "自动压缩触发", {
     sessionId: session.id,
     directorModel: session.directorModel,
     contextCurrent: metrics?.contextCurrent,
@@ -3426,9 +3884,9 @@ async function tryAutoCompressSession(session) {
       updateCompressMemoryButtonProgress(session);
       renderCompressMemoryPopover();
     }
-    setText(els.chatStatus, prevStatusText || "所有单位已就绪");
+    setText(els.chatStatus, prevStatusText || t("chat.statusReady"));
   } catch (error) {
-    setText(els.chatStatus, prevStatusText || "所有单位已就绪");
+    setText(els.chatStatus, prevStatusText || t("chat.statusReady"));
     console.error("[MOYU:compress]", "自动压缩失败", {
       message: error?.message || String(error),
       directorModel: session.directorModel,
@@ -3470,7 +3928,7 @@ async function tryAutoCompressChat(session) {
   const npc = session.npcs?.[0];
   if (!npc?.model) return;
 
-  console.log("[MOYU:compress]", "单 AI 自动压缩触发", {
+  debugInfo("[MOYU:compress]", "单 AI 自动压缩触发", {
     sessionId: session.id,
     npcModel: npc.model,
     unsummarizedCount,
@@ -3487,9 +3945,9 @@ async function tryAutoCompressChat(session) {
       updateCompressMemoryButtonProgress(session);
       renderCompressMemoryPopover();
     }
-    setText(els.chatStatus, prevStatusText || "所有单位已就绪");
+    setText(els.chatStatus, prevStatusText || t("chat.statusReady"));
   } catch (error) {
-    setText(els.chatStatus, prevStatusText || "所有单位已就绪");
+    setText(els.chatStatus, prevStatusText || t("chat.statusReady"));
     console.error("[MOYU:compress]", "单 AI 自动压缩失败", {
       message: error?.message || String(error),
       npcModel: npc.model,
@@ -3620,20 +4078,20 @@ function buildCompressMemoryPopoverMarkup(session) {
   }
 
   const contextPercent = Math.max(0, Math.min(100, Math.round((metrics.contextCurrent / Math.max(1, metrics.contextThreshold)) * 100)));
-  const headText = isSingleAi ? "对话上下文与压缩进度" : "导演上下文与自动压缩进度";
+  const headText = isSingleAi ? t("chat.compressContextTitle") : t("chat.compressDirectorTitle");
   const progressTone = contextPercent >= 100 ? "full" : contextPercent >= 76 ? "high" : contextPercent >= 48 ? "mid" : "low";
   const summaryText = isSingleAi ? String(session?.chatSummary || "").trim() : String(session?.directorSummary || "").trim();
   const summaryMarkup = summaryText ? escapeHtml(summaryText).replace(/\n/g, "<br>") : "";
   const summaryCollapsed = summaryMarkup && (summaryText.length > 360 || summaryText.split(/\n+/).filter(Boolean).length > 3) ? "collapsed" : "expanded";
   const rows = [
-    ["上下文", `${formatTokenCount(metrics.contextCurrent)} / ${formatTokenCount(metrics.contextThreshold)}`],
+    [t("chat.compressMetricContext"), `${formatTokenCount(metrics.contextCurrent)} / ${formatTokenCount(metrics.contextThreshold)}`],
   ];
   const segmentCount = Array.isArray(session?.compressionSegments) ? session.compressionSegments.length : 0;
   if (segmentCount > 0) {
-    rows.push(["分段记忆", String(segmentCount)]);
+    rows.push([t("chat.compressMetricSegments"), String(segmentCount)]);
   }
   if (isSingleAi && metrics.recentCount > 0) {
-    rows.push(["消息数", String(metrics.recentCount)]);
+    rows.push([t("chat.compressMetricMessages"), String(metrics.recentCount)]);
   }
 
   return `
@@ -3655,13 +4113,13 @@ function buildCompressMemoryPopoverMarkup(session) {
       </dl>
       ${summaryMarkup ? `
       <div class="memory-compress-summary ${summaryCollapsed}">
-        <div class="memory-compress-summary-label">${isSingleAi ? "压缩摘要" : "导演记忆"}</div>
+        <div class="memory-compress-summary-label">${isSingleAi ? t("chat.compressSummaryLabel") : t("chat.compressDirectorLabel")}</div>
         <div class="memory-compress-summary-body">${summaryMarkup}</div>
-        <button class="memory-compress-summary-toggle" type="button">${summaryCollapsed === "collapsed" ? "展开" : "收起"}</button>
+        <button class="memory-compress-summary-toggle" type="button">${summaryCollapsed === "collapsed" ? t("chat.compressExpand") : t("chat.compressCollapse")}</button>
       </div>
       ` : ""}
       <div class="memory-compress-popover-footer">
-        <button class="memory-compress-popover-action" type="button"${state.isSending ? " disabled" : ""}>压缩</button>
+        <button class="memory-compress-popover-action" type="button"${state.isSending ? " disabled" : ""}>${t("chat.compressAction")}</button>
       </div>
     </div>
   `.trim();
@@ -3692,12 +4150,12 @@ function updateCompressMemoryButtonProgress(session) {
   els.compressMemoryBtn.setAttribute(
     "aria-label",
     metrics
-      ? `压缩记忆，当前上下文 ${metrics.contextCurrent} / ${metrics.contextThreshold}，进度 ${contextPercent}%`
-      : "压缩记忆"
+      ? t("chat.compressMemoryAria", { current: metrics.contextCurrent, threshold: metrics.contextThreshold, percent: contextPercent })
+      : t("chat.compressMemory")
   );
   els.compressMemoryBtn.title = metrics
-    ? `压缩记忆 ${metrics.contextCurrent} / ${metrics.contextThreshold}`
-    : "压缩记忆";
+    ? t("chat.compressMemoryTitle", { current: metrics.contextCurrent, threshold: metrics.contextThreshold })
+    : t("chat.compressMemory");
 }
 
 function showCompressPopover() {
@@ -3840,7 +4298,7 @@ function updateModelThinkingBtn() {
   if (!els.modelThinkingBtn) return;
   const on = els.modelThinkingBtn.dataset.state === "enabled";
   els.modelThinkingBtn.className = `secondary-btn model-thinking-btn ${on ? "state-enabled" : "state-disabled"}`;
-  els.modelThinkingBtn.textContent = "Agent思考";
+  els.modelThinkingBtn.textContent = t("chat.agentThinking");
 }
 
 function isSingleModelWorkSession(session) {
@@ -3872,7 +4330,7 @@ function updateThinkingToggleMode() {
   els.thinkingToggleBtn.classList.toggle("single-model-thinking", singleModel);
   els.thinkingToggleBtn.classList.toggle("state-enabled", singleModel && enabled);
   els.thinkingToggleBtn.classList.toggle("state-disabled", singleModel && !enabled);
-  els.thinkingToggleBtn.textContent = singleModel ? "深度思考" : "思考设置";
+  els.thinkingToggleBtn.textContent = singleModel ? t("chat.deepThinking") : t("chat.thinkingSettings");
   els.thinkingToggleBtn.setAttribute("aria-pressed", singleModel ? String(enabled) : "false");
   if (singleModel && els.thinkingPopover) {
     els.thinkingPopover.classList.add("hidden");
@@ -3887,6 +4345,14 @@ function getModelThinkingState() {
 
 function buildModelThinkingExtra(modelName) {
   return buildThinkingExtra(modelName, getModelThinkingState());
+}
+
+function shouldRenderThinkingForModel(modelName) {
+  const name = (modelName || "").toLowerCase();
+  if (name.includes("claude") && getModelThinkingState() === "disabled") {
+    return false;
+  }
+  return true;
 }
 
 
@@ -4063,15 +4529,15 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     const isTempError = /temperature|unsupported param/i.test(errorDetail);
 
     if (isUsageError && isTempError) {
-      console.warn("[MOYU] stream_options and temperature rejected, retrying without both", { model, detail: errorDetail });
+      debugWarn("[MOYU] stream_options and temperature rejected, retrying without both", { model, detail: errorDetail });
       response = await doStreamFetch(false, false);
       errorDetail = "";
     } else if (isUsageError) {
-      console.warn("[MOYU] stream_options rejected, retrying without it", { model, detail: errorDetail });
+      debugWarn("[MOYU] stream_options rejected, retrying without it", { model, detail: errorDetail });
       response = await doStreamFetch(false);
       errorDetail = "";
     } else if (isTempError) {
-      console.warn("[MOYU] temperature not supported, retrying without it", { model, detail: errorDetail });
+      debugWarn("[MOYU] temperature not supported, retrying without it", { model, detail: errorDetail });
       response = await doStreamFetch(shouldTrackUsage, false);
       errorDetail = "";
     }
@@ -4101,7 +4567,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     if (speaker !== "导演 AI") {
       targetMessage.content = stripThinkingLeakage(targetMessage.content);
     }
-    targetMessage.thinking = result.thinking || "";
+    targetMessage.thinking = shouldRenderThinkingForModel(model) ? (result.thinking || "") : "";
     targetMessage.usage = normalizeUsage(result.usage);
     targetMessage.streaming = false;
     touchSession(session);
@@ -4150,8 +4616,9 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
             data?.choices?.[0]?.message?.reasoning_content ??
             data?.choices?.[0]?.message?.reasoning ??
             "";
-          if (thinkingDelta && !streamRevealed) {
-            initialThinkingBuffer += thinkingDelta;
+          const visibleThinkingDelta = shouldRenderThinkingForModel(model) ? thinkingDelta : "";
+          if (visibleThinkingDelta && !streamRevealed) {
+            initialThinkingBuffer += visibleThinkingDelta;
           }
           if (delta) {
             if (!streamRevealed) {
@@ -4164,10 +4631,10 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
                 initialThinkingBuffer = "";
               }
             } else {
-              streamBatch.queue(delta, thinkingDelta, streamRevealed);
+              streamBatch.queue(delta, visibleThinkingDelta, streamRevealed);
             }
-          } else if (thinkingDelta && streamRevealed) {
-            streamBatch.queue("", thinkingDelta, streamRevealed);
+          } else if (visibleThinkingDelta && streamRevealed) {
+            streamBatch.queue("", visibleThinkingDelta, streamRevealed);
           }
         } catch {
           // Ignore incompatible keepalive chunks.
@@ -4234,8 +4701,9 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
                 data?.choices?.[0]?.delta?.reasoning_content ??
                 data?.choices?.[0]?.delta?.reasoning ??
                 "";
-              if (thinkingDelta && !retryRevealed) {
-                retryInitialThinkingBuffer += thinkingDelta;
+              const visibleThinkingDelta = shouldRenderThinkingForModel(model) ? thinkingDelta : "";
+              if (visibleThinkingDelta && !retryRevealed) {
+                retryInitialThinkingBuffer += visibleThinkingDelta;
               }
               if (delta) {
                 if (!retryRevealed) {
@@ -4248,10 +4716,10 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
                     retryInitialThinkingBuffer = "";
                   }
                 } else {
-                  retryBatch.queue(delta, thinkingDelta, retryRevealed);
+                  retryBatch.queue(delta, visibleThinkingDelta, retryRevealed);
                 }
-              } else if (thinkingDelta && retryRevealed) {
-                retryBatch.queue("", thinkingDelta, retryRevealed);
+              } else if (visibleThinkingDelta && retryRevealed) {
+                retryBatch.queue("", visibleThinkingDelta, retryRevealed);
               }
             } catch {}
           }
@@ -4392,7 +4860,7 @@ async function generateSuggestions() {
     }
 
     if (!Array.isArray(suggestions) || !suggestions.length) {
-      console.warn("[Suggest] 原始响应:", content);
+      debugWarn("[Suggest] 原始响应:", content);
       throw new Error("invalid");
     }
 
@@ -4723,7 +5191,7 @@ function hideMentionPopup() {
 //   __msg(g, w)      — 全局第 g 条 = 可见窗口内第 w 条，验证对应关系
 window.__msg = function (g, w) {
   var session = getCurrentSession();
-  if (!session) return console.warn("[__msg] 没有当前会话");
+  if (!session) return debugWarn("[__msg] 没有当前会话");
   var msgs = session.messages.filter(function (m) { return m && m.role !== "system" && m.content && !m.pending; });
   var total = msgs.length;
   var windowSize = 30;
@@ -4731,10 +5199,10 @@ window.__msg = function (g, w) {
 
   // 单参数：原行为
   if (w === undefined) {
-    if (g < 1 || g > total) return console.warn("[__msg] 序号超出范围，共 " + total + " 条可见消息");
+    if (g < 1 || g > total) return debugWarn("[__msg] 序号超出范围，共 " + total + " 条可见消息");
     var msg = msgs[g - 1];
     var inWin = g >= windowStart ? "第 " + (g - windowStart + 1) + "/30" : "窗口外";
-    console.log("[__msg] 全局第 " + g + "/" + total + " 条（窗口内 " + inWin + "）:", {
+    debugInfo("[__msg] 全局第 " + g + "/" + total + " 条（窗口内 " + inWin + "）:", {
       role: msg.role,
       speaker: msg.speaker || (msg.role === "user" ? "你" : "AI"),
       uiType: msg.uiType || "normal",
@@ -4750,22 +5218,22 @@ window.__msg = function (g, w) {
   // 验证全局索引 g 是否恰好等于 windowStart + w - 1
   var expectedGlobal = windowStart + w - 1;
   if (g !== expectedGlobal) {
-    console.warn("[__msg] 对不上: 全局第 " + g + " 条 ≠ 窗口第 " + w + " 条（窗口从 " + windowStart + " 开始，窗口第 " + w + " 条 = 全局第 " + expectedGlobal + " 条）");
+    debugWarn("[__msg] 对不上: 全局第 " + g + " 条 ≠ 窗口第 " + w + " 条（窗口从 " + windowStart + " 开始，窗口第 " + w + " 条 = 全局第 " + expectedGlobal + " 条）");
     // 仍然打印两条各自的信息方便对比
     if (g >= 1 && g <= total) {
       var msgG = msgs[g - 1];
-      console.log("[__msg] 全局第 " + g + ": [" + (msgG.role === "user" ? "用户" : (msgG.speaker || "AI")) + "] " + (msgG.content || "").slice(0, 200));
+      debugInfo("[__msg] 全局第 " + g + ": [" + (msgG.role === "user" ? "用户" : (msgG.speaker || "AI")) + "] " + (msgG.content || "").slice(0, 200));
     }
     if (w >= 1 && w <= windowSize && windowStart + w - 1 <= total) {
       var msgW = msgs[windowStart + w - 2];
-      console.log("[__msg] 窗口第 " + w + ": [" + (msgW.role === "user" ? "用户" : (msgW.speaker || "AI")) + "] " + (msgW.content || "").slice(0, 200));
+      debugInfo("[__msg] 窗口第 " + w + ": [" + (msgW.role === "user" ? "用户" : (msgW.speaker || "AI")) + "] " + (msgW.content || "").slice(0, 200));
     }
     return;
   }
 
   // 对上了，打印这条消息
   var msg = msgs[g - 1];
-  console.log("[__msg] ✓ 全局第 " + g + " = 窗口第 " + w + "/30" + ":", {
+  debugInfo("[__msg] ✓ 全局第 " + g + " = 窗口第 " + w + "/30" + ":", {
     role: msg.role,
     speaker: msg.speaker || (msg.role === "user" ? "你" : "AI"),
     uiType: msg.uiType || "normal",
