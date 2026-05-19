@@ -663,8 +663,8 @@ function importSettingsBackup(event) {
 
 function clearAllData() {
   if (window.__chatDB?.clearAll) {
-    if (!confirm("确定要清空所有会话和消息数据吗？此操作不可撤销！")) return;
-    if (!confirm("再次确认：所有聊天记录将被永久删除。")) return;
+    if (!confirm(t("settings.clearAllDataConfirm"))) return;
+    if (!confirm(t("settings.clearAllDataConfirm2"))) return;
     var btn = document.getElementById("clearAllDataBtn");
     if (btn) btn.disabled = true;
     window.__chatDB.clearAll().then(function () {
@@ -673,9 +673,9 @@ function clearAllData() {
       persistSessions();
       renderSession();
       renderChatListMenu();
-      setText(els.settingsStatus, "所有会话消息已清空");
+      setText(els.settingsStatus, t("settings.clearAllDataSuccess"));
     }).catch(function (err) {
-      setText(els.settingsStatus, "清理失败: " + (err.message || "未知错误"));
+      setText(els.settingsStatus, t("settings.clearAllDataFailed", { message: err.message || String(err) }));
     }).finally(function () {
       if (btn) btn.disabled = false;
     });

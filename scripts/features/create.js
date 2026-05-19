@@ -1,3 +1,5 @@
+"use strict";
+
 function updateEntityTerms() {
   const mode = getSelectedMode();
   const term = getEntityTerm(mode);
@@ -193,8 +195,7 @@ function getCreateExitMeta() {
     };
   }
 
-  const hasCurrentSession = Boolean(state.currentSessionId && getCurrentSession());
-  if (hasCurrentSession) {
+  if (state.createExitTarget === "chat") {
     return {
       label: state.locale === "en-US" ? "Back to Chat" : "返回聊天",
       target: "chat",
@@ -295,7 +296,7 @@ function bindCreateEditNavigation() {
     }
 
     state.currentSessionEditSection = "details";
-    state.showWelcomeHome = !state.currentSessionId;
+    state.showWelcomeHome = state.createExitTarget !== "chat";
     renderSession();
     switchView("chat");
   });
@@ -824,6 +825,7 @@ function openSessionEditor(sessionId) {
     renderWorkModels();
   }
 
+  state.createExitTarget = "chat";
   state.editingSessionId = session.id;
   session.directorConfigId = resolveConfigIdForModel(session.directorModel, session.directorConfigId || session.configId);
   session.npcs = (session.npcs || []).map((npc) => ({
@@ -849,10 +851,11 @@ function openSessionEditor(sessionId) {
   setCreateStatus(t("create.statusEditing"), "");
 }
 
-function prepareCreateViewForNewSession() {
+function prepareCreateViewForNewSession(options = {}) {
   clearUserMessageEdit();
   state.editingSessionId = null;
   state.currentSessionEditSection = "details";
+  state.createExitTarget = options.returnTarget === "chat" ? "chat" : "welcome";
   els.globalPromptInput.value = "";
   populateModelSelect(els.directorModelSelect, "");
   els.npcList.innerHTML = "";

@@ -1,4 +1,6 @@
-﻿function renderSession() {
+﻿"use strict";
+
+function renderSession() {
   var session = getCurrentSession();
   renderChatListMenu();
 

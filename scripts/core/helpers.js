@@ -1,4 +1,6 @@
-﻿function wait(ms) {
+﻿"use strict";
+
+function wait(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
@@ -261,13 +263,6 @@ function showToast(message, type = "error", duration = 4000) {
     toast.classList.remove("visible");
     setTimeout(() => toast.remove(), 300);
   }, duration);
-}
-
-function scrollChatToBottom() {
-  var scrollEl = els.chatMessages?.closest(".main");
-  if (scrollEl) {
-    smoothScrollTo(scrollEl, scrollEl.scrollHeight);
-  }
 }
 
 function getEntityTerm(mode) {

@@ -1,3 +1,5 @@
+"use strict";
+
 let maxObservedViewportHeight = 0;
 let _prevKeyboardOpen = false;
 
@@ -231,7 +233,7 @@ async function init() {
   if (initialView === "create") {
     await _loadScript("./scripts/features/create.js");
     initCreateView();
-    prepareCreateViewForNewSession();
+    prepareCreateViewForNewSession({ returnTarget: "welcome" });
     switchView("create");
   } else if (initialView === "settings") {
     await _loadScript("./scripts/features/settings.js");

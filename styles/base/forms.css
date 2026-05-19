@@ -270,7 +270,6 @@ textarea {
   align-items: flex-end;
   padding-top: 6px;
 }
-
 #createView .npc-header > div {
   display: grid;
   gap: 6px;
@@ -279,76 +278,280 @@ textarea {
 #createView .npc-list {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 14px;
+  gap: 6px;
 }
 
+/* ── Card shell ─────────────────────────── */
 #createView .npc-card {
   display: grid;
   gap: 0;
-  border: 0;
-  border-radius: 14px;
-  box-shadow: none;
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  background: transparent;
   overflow: hidden;
+  position: relative;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+#createView .npc-card:hover {
+  border-color: rgba(255, 255, 255, 0.09);
+}
+/* expanded: subtle glow instead of heavy bar */
+#createView .npc-card.expanded {
+  border-color: rgba(255, 255, 255, 0.11);
+  box-shadow: inset 2px 0 0 0 var(--accent);
+  background: rgba(255, 255, 255, 0.04);
 }
 
+/* ── Header — always compact ────────────── */
 #createView .npc-accordion-toggle {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
+  gap: 6px;
+  padding: 8px 10px 8px 12px;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: var(--text);
   text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+/* Header NEVER gets taller on expanded —
+   no border-bottom, no padding change.     */
+
+#createView .npc-agent-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+#createView .npc-agent-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Green dot */
+#createView .npc-agent-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ec9b0;
+  flex: 0 0 auto;
+  opacity: 0.6;
 }
 
 #createView .npc-accordion-name {
-  font-size: 14px;
+  font-size: 12.5px;
   font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-#createView .npc-accordion-arrow {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 14px;
-  transition: transform 0.3s ease, color 0.24s ease;
-}
-
-#createView .npc-card.expanded .npc-accordion-arrow {
-  transform: rotate(180deg);
   color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
 #createView .npc-card.is-unnamed .npc-accordion-name {
   color: var(--muted);
   font-weight: 500;
 }
 
+#createView .npc-agent-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+/* Model chip */
+#createView .npc-agent-model-chip {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+#createView .npc-agent-model-chip:empty {
+  display: none;
+}
+
+/* Prompt badge */
+#createView .npc-agent-badge {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+#createView .badge-prompt.badge-prompt-on {
+  background: rgba(78, 201, 176, 0.1);
+  color: #4ec9b0;
+}
+#createView .badge-prompt.badge-prompt-off {
+  display: none;
+}
+
+/* Arrow */
+#createView .npc-accordion-arrow {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 11px;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+#createView .npc-card.expanded .npc-accordion-arrow {
+  transform: rotate(180deg);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ── Expanded body — Inspector style ────── */
 #createView .npc-accordion-body {
   display: grid;
-  gap: 14px;
+  gap: 2px;
   height: 0;
   opacity: 0;
   overflow: hidden;
-  padding: 0 16px;
-  transition: height 0.32s ease, opacity 0.24s ease, padding 0.32s ease;
-  will-change: height, opacity;
+  padding: 0 12px;
+  transition: height 0.22s ease, opacity 0.18s ease, padding 0.22s ease;
 }
-
 #createView .npc-card.expanded .npc-accordion-body {
   opacity: 1;
-  padding: 0 16px 16px;
+  padding: 10px 12px 12px;
+}
+
+/* Section label row (like Inspector header) */
+#createView .npc-accordion-body .field {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 6px;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+#createView .npc-accordion-body .field:last-of-type {
+  border-bottom: none;
+}
+#createView .npc-accordion-body .field span:first-child {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  flex: 0 0 auto;
+}
+
+/* Compact inputs */
+#createView .npc-accordion-body input,
+#createView .npc-accordion-body select {
+  height: 28px;
+  font-size: 12px;
+  padding: 0 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 4px;
+  color: var(--text);
+  outline: none;
+  min-width: 0;
+}
+#createView .npc-accordion-body select {
+  cursor: pointer;
+}
+#createView .npc-accordion-body input:focus,
+#createView .npc-accordion-body select:focus {
+  border-color: var(--accent);
+}
+
+/* ── Prompt as code editor ──────────────── */
+#createView .npc-accordion-body .field:has(textarea) {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 6px 0 2px;
+}
+
+#createView .npc-prompt {
+  width: 100%;
+  height: 72px;
+  max-height: 120px;
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 4px;
+  color: var(--text);
+  outline: none;
+  resize: vertical;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  font-family: "SF Mono", "Cascadia Code", "Fira Code", "Consolas", monospace;
+}
+#createView .npc-prompt:focus {
+  border-color: var(--accent);
+}
+#createView .npc-prompt::placeholder {
+  color: rgba(255, 255, 255, 0.2);
+  font-family: inherit;
+}
+
+/* ── Footer ─────────────────────────────── */
+/* Inspector rows: stack fields vertically, not side by side */
+#createView .npc-top {
+  display: contents;
 }
 
 #createView .npc-footer {
-  margin-top: 0;
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  margin-top: 0;
+}
+#createView .npc-footer .hint-text {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.2);
+  line-height: 1.4;
+  display: block;
+}
+
+/* ── Remove × icon — top right overlay ─── */
+#createView .remove-npc-btn {
+  position: absolute;
+  top: 6px;
+  right: 28px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.15);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+#createView .npc-card:hover .remove-npc-btn {
+  opacity: 1;
+}
+#createView .remove-npc-btn:hover {
+  color: #f48771;
+  background: rgba(244, 135, 113, 0.1);
+  opacity: 1;
 }
 
 #createView .actions {
@@ -367,6 +570,8 @@ textarea {
 }
 
 .npc-top {
+  display: flex;
+  gap: 14px;
   align-items: start;
 }
 
@@ -375,6 +580,120 @@ textarea {
 }
 
 .npc-footer {
-  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+/* ── Custom Select (replaces native <select>) ─────────────── */
+.cs-wrap {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  vertical-align: middle;
+}
+
+.cs-trigger {
+  width: 100%;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.cs-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.cs-trigger:focus-visible {
+  border-color: var(--accent);
+}
+.cs-trigger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cs-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.cs-arrow {
+  flex: 0 0 auto;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.3);
+  transition: transform 0.2s ease;
+  line-height: 1;
+}
+.cs-open .cs-arrow {
+  transform: rotate(180deg);
+}
+
+.cs-panel {
+  position: absolute;
+  z-index: 500;
+  left: 0;
+  right: 0;
+  min-width: 120px;
+  background: #252526;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 6px;
+  padding: 4px;
+  display: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.cs-panel.cs-open {
+  display: block;
+}
+
+.cs-opt {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s ease, color 0.1s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.cs-opt:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+.cs-opt-active {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+}
+.cs-opt-sel {
+  color: #fff;
+  font-weight: 600;
+  background: rgba(0, 122, 204, 0.15);
+}
+.cs-opt-sel.cs-opt-active {
+  background: rgba(0, 122, 204, 0.24);
 }
 

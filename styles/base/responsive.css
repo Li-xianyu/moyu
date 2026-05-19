@@ -520,12 +520,20 @@
     gap: 12px;
   }
 
-  #createView .npc-accordion-toggle {
-    padding: 13px 14px;
+  #createView .npc-list {
+    gap: 4px;
   }
-
+  #createView .npc-accordion-toggle {
+    padding: 7px 8px 7px 10px;
+  }
   #createView .npc-accordion-body {
-    padding: 0 14px 14px;
+    padding: 0 10px;
+  }
+  #createView .npc-card.expanded .npc-accordion-body {
+    padding: 8px 10px 10px;
+  }
+  #createView .npc-accordion-body .field {
+    grid-template-columns: 60px 1fr;
   }
 
   .message {

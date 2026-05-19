@@ -1,3 +1,5 @@
+"use strict";
+
 const _scriptState = {};
 
 function _loadScript(src) {
@@ -92,7 +94,7 @@ async function restoreViewFromHistory(entry) {
     } else {
       await _loadScript("./scripts/features/create.js");
       initCreateView();
-      prepareCreateViewForNewSession();
+      prepareCreateViewForNewSession({ returnTarget: "chat" });
       switchView("create");
     }
   } else if (entry.view === "settings") {
@@ -142,7 +144,7 @@ function bindNav() {
       if (view === "create") {
         await _loadScript("./scripts/features/create.js");
         initCreateView();
-        prepareCreateViewForNewSession();
+        prepareCreateViewForNewSession({ returnTarget: "chat" });
       } else if (view === "settings") {
         await _loadScript("./scripts/features/settings.js");
         initSettingsView();

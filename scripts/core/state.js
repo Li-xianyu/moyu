@@ -1,4 +1,6 @@
-﻿const state = {
+﻿"use strict";
+
+const state = {
   locale: loadJson(STORAGE_KEYS.locale, "zh-CN"),
   settings: normalizeSettings(loadJson(STORAGE_KEYS.settings, { host: "", key: "", configs: [] })),
   modelCache: loadJson(STORAGE_KEYS.modelCache, {}),
@@ -8,6 +10,7 @@
   mobileSidebarOpen: false,
   currentSettingsSection: "global",
   showWelcomeHome: false,
+  createExitTarget: "welcome",
   isSending: false,
   chatInlineStatus: "",
   editingSessionId: null,
