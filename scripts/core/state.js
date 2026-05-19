@@ -107,7 +107,6 @@ const els = {
   modelThinkingBtn: document.getElementById("modelThinkingBtn"),
   thinkingToggleBtn: document.getElementById("thinkingToggleBtn"),
   thinkingPopover: document.getElementById("thinkingPopover"),
-  mobileNewlineBtn: document.getElementById("mobileNewlineBtn"),
   sendBtn: document.getElementById("sendBtn"),
   chatStatus: document.getElementById("chatStatus"),
   createViewTitle: document.querySelector("#createView .panel-head h2"),

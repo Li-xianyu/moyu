@@ -138,7 +138,7 @@ function bindChat() {
       }
     }
 
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey && !isMobileViewport()) {
       event.preventDefault();
       sendUserMessage();
     }
@@ -153,9 +153,6 @@ function bindChat() {
   });
   if (els.suggestBtn) {
     els.suggestBtn.addEventListener("click", generateSuggestions);
-  }
-  if (els.mobileNewlineBtn) {
-    els.mobileNewlineBtn.addEventListener("click", insertChatInputNewline);
   }
   const suggestionClose = els.suggestionBar?.querySelector(".suggestion-close-btn");
   if (suggestionClose) {
@@ -362,6 +359,31 @@ function ensureCompressMemoryPopover() {
 }
 
 
+function buildCompressionSegmentsMarkup(session) {
+  var segments = Array.isArray(session?.compressionSegments) ? session.compressionSegments : [];
+  if (!segments.length) return "";
+  var itemsHtml = segments.map(function (seg, i) {
+    var summary = String(seg.summary || "").trim();
+    if (!summary) return "";
+    var rangeLabel = Number.isFinite(seg.startSeq) && Number.isFinite(seg.endSeq)
+      ? (seg.startSeq + 1) + "-" + (seg.endSeq + 1)
+      : "#" + (i + 1);
+    var bodyClass = summary.length > 200 || summary.split(/\n+/).filter(Boolean).length > 3 ? "collapsed" : "";
+    return '<div class="memory-compress-segment' + (bodyClass ? " collapsed" : "") + '">'
+      + '<div class="memory-compress-segment-range">' + t("chat.compressSegmentRange", { range: rangeLabel }) + "</div>"
+      + '<div class="memory-compress-segment-body' + (bodyClass ? " collapsed" : "") + '">' + escapeHtml(summary).replace(/\n/g, "<br>") + "</div>"
+      + (bodyClass ? '<button class="memory-compress-segment-toggle" type="button">' + t("chat.compressExpand") + "</button>" : "")
+      + "</div>";
+  }).filter(Boolean).join("");
+  if (!itemsHtml) return "";
+  var collapsed = segments.length > 2 ? " collapsed" : "";
+  return '<div class="memory-compress-segments' + collapsed + '">'
+    + '<div class="memory-compress-segments-head">' + t("chat.compressMetricSegments") + "</div>"
+    + itemsHtml
+    + (collapsed ? '<button class="memory-compress-segments-toggle" type="button">' + t("chat.compressExpandAll") + "</button>" : "")
+    + "</div>";
+}
+
 function buildCompressMemoryPopoverMarkup(session) {
   const isSingleAi = session?.mode === SESSION_MODE_WORK && !session.directorModel && session.npcs?.length === 1;
   const metrics = isSingleAi ? buildChatContextTokenMetrics(session) : buildDirectorContextTokenMetrics(session);
@@ -403,6 +425,7 @@ function buildCompressMemoryPopoverMarkup(session) {
           </div>
         `).join("")}
       </dl>
+      ${buildCompressionSegmentsMarkup(session)}
       ${summaryMarkup ? `
       <div class="memory-compress-summary ${summaryCollapsed}">
         <div class="memory-compress-summary-label">${isSingleAi ? t("chat.compressSummaryLabel") : t("chat.compressDirectorLabel")}</div>
@@ -458,12 +481,19 @@ function showCompressPopover() {
   popover.classList.add("visible");
   popover.getBoundingClientRect();
   popover.style.removeProperty("transition");
+  // 移动端：阻止外层 .main 抢滚动
+  popover.addEventListener("touchmove", preventPopoverScrollEscape, { passive: false });
 }
 
 function hideCompressPopover() {
   const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
   if (!popover) return;
   popover.classList.remove("visible");
+  popover.removeEventListener("touchmove", preventPopoverScrollEscape);
+}
+
+function preventPopoverScrollEscape(e) {
+  e.stopPropagation();
 }
 
 function toggleCompressPopover() {
@@ -514,6 +544,39 @@ function renderCompressMemoryPopover() {
       summaryToggle.textContent = collapsed ? "展开" : "收起";
     };
   }
+  // Segment toggles
+  var segmentsWrap = popover.querySelector(".memory-compress-segments");
+  var segmentsToggle = popover.querySelector(".memory-compress-segments-toggle");
+  if (segmentsWrap && segmentsToggle) {
+    segmentsToggle.onclick = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var isCollapsed = segmentsWrap.classList.toggle("collapsed");
+      segmentsToggle.textContent = isCollapsed ? t("chat.compressExpandAll") : t("chat.compressCollapseAll");
+      segmentsWrap.querySelectorAll(".memory-compress-segment").forEach(function (seg) {
+        seg.classList.remove("collapsed");
+      });
+      segmentsWrap.querySelectorAll(".memory-compress-segment-body").forEach(function (body) {
+        body.classList.remove("collapsed");
+      });
+      segmentsWrap.querySelectorAll(".memory-compress-segment-toggle").forEach(function (btn) {
+        if (btn) btn.textContent = t("chat.compressCollapse");
+      });
+    };
+  }
+  popover.querySelectorAll(".memory-compress-segment-toggle").forEach(function (btn) {
+    btn.onclick = function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var seg = btn.closest(".memory-compress-segment");
+      if (!seg) return;
+      var body = seg.querySelector(".memory-compress-segment-body");
+      if (body) body.classList.toggle("collapsed");
+      seg.classList.toggle("collapsed");
+      btn.textContent = seg.classList.contains("collapsed") ? t("chat.compressExpand") : t("chat.compressCollapse");
+    };
+  });
+
   const actionBtn = popover.querySelector(".memory-compress-popover-action");
   if (actionBtn) {
     actionBtn.disabled = state.isSending || !hasSession;

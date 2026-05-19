@@ -1503,34 +1503,6 @@
   margin-left: -2px;
 }
 
-.mobile-newline-btn {
-  display: none;
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--muted);
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  line-height: 1;
-  flex: 0 0 auto;
-  cursor: pointer;
-  outline: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.mobile-newline-btn:disabled {
-  cursor: default;
-  opacity: 0.35;
-}
-
-.mobile-newline-btn:not(:disabled):active {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
-}
 
 .memory-compress-btn {
   position: relative;
@@ -1553,6 +1525,7 @@
   transform: none;
   outline: none;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .memory-compress-btn::before,
@@ -1685,10 +1658,15 @@
   background: #252526;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
   opacity: 0;
-  overflow: visible;
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
   transform: translateX(var(--memory-compress-popover-shift-x)) translateY(calc(6px + var(--memory-compress-popover-shift-y)));
   pointer-events: none;
   transition: opacity 0.18s ease, transform 0.18s ease;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: auto;
 }
 
 .memory-compress-popover::before {
@@ -1827,10 +1805,6 @@
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 220px;
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
 }
 
 .memory-compress-summary.collapsed .memory-compress-summary-body {
@@ -1863,6 +1837,89 @@
 
 .memory-compress-summary-toggle:hover,
 .memory-compress-summary-toggle:focus-visible {
+  color: #a7c4ff;
+}
+
+.memory-compress-segments {
+  display: grid;
+  gap: 6px;
+}
+.memory-compress-segments.collapsed .memory-compress-segment:nth-child(n+3) {
+  display: none;
+}
+.memory-compress-segments.collapsed .memory-compress-segments-toggle {
+  display: inline;
+}
+
+.memory-compress-segments-head {
+  color: #8f96a3;
+  font-size: 11px;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.memory-compress-segment {
+  display: grid;
+  gap: 4px;
+  padding: 8px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.memory-compress-segment.collapsed .memory-compress-segment-body {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.memory-compress-segment-range {
+  color: #7ea9ff;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 500;
+}
+
+.memory-compress-segment-body {
+  color: #e1e5eb;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.memory-compress-segment-toggle {
+  justify-self: end;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #7ea9ff;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.memory-compress-segment-toggle:hover,
+.memory-compress-segment-toggle:focus-visible {
+  color: #a7c4ff;
+}
+
+.memory-compress-segments-toggle {
+  display: none;
+  border: 0;
+  padding: 4px 0 0;
+  background: transparent;
+  color: #7ea9ff;
+  font-size: 11px;
+  line-height: 1.2;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  text-align: left;
+}
+.memory-compress-segments-toggle:hover,
+.memory-compress-segments-toggle:focus-visible {
   color: #a7c4ff;
 }
 
@@ -2116,9 +2173,9 @@
 /* ===== Mobile-responsive composer ===== */
 @media (max-width: 960px) {
   #chatInput {
-    min-height: 84px;
-    max-height: 156px;
-    padding: 12px;
+    min-height: 52px;
+    max-height: 130px;
+    padding: 10px;
     font-size: 16px;
     line-height: 1.5;
   }
@@ -2159,9 +2216,9 @@
 
 @media (max-width: 640px) {
   #chatInput {
-    min-height: 68px;
-    max-height: 132px;
-    padding: 10px;
+    min-height: 44px;
+    max-height: 108px;
+    padding: 8px;
     font-size: 15px;
     line-height: 1.48;
   }

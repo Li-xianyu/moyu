@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="dark">
   <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=2026.05.19.04">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.19.01";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.20.01";window.__moyuBootStart = performance.now();</script>
   <style>
     .loading-screen {
       position: fixed; inset: 0; z-index: 9999;
@@ -794,7 +794,7 @@
               <div id="chatStatus" class="status-text" data-i18n="chat.readyAfterCreate" data-tone="success">所有单位已就绪</div>
             </div>
             <div class="composer">
-              <textarea id="chatInput" rows="3" enterkeyhint="send" data-i18n-placeholder="chat.inputPlaceholder" placeholder="输入你想说的话..." disabled></textarea>
+              <textarea id="chatInput" rows="1" data-i18n-placeholder="chat.inputPlaceholder" placeholder="输入你想说的话..." disabled></textarea>
               <div class="composer-footer">
                 <div class="composer-footer-left">
                   <button id="compressMemoryBtn" class="secondary-btn memory-compress-btn" type="button" disabled aria-label="压缩记忆" data-i18n-aria-label="chat.compressMemory" data-i18n-title="chat.compressMemory">
@@ -810,8 +810,7 @@
                     <button id="modelThinkingBtn" class="secondary-btn model-thinking-btn" type="button" disabled data-state="disabled" data-i18n="chat.agentThinking">Agent思考</button>
                   </div>
                 </div>
-                <button id="mobileNewlineBtn" class="mobile-newline-btn" type="button" disabled aria-label="换行" title="换行"><i data-lucide="corner-down-left"></i></button>
-                <button id="sendBtn" class="primary-btn send-inside-btn" disabled aria-label="发送"><i data-lucide="arrow-up"></i></button>
+<button id="sendBtn" class="primary-btn send-inside-btn" disabled aria-label="发送"><i data-lucide="arrow-up"></i></button>
               </div>
             </div>
           </div>

@@ -64,17 +64,7 @@ function copyMessageContent(messageId, iconEl) {
     }
   };
 
-  navigator.clipboard.writeText(message.content).then(showCopied, () => {
-    const textarea = document.createElement("textarea");
-    textarea.value = message.content;
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.appendChild(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    document.body.removeChild(textarea);
-    showCopied();
-  });
+  copyToClipboard(message.content, showCopied);
 }
 
 async function regenerateFromUserMessage(messageId) {

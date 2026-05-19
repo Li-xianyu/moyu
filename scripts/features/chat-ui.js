@@ -348,9 +348,9 @@ function autoResizeChatInput() {
   const minHeight = parseFloat(computed.minHeight) || 0;
   const maxHeight = parseFloat(computed.maxHeight) || (
     window.matchMedia("(max-width: 640px)").matches
-      ? 132
+      ? 108
       : window.matchMedia("(max-width: 960px)").matches
-        ? 156
+        ? 130
         : 184
   );
 
@@ -360,22 +360,6 @@ function autoResizeChatInput() {
   el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
   recalcUserTopAnchorSpacer();
 }
-
-function insertChatInputNewline() {
-  const input = els.chatInput;
-  if (!input || input.disabled || state.isSending) return;
-
-  const start = input.selectionStart ?? input.value.length;
-  const end = input.selectionEnd ?? start;
-  const nextValue = `${input.value.slice(0, start)}\n${input.value.slice(end)}`;
-  input.value = nextValue;
-  const nextCursor = start + 1;
-  input.setSelectionRange(nextCursor, nextCursor);
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  autoResizeChatInput();
-  input.focus();
-}
-
 
 function updateComposerMode() {
   const composer = els.chatInput?.closest(".composer");
@@ -389,7 +373,6 @@ function updateComposerMode() {
     els.sendBtn.disabled = false;
     els.sendBtn.classList.add("sending");
     els.chatInput.classList.remove("editing");
-    if (els.mobileNewlineBtn) els.mobileNewlineBtn.disabled = true;
     if (composer) composer.classList.remove("editing");
     if (composerShell) composerShell.classList.remove("editing");
     if (els.cancelEditBtn) els.cancelEditBtn.classList.add("hidden");
@@ -402,7 +385,6 @@ function updateComposerMode() {
     els.sendBtn.innerHTML = '<i data-lucide="check"></i>';
     lucide.createIcons();
     els.chatInput.classList.add("editing");
-    if (els.mobileNewlineBtn) els.mobileNewlineBtn.disabled = false;
     if (composer) {
       composer.classList.add("editing");
     }
@@ -423,9 +405,6 @@ function updateComposerMode() {
 
   els.sendBtn.classList.remove("sending");
   els.chatInput.classList.remove("editing");
-  if (els.mobileNewlineBtn) {
-    els.mobileNewlineBtn.disabled = !currentSession;
-  }
   if (composer) {
     composer.classList.remove("editing");
   }
@@ -791,7 +770,7 @@ function updateStreamingBubble(targetMessage) {
           e.stopPropagation();
           var pre = btn.closest('.pre-code-block');
           const code = pre ? pre.querySelector('code').textContent : '';
-          navigator.clipboard.writeText(code).then(() => {
+          function copyDone() {
             btn.className = 'code-copy-btn copied';
             btn.innerHTML = '<i data-lucide="check"></i>';
             lucide.createIcons();
@@ -800,7 +779,8 @@ function updateStreamingBubble(targetMessage) {
               btn.innerHTML = '<i data-lucide="clipboard"></i>';
               lucide.createIcons();
             }, 1500);
-          }).catch(() => {});
+          }
+          copyToClipboard(code, copyDone);
         });
       });
     }
@@ -1306,7 +1286,7 @@ function buildMessageTools(message) {
   copyBtn.className = "message-edit-btn";
   copyBtn.title = t("chat.copy");
   copyBtn.innerHTML = `<i data-lucide="copy" class="message-edit-icon"></i>`;
-  copyBtn.addEventListener("click", () => copyMessageContent(message.id, copyBtn.querySelector(".message-edit-icon")));
+  copyBtn.addEventListener("click", (e) => { e.stopPropagation(); copyMessageContent(message.id, copyBtn.querySelector(".message-edit-icon")); });
   tools.appendChild(copyBtn);
 
   if (message.role === "user") {
@@ -1314,14 +1294,14 @@ function buildMessageTools(message) {
     editBtn.type = "button";
     editBtn.className = `message-edit-btn ${state.editingUserMessageId === message.id ? "active" : ""}`.trim();
     editBtn.innerHTML = `<i data-lucide="pencil" class="message-edit-icon"></i>`;
-    editBtn.addEventListener("click", () => beginUserMessageEdit(message.id));
+    editBtn.addEventListener("click", (e) => { e.stopPropagation(); beginUserMessageEdit(message.id); });
     tools.appendChild(editBtn);
 
     const retryBtn = document.createElement("button");
     retryBtn.type = "button";
     retryBtn.className = "message-edit-btn";
     retryBtn.innerHTML = `<i data-lucide="rotate-ccw" class="message-edit-icon"></i>`;
-    retryBtn.addEventListener("click", () => regenerateFromUserMessage(message.id));
+    retryBtn.addEventListener("click", (e) => { e.stopPropagation(); regenerateFromUserMessage(message.id); });
     tools.appendChild(retryBtn);
   }
 
@@ -1371,7 +1351,7 @@ function bindCodeCopyBtn(btn) {
         code = codeEl ? codeEl.textContent.replace(/\u200B/g, '') : '';
       }
     }
-    navigator.clipboard.writeText(code).then(() => {
+    copyToClipboard(code, function () {
       btn.className = 'code-copy-btn copied';
       btn.innerHTML = '<i data-lucide="check"></i>';
       lucide.createIcons();
@@ -1380,7 +1360,7 @@ function bindCodeCopyBtn(btn) {
         btn.innerHTML = '<i data-lucide="clipboard"></i>';
         lucide.createIcons();
       }, 1500);
-    }).catch(() => {});
+    });
   });
 }
 

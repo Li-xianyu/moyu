@@ -421,12 +421,8 @@
     order: 0;
   }
 
-  .send-inside-btn {
-    order: 0;
-  }
 
-  .mobile-newline-btn {
-    display: inline-flex;
+  .send-inside-btn {
     order: 0;
   }
 
@@ -435,8 +431,12 @@
   }
 
   .composer-cancel-btn {
-    min-width: 38px;
-    min-height: 38px;
+    width: 32px;
+    height: 32px;
+  }
+  .composer-cancel-btn svg {
+    width: 16px;
+    height: 16px;
   }
   .memory-compress-btn {
     min-width: 84px;
@@ -444,13 +444,12 @@
   }
 
   .send-inside-btn {
-    min-width: 38px;
-    min-height: 38px;
+    width: 32px;
+    height: 32px;
   }
-
-  .mobile-newline-btn {
-    min-width: 38px;
-    min-height: 38px;
+  .send-inside-btn svg {
+    width: 16px;
+    height: 16px;
   }
 
   .memory-compress-btn {

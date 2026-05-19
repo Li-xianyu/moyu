@@ -6,6 +6,27 @@ function wait(ms) {
   });
 }
 
+function copyToClipboard(text, onSuccess) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(onSuccess, fallback);
+  } else {
+    fallback();
+  }
+  function fallback() {
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    } catch (e) { /* ignored */ }
+    onSuccess();
+  }
+}
+
 function smoothScrollTo(element, targetY) {
   const startY = element.scrollTop;
   const distance = targetY - startY;
