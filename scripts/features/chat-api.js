@@ -98,7 +98,7 @@ function estimateMessageOutputUsage(message) {
 }
 
 function buildMessageTokenLabel(message) {
-  if (state.settings?.session?.showTokenDisplay === false) {
+  if (getSessionSetting("showTokenDisplay") === false) {
     return "";
   }
   const usage = normalizeUsage(message?.usage);

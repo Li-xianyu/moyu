@@ -56,6 +56,92 @@ function touchSession(session) {
   upsertSession(session);
 }
 
+const SESSION_SETTING_DEFAULTS = Object.freeze({
+  compressThreshold: 1800,
+  showTokenDisplay: true,
+  directorDispatchOnly: false,
+  markdownRender: true,
+  showLineNumbers: false,
+  modelThinking: "disabled",
+});
+
+function normalizeSessionSettingValue(key, value) {
+  switch (key) {
+    case "compressThreshold": {
+      const num = Number.parseInt(value, 10);
+      return Number.isFinite(num) ? Math.max(500, Math.min(10000, num)) : SESSION_SETTING_DEFAULTS.compressThreshold;
+    }
+    case "showTokenDisplay":
+    case "directorDispatchOnly":
+    case "markdownRender":
+    case "showLineNumbers":
+      return Boolean(value);
+    case "modelThinking":
+      return value === "enabled" ? "enabled" : "disabled";
+    default:
+      return value;
+  }
+}
+
+function normalizeSessionOverrides(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const overrides = {};
+  Object.keys(SESSION_SETTING_DEFAULTS).forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      overrides[key] = normalizeSessionSettingValue(key, source[key]);
+    }
+  });
+  return overrides;
+}
+
+function getGlobalSessionSetting(key) {
+  const fallback = SESSION_SETTING_DEFAULTS[key];
+  const source = state.settings?.session || {};
+  if (!Object.prototype.hasOwnProperty.call(source, key)) {
+    return fallback;
+  }
+  return normalizeSessionSettingValue(key, source[key]);
+}
+
+function getSessionSetting(sessionOrKey, maybeKey) {
+  const session = typeof sessionOrKey === "string" || sessionOrKey == null
+    ? getCurrentSession()
+    : sessionOrKey;
+  const key = typeof sessionOrKey === "string" ? sessionOrKey : maybeKey;
+  if (!key) {
+    return undefined;
+  }
+  const overrides = normalizeSessionOverrides(session?.settingsOverrides);
+  if (Object.prototype.hasOwnProperty.call(overrides, key)) {
+    return overrides[key];
+  }
+  return getGlobalSessionSetting(key);
+}
+
+function hasSessionSettingOverride(session, key) {
+  const overrides = session?.settingsOverrides;
+  return Boolean(overrides && Object.prototype.hasOwnProperty.call(overrides, key));
+}
+
+function setSessionSettingOverride(session, key, value) {
+  if (!session || !key) {
+    return;
+  }
+  session.settingsOverrides = normalizeSessionOverrides({
+    ...(session.settingsOverrides || {}),
+    [key]: normalizeSessionSettingValue(key, value),
+  });
+}
+
+function clearSessionSettingOverride(session, key) {
+  if (!session?.settingsOverrides || !key) {
+    return;
+  }
+  const next = { ...session.settingsOverrides };
+  delete next[key];
+  session.settingsOverrides = normalizeSessionOverrides(next);
+}
+
 function buildFallbackTitle(session) {
   const text = session?.globalPrompt?.trim() || "未命名会话";
   return text.length > 12 ? `${text.slice(0, 12)}...` : text;
@@ -278,10 +364,12 @@ function normalizeSettings(raw) {
     },
     session: {
       ...(raw?.session || {}),
-      compressThreshold: typeof raw?.session?.compressThreshold === "number"
-        ? raw.session.compressThreshold
-        : 1800,
-      showTokenDisplay: raw?.session?.showTokenDisplay !== false,
+      compressThreshold: normalizeSessionSettingValue("compressThreshold", raw?.session?.compressThreshold),
+      showTokenDisplay: normalizeSessionSettingValue("showTokenDisplay", raw?.session?.showTokenDisplay !== false),
+      directorDispatchOnly: normalizeSessionSettingValue("directorDispatchOnly", raw?.session?.directorDispatchOnly),
+      markdownRender: normalizeSessionSettingValue("markdownRender", raw?.session?.markdownRender !== false),
+      showLineNumbers: normalizeSessionSettingValue("showLineNumbers", raw?.session?.showLineNumbers),
+      modelThinking: normalizeSessionSettingValue("modelThinking", raw?.session?.modelThinking),
     },
   };
 }

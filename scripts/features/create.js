@@ -32,7 +32,236 @@ function getMinNpcWarning() {
   return t("create.statusMinNpc", { n: String(getModeMinNpcs()), entityType: getEntityTerm(getSelectedMode()) });
 }
 
+function getCurrentCreateEditSection() {
+  return state.currentSessionEditSection === "overrides" ? "overrides" : "details";
+}
+
+const SESSION_OVERRIDE_KEYS = [
+  "compressThreshold",
+  "directorDispatchOnly",
+  "modelThinking",
+  "showTokenDisplay",
+  "markdownRender",
+  "showLineNumbers",
+];
+
+function getEditingSessionTarget() {
+  return state.sessions.find((item) => item.id === state.editingSessionId) || null;
+}
+
+function formatSessionOverrideValue(key, value) {
+  if (key === "compressThreshold") {
+    return String(normalizeSessionSettingValue(key, value));
+  }
+  if (key === "modelThinking") {
+    return normalizeSessionSettingValue(key, value) === "enabled"
+      ? t("create.overrideValueOn")
+      : t("create.overrideValueOff");
+  }
+  return normalizeSessionSettingValue(key, value)
+    ? t("create.overrideValueOn")
+    : t("create.overrideValueOff");
+}
+
+function renderSessionOverrideControls() {
+  const session = getEditingSessionTarget();
+  if (!els.sessionEditOverridesPanel) {
+    return;
+  }
+
+  SESSION_OVERRIDE_KEYS.forEach((key) => {
+    const control = els.sessionEditOverridesPanel.querySelector(`[data-session-setting="${key}"]`);
+    const source = els.sessionEditOverridesPanel.querySelector(`[data-session-override-source="${key}"]`);
+    const resetBtn = els.sessionEditOverridesPanel.querySelector(`[data-session-override-reset="${key}"]`);
+    const hasOverride = session ? hasSessionSettingOverride(session, key) : false;
+    const effectiveValue = session ? getSessionSetting(session, key) : getGlobalSessionSetting(key);
+    const globalValue = getGlobalSessionSetting(key);
+
+    if (control) {
+      if (control.type === "checkbox") {
+        control.checked = key === "modelThinking"
+          ? effectiveValue === "enabled"
+          : Boolean(effectiveValue);
+      } else {
+        control.value = String(effectiveValue);
+      }
+      control.disabled = !session;
+    }
+
+    if (source) {
+      const stateText = hasOverride ? t("create.overrideCustomized") : t("create.overrideUsingGlobal");
+      const globalText = t("create.overrideGlobalDefault", { value: formatSessionOverrideValue(key, globalValue) });
+      source.textContent = `${stateText} | ${globalText}`;
+    }
+
+    if (resetBtn) {
+      resetBtn.disabled = !session || !hasOverride;
+    }
+  });
+}
+
+function commitSessionOverrideChange(key, nextValue, options = {}) {
+  const session = getEditingSessionTarget();
+  if (!session || !SESSION_OVERRIDE_KEYS.includes(key)) {
+    return;
+  }
+
+  if (options.clear) {
+    clearSessionSettingOverride(session, key);
+  } else {
+    setSessionSettingOverride(session, key, nextValue);
+  }
+
+  touchSession(session);
+  persistSessions();
+  renderSessionOverrideControls();
+  if (state.currentSessionId === session.id) {
+    if (key === "showTokenDisplay" || key === "markdownRender" || key === "showLineNumbers") {
+      if (typeof renderMessages === "function") {
+        renderMessages({ keepWindow: true });
+      }
+    }
+    if (key === "modelThinking") {
+      if (els.modelThinkingBtn) {
+        els.modelThinkingBtn.dataset.state = getSessionSetting(session, "modelThinking");
+      }
+      if (typeof updateModelThinkingBtn === "function") {
+        updateModelThinkingBtn();
+      }
+      if (typeof updateThinkingToggleMode === "function") {
+        updateThinkingToggleMode();
+      }
+    }
+    if (key === "compressThreshold" && typeof renderCompressMemoryPopover === "function") {
+      renderCompressMemoryPopover();
+    }
+  }
+}
+
+function bindSessionOverrideControls() {
+  if (!els.sessionEditOverridesPanel) {
+    return;
+  }
+
+  els.sessionEditOverridesPanel.querySelectorAll("[data-session-setting]").forEach((control) => {
+    control.addEventListener("change", () => {
+      if (!state.editingSessionId) {
+        return;
+      }
+
+      const key = control.dataset.sessionSetting;
+      if (!key) {
+        return;
+      }
+
+      if (control.type === "number") {
+        const value = Number.parseInt(control.value, 10);
+        if (!Number.isFinite(value)) {
+          renderSessionOverrideControls();
+          return;
+        }
+        commitSessionOverrideChange(key, value);
+        return;
+      }
+
+      if (key === "modelThinking") {
+        commitSessionOverrideChange(key, control.checked ? "enabled" : "disabled");
+        return;
+      }
+
+      commitSessionOverrideChange(key, Boolean(control.checked));
+    });
+  });
+
+  els.sessionEditOverridesPanel.querySelectorAll("[data-session-override-reset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.dataset.sessionOverrideReset;
+      if (!key || !state.editingSessionId) {
+        return;
+      }
+      commitSessionOverrideChange(key, null, { clear: true });
+    });
+  });
+}
+
+function syncCreateEditNavigation() {
+  const isEditing = Boolean(state.editingSessionId);
+  const activeSection = isEditing ? getCurrentCreateEditSection() : "details";
+  const showDetails = activeSection === "details";
+  const tabButtons = [els.sessionEditInfoTabBtn, els.sessionEditOverridesTabBtn];
+  const navButtons = [els.sessionEditInfoNavBtn, els.sessionEditOverridesNavBtn];
+
+  if (els.sessionEditTopbar) {
+    els.sessionEditTopbar.classList.toggle("hidden", !isEditing);
+  }
+  if (els.sessionEditTabs) {
+    els.sessionEditTabs.classList.toggle("hidden", !isEditing);
+  }
+  if (els.sessionEditSidebar) {
+    els.sessionEditSidebar.classList.toggle("hidden", !isEditing);
+  }
+  if (els.sessionEditFooter) {
+    els.sessionEditFooter.classList.toggle("hidden", isEditing && activeSection === "overrides");
+  }
+
+  tabButtons.forEach((button) => {
+    if (!button) return;
+    const isActive = isEditing && button.dataset.sessionEditSection === activeSection;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+    button.tabIndex = isActive ? 0 : -1;
+  });
+
+  navButtons.forEach((button) => {
+    if (!button) return;
+    const isActive = isEditing && button.dataset.sessionEditSection === activeSection;
+    button.classList.toggle("active", isActive);
+  });
+
+  if (els.sessionEditInfoPanel) {
+    els.sessionEditInfoPanel.classList.toggle("active", showDetails);
+  }
+  if (els.sessionEditOverridesPanel) {
+    els.sessionEditOverridesPanel.classList.toggle("active", isEditing && activeSection === "overrides");
+  }
+  if (isEditing) {
+    renderSessionOverrideControls();
+  }
+}
+
+function switchCreateEditSection(section) {
+  state.currentSessionEditSection = section === "overrides" ? "overrides" : "details";
+  updateCreateViewMode();
+}
+
+function bindCreateEditNavigation() {
+  [els.sessionEditInfoTabBtn, els.sessionEditOverridesTabBtn, els.sessionEditInfoNavBtn, els.sessionEditOverridesNavBtn]
+    .filter(Boolean)
+    .forEach((button) => {
+      button.addEventListener("click", () => {
+        if (!state.editingSessionId) {
+          return;
+        }
+        switchCreateEditSection(button.dataset.sessionEditSection);
+      });
+    });
+
+  els.cancelEditBtn?.addEventListener("click", () => {
+    if (!state.editingSessionId) {
+      return;
+    }
+    state.editingSessionId = null;
+    state.currentSessionEditSection = "details";
+    updateCreateViewMode();
+    renderSession();
+    switchView("chat");
+  });
+}
+
 function bindCreateFlow() {
+  bindCreateEditNavigation();
+  bindSessionOverrideControls();
+
   document.querySelectorAll('input[name="sessionMode"]').forEach((radio) => {
     radio.addEventListener("change", () => {
       if (radio.checked) {
@@ -92,6 +321,7 @@ function bindCreateFlow() {
       mode: payload.mode,
       directorModel: payload.directorModel || "",
       directorConfigId: payload.directorConfigId || "",
+      settingsOverrides: {},
       npcs: payload.npcs,
       transientNpcs: [],
       directorMemory: normalizeDirectorMemory(null),
@@ -516,7 +746,9 @@ function openSessionEditor(sessionId) {
   els.npcList.innerHTML = "";
   (session.npcs || []).forEach((npc) => addNpcCard(npc));
   ensureMinimumNpcs();
+  state.currentSessionEditSection = "details";
   updateCreateViewMode();
+  renderSessionOverrideControls();
   updateEntityTerms();
   switchView("create");
   setCreateStatus(t("create.statusEditing"), "");
@@ -525,12 +757,14 @@ function openSessionEditor(sessionId) {
 function prepareCreateViewForNewSession() {
   clearUserMessageEdit();
   state.editingSessionId = null;
+  state.currentSessionEditSection = "details";
   els.globalPromptInput.value = "";
   populateModelSelect(els.directorModelSelect, "");
   els.npcList.innerHTML = "";
   ensureMinimumNpcs();
   refreshModelSelectors();
   updateCreateViewMode();
+  renderSessionOverrideControls();
   updateEntityTerms();
   setCreateStatus(getNpcCountHint(), "");
 }
@@ -565,6 +799,8 @@ function syncSessionModePresentation(isEditing, sessionMode) {
 
 function updateCreateViewMode() {
   const isEditing = Boolean(state.editingSessionId);
+  const activeSection = isEditing ? getCurrentCreateEditSection() : "details";
+  els.views.create?.classList.toggle("create-view-editing", isEditing);
   if (els.createViewTitle) {
     els.createViewTitle.textContent = isEditing ? t("create.editTitle") : t("create.title");
   }
@@ -580,7 +816,9 @@ function updateCreateViewMode() {
   const term = getEntityTerm(sessionMode);
   if (els.createViewSubtitle) {
     els.createViewSubtitle.textContent = isEditing
-      ? t("create.editSubtitle", { entityType: term })
+      ? (activeSection === "overrides"
+        ? t("create.overridesSubtitle")
+        : t("create.editSubtitle", { entityType: term }))
       : t("create.newSubtitle", { entityType: term });
   }
   els.createChatBtn.textContent = isEditing ? t("create.saveBtn") : t("create.submit");
@@ -594,6 +832,7 @@ function updateCreateViewMode() {
     modeRadio.checked = true;
   }
   syncSessionModePresentation(isEditing, sessionMode);
+  syncCreateEditNavigation();
 }
 
 function saveSessionEdits(payload, activeConfig) {

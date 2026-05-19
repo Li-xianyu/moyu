@@ -87,6 +87,46 @@ function buildDirectorMemorySystemMessage(sessionOrMemory) {
   }];
 }
 
+function getCompressionSegments(session, kind) {
+  return (Array.isArray(session?.compressionSegments) ? session.compressionSegments : [])
+    .filter((segment) => {
+      if (!segment || !segment.summary) return false;
+      return !kind || segment.kind === kind;
+    })
+    .slice()
+    .sort((a, b) => (Number(a.startSeq) || 0) - (Number(b.startSeq) || 0));
+}
+
+function buildCompressionSegmentsSystemMessages(session, kind = "director", options = {}) {
+  const segments = getCompressionSegments(session, kind);
+  if (!segments.length) return [];
+
+  const maxTokens = Number(options.maxTokens) || (kind === "director" ? 900 : 700);
+  const selected = [];
+  let usedTokens = 0;
+
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const segment = segments[index];
+    const rangeLabel = Number.isFinite(segment.startSeq) && Number.isFinite(segment.endSeq)
+      ? `${segment.startSeq + 1}-${segment.endSeq + 1}`
+      : `${segment.startMessageId || "?"}-${segment.endMessageId || "?"}`;
+    const line = `区间 ${rangeLabel}：${String(segment.summary || "").trim()}`;
+    const lineTokens = estimateTokens(line);
+    if (selected.length && usedTokens + lineTokens > maxTokens) {
+      break;
+    }
+    selected.push(line);
+    usedTokens += lineTokens;
+  }
+
+  if (!selected.length) return [];
+  const label = kind === "chat" ? "COMPRESSED_CHAT_SEGMENTS" : "COMPRESSED_STORY_SEGMENTS";
+  return [{
+    role: "system",
+    content: `[${label}]\n${selected.reverse().join("\n\n")}\n[/${label}]`,
+  }];
+}
+
 function getDirectorMemoryTargetTokens(session, recentLimit = DIRECTOR_RECENT_HISTORY_LIMIT) {
   const currentDirectorContext = [
     { role: "system", content: getDirectorSystemPrompt(session) },
@@ -95,6 +135,7 @@ function getDirectorMemoryTargetTokens(session, recentLimit = DIRECTOR_RECENT_HI
     { role: "system", content: "NPC 资料：" + buildDirectorNpcRoster(session) },
     { role: "system", content: "全局设定：" + session.globalPrompt },
     ...buildDirectorMemorySystemMessage(session),
+    ...buildCompressionSegmentsSystemMessages(session, "director", { maxTokens: 600 }),
     ...buildHistoryMessagesFromSlice(getDirectorRecentMessages(session, recentLimit), session?.directorMemory?.synopsis ? "RECENT_HISTORY" : "HISTORY"),
   ];
   const currentTokens = estimateChatMessagesTokens(currentDirectorContext);
@@ -107,6 +148,7 @@ function getDirectorMemoryTargetTokens(session, recentLimit = DIRECTOR_RECENT_HI
 function buildDirectorContextMessages(session) {
   const contextMessages = [];
   contextMessages.push(...buildDirectorMemorySystemMessage(session));
+  contextMessages.push(...buildCompressionSegmentsSystemMessages(session, "director"));
   const recentMessages = getDirectorRecentMessages(session);
   contextMessages.push(...buildHistoryMessagesFromSlice(recentMessages, contextMessages.length ? "RECENT_HISTORY" : "HISTORY"));
   return contextMessages;
@@ -138,7 +180,14 @@ function getDirectorRecentMessages(session, recentLimit = DIRECTOR_RECENT_HISTOR
   const cutoffIndex = session?.compressedUntilMessageId
     ? visibleMessages.findIndex((message) => message.id === session.compressedUntilMessageId)
     : -1;
-  const unsummarized = cutoffIndex >= 0 ? visibleMessages.slice(cutoffIndex + 1) : visibleMessages;
+  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
+    ? session.compressedUntilSequence
+    : Math.max(-1, ...getCompressionSegments(session, "director").map((segment) => Number(segment.endSeq) || -1));
+  const unsummarized = cutoffIndex >= 0
+    ? visibleMessages.slice(cutoffIndex + 1)
+    : (cutoffSeq >= 0
+      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+      : visibleMessages);
   return unsummarized.slice(-recentLimit);
 }
 
@@ -151,7 +200,14 @@ function getCompressibleDirectorMessages(session, recentLimit = DIRECTOR_RECENT_
   const cutoffIndex = session?.compressedUntilMessageId
     ? visibleMessages.findIndex((message) => message.id === session.compressedUntilMessageId)
     : -1;
-  const unsummarized = cutoffIndex >= 0 ? visibleMessages.slice(cutoffIndex + 1) : visibleMessages;
+  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
+    ? session.compressedUntilSequence
+    : Math.max(-1, ...getCompressionSegments(session, "director").map((segment) => Number(segment.endSeq) || -1));
+  const unsummarized = cutoffIndex >= 0
+    ? visibleMessages.slice(cutoffIndex + 1)
+    : (cutoffSeq >= 0
+      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+      : visibleMessages);
   if (unsummarized.length === 0) {
     return [];
   }
@@ -293,9 +349,14 @@ function buildScopedNpcHistory(session, npc) {
   const cutoffIndex = session?.compressedUntilMessageId
     ? visibleMessages.findIndex((message) => message.id === session.compressedUntilMessageId)
     : -1;
+  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
+    ? session.compressedUntilSequence
+    : Math.max(-1, ...getCompressionSegments(session, "chat").map((segment) => Number(segment.endSeq) || -1));
   const compressedVisibleMessages = cutoffIndex >= 0
     ? visibleMessages.slice(cutoffIndex + 1)
-    : visibleMessages;
+    : (cutoffSeq >= 0
+      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+      : visibleMessages);
   const scopedSourceMessages = session?.chatSummary ? compressedVisibleMessages : visibleMessages;
 
   let scopedMessages;
@@ -593,7 +654,7 @@ function sanitizeDirectorDirective(session, narration, responders, spawnNpcs = [
 
   // 过滤 npcInstructions，只保留针对已知 NPC 的指令（纯调度模式下直接丢弃）
   const filteredInstructions = {};
-  if (!state.settings?.session?.directorDispatchOnly && npcInstructions && typeof npcInstructions === "object" && !Array.isArray(npcInstructions)) {
+  if (!getSessionSetting(session, "directorDispatchOnly") && npcInstructions && typeof npcInstructions === "object" && !Array.isArray(npcInstructions)) {
     for (const [npcName, instruction] of Object.entries(npcInstructions)) {
       if (knownNpcNames.includes(npcName) && typeof instruction === "string" && instruction.trim()) {
         filteredInstructions[npcName] = instruction.trim();
@@ -727,11 +788,17 @@ function sanitizeNpcReply(session, speaker, content) {
   const labelPattern = new RegExp(`^(${allNpcNames.map(escapeRegExp).join("|")})[：:]\\s*`);
   const lines = cleaned
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .map((line) => line.trim());
 
   const keptLines = [];
   for (const line of lines) {
+    if (!line) {
+      if (keptLines.length > 0 && keptLines[keptLines.length - 1] !== "") {
+        keptLines.push("");
+      }
+      continue;
+    }
+
     const match = line.match(labelPattern);
     if (!match) {
       keptLines.push(line);
@@ -749,7 +816,7 @@ function sanitizeNpcReply(session, speaker, content) {
     }
   }
 
-  cleaned = keptLines.join("\n").trim() || cleaned.replace(labelPattern, "").trim();
+  cleaned = keptLines.join("\n").replace(/\n{3,}/g, "\n\n").trim() || cleaned.replace(labelPattern, "").trim();
 
   const selfReplayPattern = new RegExp(`(?:^|\\n)${escapeRegExp(speaker)}[：:]`, "g");
   const selfReplayCount = (cleaned.match(selfReplayPattern) || []).length;
@@ -778,8 +845,7 @@ function sanitizeNpcReplyStrict(session, speaker, content) {
   const labelPattern = new RegExp(`^(${allNpcNames.map(escapeRegExp).join("|")})[：:]\\s*`);
   const lines = cleaned
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .map((line) => line.trim());
 
   const keptLines = [];
   let skippingNarrationBlock = startsWithNarrationLabel;
@@ -789,6 +855,13 @@ function sanitizeNpcReplyStrict(session, speaker, content) {
   const selfLinePattern = new RegExp(`(?:^|[（(，,。\\s])(?:我|${escapeRegExp(speaker)})(?:[）)，,。\\s]|$)`, "u");
   const otherActionPattern = /^（?[^）\n]{1,16}(?:拱手|行礼|开口|说道|问道|喝道|冷声|沉声|皱眉|颔首|抬头|看向|落在|站在|走来|破空|现身|拔剑|跪下|跪倒|抱拳|叹道|笑道|怒道|喝问)[^）\n]{0,80}）?$/u;
   for (const line of lines) {
+    if (!line) {
+      if (!skippingNarrationBlock && keptLines.length > 0 && keptLines[keptLines.length - 1] !== "") {
+        keptLines.push("");
+      }
+      continue;
+    }
+
     if (narrationLabelPattern.test(line)) {
       if (keptLines.length > 0) {
         break;
@@ -827,7 +900,7 @@ function sanitizeNpcReplyStrict(session, speaker, content) {
     }
   }
 
-  cleaned = keptLines.join("\n").trim() || cleaned.replace(labelPattern, "").trim();
+  cleaned = keptLines.join("\n").replace(/\n{3,}/g, "\n\n").trim() || cleaned.replace(labelPattern, "").trim();
   cleaned = cleaned.replace(
     /^(（|\()我(?=[^）)]*(?:扶|站|坐|跪|退|躲|看|望|盯|瞪|低|抬|皱|咽|攥|握|按|拉|拽|松|僵|愣|颤|抖|喘|笑|冷|脸|眼|手|肩|身|心|额|汗|声|语|步|头|眉|唇))/u,
     `$1${speaker}`
@@ -1243,7 +1316,7 @@ function buildDirectorContextTokenMetrics(session) {
 
   return {
     contextCurrent: estimateChatMessagesTokens(memoryMessages),
-    contextThreshold: DIRECTOR_MEMORY_TARGET_MAX,
+    contextThreshold: getSessionSetting(session, "compressThreshold"),
     recentCount: recentMessages.length,
   };
 }

@@ -263,6 +263,9 @@
       directorSummary: session.directorSummary || "",
       chatSummary: session.chatSummary || "",
       compressedUntilMessageId: session.compressedUntilMessageId || "",
+      compressedUntilSequence: Number.isFinite(session.compressedUntilSequence) ? session.compressedUntilSequence : null,
+      compressionSegments: Array.isArray(session.compressionSegments) ? session.compressionSegments : [],
+      settingsOverrides: normalizeSessionOverrides(session.settingsOverrides),
       suggestionGuide: session.suggestionGuide || "",
       messageCount: countSessionMessagesForSave(session),
       tags: extractTags(session),
@@ -391,6 +394,7 @@
       speaker: m.speaker,
       content: m.content,
       createdAt: m.timestamp ? new Date(m.timestamp).toISOString() : new Date().toISOString(),
+      sequence: Number.isFinite(m.sequence) ? m.sequence : null,
     };
     if (m.uiType) {
       msg.uiType = m.uiType;
@@ -491,6 +495,9 @@
       directorSummary: rec.directorSummary || "",
       chatSummary: rec.chatSummary || "",
       compressedUntilMessageId: rec.compressedUntilMessageId || "",
+      compressedUntilSequence: Number.isFinite(rec.compressedUntilSequence) ? rec.compressedUntilSequence : null,
+      compressionSegments: Array.isArray(rec.compressionSegments) ? rec.compressionSegments : [],
+      settingsOverrides: normalizeSessionOverrides(rec.settingsOverrides),
       suggestionGuide: rec.suggestionGuide || "",
       messageCount: Number.isFinite(rec.messageCount) ? rec.messageCount : 0,
       messages: [],
@@ -666,13 +673,17 @@
         var count = 0;
 
         var existingTokens = [];
-        var getReq = store.index("idx_msgId").getAll(msg.id);
+        var getReq = store.index("idx_msgId").getAllKeys(msg.id);
         getReq.onsuccess = function () {
           existingTokens = getReq.result || [];
           // 删除旧索引
           var deletePromises = existingTokens.map(function (entry) {
             return new Promise(function (res, rej) {
-              var delReq = store.delete(entry.id);
+              if (entry === undefined || entry === null) {
+                res();
+                return;
+              }
+              var delReq = store.delete(entry);
               delReq.onsuccess = res;
               delReq.onerror = rej;
             });
@@ -860,6 +871,9 @@
         directorSummary: session.directorSummary || "",
         chatSummary: session.chatSummary || "",
         compressedUntilMessageId: session.compressedUntilMessageId || "",
+        compressedUntilSequence: Number.isFinite(session.compressedUntilSequence) ? session.compressedUntilSequence : null,
+        compressionSegments: Array.isArray(session.compressionSegments) ? session.compressionSegments : [],
+        settingsOverrides: normalizeSessionOverrides(session.settingsOverrides),
         suggestionGuide: session.suggestionGuide || "",
         messageCount: countSessionMessagesForSave(session),
         tags: extractTags(session),
@@ -877,6 +891,13 @@
         record.messageCount = countSessionMessagesForSave(session);
         record.tags = extractTags(session);
         record.host = session.host || record.host || "";
+        record.directorMemory = session.directorMemory || record.directorMemory || null;
+        record.directorSummary = session.directorSummary || record.directorSummary || "";
+        record.chatSummary = session.chatSummary || record.chatSummary || "";
+        record.compressedUntilMessageId = session.compressedUntilMessageId || record.compressedUntilMessageId || "";
+        record.compressedUntilSequence = Number.isFinite(session.compressedUntilSequence) ? session.compressedUntilSequence : (Number.isFinite(record.compressedUntilSequence) ? record.compressedUntilSequence : null);
+        record.compressionSegments = Array.isArray(session.compressionSegments) ? session.compressionSegments : (Array.isArray(record.compressionSegments) ? record.compressionSegments : []);
+        record.settingsOverrides = normalizeSessionOverrides(session.settingsOverrides || record.settingsOverrides);
         if (!record.createdAt) record.createdAt = session.createdAt || new Date().toISOString();
         return doPut("sessions", record);
       });
@@ -1018,6 +1039,7 @@
                         speaker: m.speaker,
                         content: m.content,
                         createdAt: m.timestamp ? new Date(m.timestamp).toISOString() : new Date().toISOString(),
+                        sequence: Number.isFinite(m.sequence) ? m.sequence : null,
                       };
                       if (m.uiType) {
                         msg.uiType = m.uiType;
@@ -1053,6 +1075,9 @@
                       directorSummary: rec.directorSummary || "",
                       chatSummary: rec.chatSummary || "",
                       compressedUntilMessageId: rec.compressedUntilMessageId || "",
+                      compressedUntilSequence: Number.isFinite(rec.compressedUntilSequence) ? rec.compressedUntilSequence : null,
+                      compressionSegments: Array.isArray(rec.compressionSegments) ? rec.compressionSegments : [],
+                      settingsOverrides: normalizeSessionOverrides(rec.settingsOverrides),
                       suggestionGuide: rec.suggestionGuide || "",
                       messages: msgs,
                     };
@@ -1105,6 +1130,9 @@
               directorSummary: s.directorSummary || "",
               chatSummary: s.chatSummary || "",
               compressedUntilMessageId: s.compressedUntilMessageId || "",
+              compressedUntilSequence: Number.isFinite(s.compressedUntilSequence) ? s.compressedUntilSequence : null,
+              compressionSegments: Array.isArray(s.compressionSegments) ? s.compressionSegments : [],
+              settingsOverrides: normalizeSessionOverrides(s.settingsOverrides),
               suggestionGuide: s.suggestionGuide || "",
               messageCount: countSessionMessagesForSave(s),
               tags: extractTags(s),
@@ -1163,6 +1191,23 @@
       };
       return doPut("messages", record).then(function () {
         return indexMessage(record);
+      });
+    },
+
+    updateMessage: function (sessionId, msg, fallbackSequence) {
+      if (!msg || !msg.id) return Promise.reject(new Error("invalid message"));
+      return doGet("messages", msg.id).then(function (existing) {
+        if (existing && existing.sessionId === sessionId && Number.isFinite(Number(existing.sequence))) {
+          return ChatDB.saveMessage(sessionId, msg, Number(existing.sequence)).then(function () {
+            return Number(existing.sequence);
+          });
+        }
+        var sequence = Number.isFinite(Number(fallbackSequence)) ? Number(fallbackSequence) : 0;
+        return ChatDB.saveMessage(sessionId, msg, sequence).then(function () {
+          return sequence;
+        }, function () {
+          return ChatDB.appendMessage(sessionId, msg);
+        });
       });
     },
 

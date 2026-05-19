@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#1e1e1e">
   <meta name="color-scheme" content="dark">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.18.01";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.19.01";window.__moyuBootStart = performance.now();</script>
   <style>
     .loading-screen {
       position: fixed; inset: 0; z-index: 9999;
@@ -242,10 +242,22 @@
               </div>
             </div>
             <div class="settings-section-nav">
-              <button id="globalSettingsTabBtn" class="settings-section-btn active" type="button" data-i18n="settings.globalTab">全局设置</button>
-              <button id="assistantSettingsTabBtn" class="settings-section-btn" type="button" data-i18n="settings.assistantTab">辅助 AI</button>
-              <button id="sessionSettingsTabBtn" class="settings-section-btn" type="button" data-i18n="settings.sessionTab">会话设置</button>
-              <button id="apiSettingsTabBtn" class="settings-section-btn" type="button" data-i18n="settings.apiTab">接口设置</button>
+              <button id="globalSettingsTabBtn" class="settings-section-btn active" type="button">
+                <i class="bi bi-sliders2 settings-section-icon" aria-hidden="true"></i>
+                <span class="settings-section-label" data-i18n="settings.globalTab">全局设置</span>
+              </button>
+              <button id="assistantSettingsTabBtn" class="settings-section-btn" type="button">
+                <i class="bi bi-magic settings-section-icon" aria-hidden="true"></i>
+                <span class="settings-section-label" data-i18n="settings.assistantTab">辅助 AI</span>
+              </button>
+              <button id="sessionSettingsTabBtn" class="settings-section-btn" type="button">
+                <i class="bi bi-chat-square-text settings-section-icon" aria-hidden="true"></i>
+                <span class="settings-section-label" data-i18n="settings.sessionTab">会话设置</span>
+              </button>
+              <button id="apiSettingsTabBtn" class="settings-section-btn" type="button">
+                <i class="bi bi-hdd-network settings-section-icon" aria-hidden="true"></i>
+                <span class="settings-section-label" data-i18n="settings.apiTab">接口设置</span>
+              </button>
             </div>
           </section>
 
@@ -258,209 +270,196 @@
             </div>
 
             <section id="globalSettingsPanel" class="settings-page-panel active">
-              <div class="settings-global-grid">
-                <section class="settings-global-section">
-                  <div class="sub-panel-head">
+              <div class="settings-page-grid">
+                <section class="settings-card">
+                  <div class="settings-card-head">
                     <div>
-                      <h3 data-i18n="settings.languageTitle">语言设置</h3>
-                      <p class="hint-text" data-i18n="settings.languageHint">控制整个应用当前使用的界面语言。</p>
+                      <h3 data-i18n="settings.globalBasicsTitle">基础体验</h3>
+                      <p class="hint-text" data-i18n="settings.globalBasicsHint">先决定界面语言和进入应用后的默认落点。</p>
                     </div>
                   </div>
-                  <label class="field settings-language-field">
-                    <span data-i18n="settings.languageLabel">界面语言</span>
-                    <select id="localeSelect">
-                      <option value="zh-CN" data-i18n="settings.locale.zh-CN">简体中文</option>
-                      <option value="en-US" data-i18n="settings.locale.en-US">English</option>
-                    </select>
-                  </label>
-                </section>
-
-                <section class="settings-global-section">
-                  <div class="sub-panel-head">
-                    <div>
-                      <h3 data-i18n="settings.startupTitle">初始页面</h3>
-                      <p class="hint-text" data-i18n="settings.startupHint">控制刷新页面后默认进入哪一种主界面。</p>
+                  <div class="settings-card-body">
+                    <div class="settings-field-grid">
+                      <label class="field settings-language-field">
+                        <span data-i18n="settings.languageLabel">界面语言</span>
+                        <select id="localeSelect">
+                          <option value="zh-CN" data-i18n="settings.locale.zh-CN">简体中文</option>
+                          <option value="en-US" data-i18n="settings.locale.en-US">English</option>
+                        </select>
+                      </label>
+                      <label class="field settings-language-field">
+                        <span data-i18n="settings.initialPageLabel">启动时打开</span>
+                        <select id="initialPageSelect">
+                          <option value="welcome" data-i18n="settings.initialPage.welcome">默认欢迎页</option>
+                          <option value="create" data-i18n="settings.initialPage.create">创建新聊天</option>
+                          <option value="last-chat" data-i18n="settings.initialPage.lastChat">最后一次聊天</option>
+                        </select>
+                      </label>
                     </div>
                   </div>
-                  <label class="field settings-language-field">
-                    <span data-i18n="settings.initialPageLabel">启动时打开</span>
-                    <select id="initialPageSelect">
-                      <option value="welcome" data-i18n="settings.initialPage.welcome">默认欢迎页</option>
-                      <option value="create" data-i18n="settings.initialPage.create">创建新聊天</option>
-                      <option value="last-chat" data-i18n="settings.initialPage.lastChat">最后一次聊天</option>
-                    </select>
-                  </label>
                 </section>
 
-                <section class="settings-global-section">
-                  <div class="sub-panel-head">
+                <section class="settings-card">
+                  <div class="settings-section-divider" aria-hidden="true"></div>
+                  <div class="settings-card-head">
                     <div>
                       <h3 data-i18n="settings.devTitle">开发者选项</h3>
                       <p class="hint-text" data-i18n="settings.devHint">用于排查导演调度和会话流程问题。</p>
                     </div>
                   </div>
-                  <label class="settings-toggle-row" for="debugModeToggle">
-                    <div class="settings-toggle-copy">
-                      <span data-i18n="settings.debugModeLabel">调试模式</span>
-                      <small class="hint-text" data-i18n="settings.debugModeHint">开启后会在 console 中输出结构化调试日志。</small>
-                    </div>
-                    <input id="debugModeToggle" class="settings-toggle-input" type="checkbox">
-                    <span class="settings-toggle-ui" aria-hidden="true"></span>
-                  </label>
-                  <label class="settings-toggle-row" for="mobileConsoleToggle">
-                    <div class="settings-toggle-copy">
-                      <span data-i18n="settings.mobileConsoleLabel">移动端调试控制台</span>
-                      <small class="hint-text" data-i18n="settings.mobileConsoleHint">开启后会在小屏或触屏设备自动加载 Eruda 调试工具。</small>
-                    </div>
-                    <input id="mobileConsoleToggle" class="settings-toggle-input" type="checkbox">
-                    <span class="settings-toggle-ui" aria-hidden="true"></span>
-                  </label>
-                </section>
-
-                <section class="settings-global-section">
-                  <div class="sub-panel-head">
-                    <div>
-                      <h3 data-i18n="settings.backupTitle">设置备份</h3>
-                      <p class="hint-text" data-i18n="settings.backupHint">导出所有设置（含 API Key）为 JSON 文件，或从备份文件恢复。</p>
-                    </div>
-                  </div>
-                  <div class="settings-field-row">
-                    <button id="exportBackupBtn" class="secondary-btn" data-i18n="settings.exportBackup">导出设置备份</button>
-                    <button id="importBackupBtn" class="secondary-btn" data-i18n="settings.importBackup">导入设置备份</button>
-                    <input id="importBackupInput" type="file" accept=".json,application/json" style="display: none">
+                  <div class="settings-card-body settings-card-body--compact">
+                    <label class="settings-toggle-row" for="debugModeToggle">
+                      <div class="settings-toggle-copy">
+                        <span data-i18n="settings.debugModeLabel">调试模式</span>
+                        <small class="hint-text" data-i18n="settings.debugModeHint">开启后会在 console 中输出结构化调试日志。</small>
+                      </div>
+                      <input id="debugModeToggle" class="settings-toggle-input" type="checkbox">
+                      <span class="settings-toggle-ui" aria-hidden="true"></span>
+                    </label>
+                    <label class="settings-toggle-row" for="mobileConsoleToggle">
+                      <div class="settings-toggle-copy">
+                        <span data-i18n="settings.mobileConsoleLabel">移动端调试控制台</span>
+                        <small class="hint-text" data-i18n="settings.mobileConsoleHint">开启后会在小屏或触屏设备自动加载 Eruda 调试工具。</small>
+                      </div>
+                      <input id="mobileConsoleToggle" class="settings-toggle-input" type="checkbox">
+                      <span class="settings-toggle-ui" aria-hidden="true"></span>
+                    </label>
                   </div>
                 </section>
 
-                <section class="settings-global-section">
-                  <div class="sub-panel-head">
+                <section class="settings-card">
+                  <div class="settings-section-divider" aria-hidden="true"></div>
+                  <div class="settings-card-head">
                     <div>
-                      <h3>危险操作</h3>
-                      <p class="hint-text">清空本地所有会话和消息数据，此操作不可撤销。</p>
+                      <h3 data-i18n="settings.globalDataTitle">备份与恢复</h3>
+                      <p class="hint-text" data-i18n="settings.globalDataHint">导出整套设置，或从已有备份快速恢复当前环境。</p>
                     </div>
                   </div>
-                  <div class="settings-field-row">
-                    <button id="clearAllDataBtn" class="danger-btn">清理所有会话消息</button>
+                  <div class="settings-card-body">
+                    <div class="settings-field-row">
+                      <button id="exportBackupBtn" class="secondary-btn" data-i18n="settings.exportBackup">导出设置备份</button>
+                      <button id="importBackupBtn" class="secondary-btn" data-i18n="settings.importBackup">导入设置备份</button>
+                      <input id="importBackupInput" type="file" accept=".json,application/json" style="display: none">
+                    </div>
+                  </div>
+                </section>
+
+                <section class="settings-card settings-card--danger">
+                  <div class="settings-section-divider settings-section-divider--danger" aria-hidden="true"></div>
+                  <div class="settings-card-head">
+                    <div>
+                      <h3 data-i18n="settings.globalDangerTitle">危险操作</h3>
+                      <p class="hint-text" data-i18n="settings.globalDangerHint">清空本地所有会话与消息数据。这个动作不可撤销。</p>
+                    </div>
+                  </div>
+                  <div class="settings-card-body">
+                    <div class="settings-field-row">
+                      <button id="clearAllDataBtn" class="danger-btn settings-danger-btn">清理所有会话消息</button>
+                    </div>
                   </div>
                 </section>
               </div>
             </section>
 
             <section id="assistantSettingsPanel" class="settings-page-panel">
-              <div class="settings-global-grid">
-                <section class="settings-global-section">
-                  <div class="sub-panel-head">
+              <div class="settings-page-grid">
+                <section class="settings-card">
+                  <div class="settings-card-head">
                     <div>
                       <h3 data-i18n="settings.assistantModelTitle">辅助模型</h3>
                       <p class="hint-text" data-i18n="settings.assistantModelHint">从所有工作模型里选一个，作为全局辅助 AI 默认模型。</p>
                     </div>
                   </div>
-                  <label class="field settings-language-field">
-                    <span data-i18n="settings.assistantModelLabel">辅助模型</span>
-                    <select id="assistantModelSelect">
-                      <option value="" data-i18n="settings.assistantModelEmpty">请先在接口设置中勾选工作模型</option>
-                    </select>
-                  </label>
+                  <div class="settings-card-body">
+                    <label class="field settings-language-field">
+                      <span data-i18n="settings.assistantModelLabel">辅助模型</span>
+                      <select id="assistantModelSelect">
+                        <option value="" data-i18n="settings.assistantModelEmpty">请先在接口设置中勾选工作模型</option>
+                      </select>
+                    </label>
+                  </div>
                 </section>
               </div>
             </section>
 
             <section id="sessionSettingsPanel" class="settings-page-panel">
-              <div class="settings-global-grid">
-                <section class="settings-global-section">
-                  <div class="sub-panel-head">
+              <div class="settings-page-grid">
+                <section class="settings-card">
+                  <div class="settings-card-head">
                     <div>
-                      <h3 data-i18n="settings.compressThresholdLabel">自动压缩阈值</h3>
-                      <p class="hint-text" data-i18n="settings.compressThresholdHint">导演上下文 Token 数超过此值后，在发送消息时自动触发压缩。</p>
+                      <h3 data-i18n="settings.sessionContextTitle">上下文与压缩</h3>
+                      <p class="hint-text" data-i18n="settings.sessionContextHint">控制上下文膨胀后的压缩时机，以及导演介入的深度。</p>
                     </div>
                   </div>
-                  <div class="settings-field-row">
-                    <input id="compressThresholdInput" type="number" min="500" max="10000" step="100" class="field" style="width:140px">
-                  </div>
-                </section>
-
-                <section class="settings-global-section">
-                  <div class="sub-panel-head">
-                    <div>
-                      <h3 data-i18n="settings.showTokenDisplayLabel">显示 Token 用量</h3>
-                      <p class="hint-text" data-i18n="settings.showTokenDisplayHint">关闭后 AI 回复气泡底部将不再显示 Token 统计信息。</p>
+                  <div class="settings-card-body settings-card-body--compact">
+                    <div class="settings-inline-control">
+                      <label class="field settings-number-field">
+                        <span data-i18n="settings.compressThresholdLabel">自动压缩阈值</span>
+                        <input id="compressThresholdInput" type="number" min="500" max="10000" step="100" class="field">
+                      </label>
+                      <p class="hint-text settings-inline-hint" data-i18n="settings.compressThresholdHint">导演上下文 Token 数超过此值后，会在发送消息时自动触发压缩。</p>
                     </div>
-                  </div>
-                  <label class="settings-toggle-row" for="showTokenDisplayToggle">
-                    <div class="settings-toggle-copy">
-                      <span data-i18n="settings.showTokenDisplayLabel">显示 Token 用量</span>
-                    </div>
-                    <input id="showTokenDisplayToggle" class="settings-toggle-input" type="checkbox">
-                    <span class="settings-toggle-ui" aria-hidden="true"></span>
-                  </label>
-                </section>
-
-                <section class="settings-global-section">
-                  <div class="sub-panel-head">
-                    <div>
-                      <h3 data-i18n="settings.directorDispatchLabel">导演纯调度</h3>
-                      <p class="hint-text" data-i18n="settings.directorDispatchHint">开启后导演只决定谁回答，不指挥 NPC 怎么演，NPC 自由发挥。</p>
-                    </div>
-                  </div>
-                  <label class="settings-toggle-row" for="directorDispatchToggle">
-                    <div class="settings-toggle-copy">
-                      <span data-i18n="settings.directorDispatchLabel">导演纯调度</span>
-                    </div>
-                    <input id="directorDispatchToggle" class="settings-toggle-input" type="checkbox">
-                    <span class="settings-toggle-ui" aria-hidden="true"></span>
-                  </label>
-                  <div class="settings-toggle-section">
-                    <div class="settings-toggle-section-head">
-                      <h3 data-i18n="settings.markdownRenderLabel">Markdown 渲染</h3>
-                      <p class="hint-text" data-i18n="settings.markdownRenderHint">关闭后工作模式将使用纯文本显示，不渲染 Markdown。</p>
-                    </div>
-                    <label class="settings-toggle-row" for="markdownRenderToggle">
+                    <label class="settings-toggle-row" for="directorDispatchToggle">
                       <div class="settings-toggle-copy">
-                        <span data-i18n="settings.markdownRenderLabel">Markdown 渲染</span>
+                        <span data-i18n="settings.directorDispatchLabel">导演纯调度</span>
+                        <small class="hint-text" data-i18n="settings.directorDispatchHint">开启后导演只决定谁回答，不指挥 NPC 怎么演，NPC 自由发挥。</small>
                       </div>
-                      <input id="markdownRenderToggle" class="settings-toggle-input" type="checkbox" checked>
+                      <input id="directorDispatchToggle" class="settings-toggle-input" type="checkbox">
                       <span class="settings-toggle-ui" aria-hidden="true"></span>
                     </label>
                   </div>
                 </section>
 
-                <section class="settings-global-section">
-                  <div class="sub-panel-head">
+                <section class="settings-card">
+                  <div class="settings-section-divider" aria-hidden="true"></div>
+                  <div class="settings-card-head">
                     <div>
-                      <h3 data-i18n="settings.showLineNumbersLabel">代码块行号</h3>
-                      <p class="hint-text" data-i18n="settings.showLineNumbersHint">在代码左侧显示行号。</p>
+                      <h3 data-i18n="settings.sessionDisplayTitle">显示与阅读</h3>
+                      <p class="hint-text" data-i18n="settings.sessionDisplayHint">决定消息渲染细节、代码可读性和 token 信息是否展示。</p>
                     </div>
                   </div>
-                  <label class="settings-toggle-row" for="showLineNumbersToggle">
-                    <div class="settings-toggle-copy">
-                      <span data-i18n="settings.showLineNumbersLabel">代码块行号</span>
-                    </div>
-                    <input id="showLineNumbersToggle" class="settings-toggle-input" type="checkbox">
-                    <span class="settings-toggle-ui" aria-hidden="true"></span>
-                  </label>
+                  <div class="settings-card-body settings-card-body--compact">
+                    <label class="settings-toggle-row" for="showTokenDisplayToggle">
+                      <div class="settings-toggle-copy">
+                        <span data-i18n="settings.showTokenDisplayLabel">显示 Token 用量</span>
+                        <small class="hint-text" data-i18n="settings.showTokenDisplayHint">关闭后 AI 回复气泡底部将不再显示 Token 统计信息。</small>
+                      </div>
+                      <input id="showTokenDisplayToggle" class="settings-toggle-input" type="checkbox">
+                      <span class="settings-toggle-ui" aria-hidden="true"></span>
+                    </label>
+                    <label class="settings-toggle-row" for="markdownRenderToggle">
+                      <div class="settings-toggle-copy">
+                        <span data-i18n="settings.markdownRenderLabel">Markdown 渲染</span>
+                        <small class="hint-text" data-i18n="settings.markdownRenderHint">关闭后工作模式将使用纯文本显示，不渲染 Markdown。</small>
+                      </div>
+                      <input id="markdownRenderToggle" class="settings-toggle-input" type="checkbox" checked>
+                      <span class="settings-toggle-ui" aria-hidden="true"></span>
+                    </label>
+                    <label class="settings-toggle-row" for="showLineNumbersToggle">
+                      <div class="settings-toggle-copy">
+                        <span data-i18n="settings.showLineNumbersLabel">代码块行号</span>
+                        <small class="hint-text" data-i18n="settings.showLineNumbersHint">在代码左侧显示行号。</small>
+                      </div>
+                      <input id="showLineNumbersToggle" class="settings-toggle-input" type="checkbox">
+                      <span class="settings-toggle-ui" aria-hidden="true"></span>
+                    </label>
+                  </div>
                 </section>
 
-                <section class="settings-global-section">
-                  <div class="sub-panel-head">
+                <section class="settings-card">
+                  <div class="settings-section-divider" aria-hidden="true"></div>
+                  <div class="settings-card-head">
                     <div>
-                      <h3 data-i18n="settings.exportSessionsTitle">导出会话</h3>
-                      <p class="hint-text" data-i18n="settings.exportSessionsHint">将所有会话导出为 JSON 文件。</p>
+                      <h3 data-i18n="settings.sessionTransferTitle">会话迁移</h3>
+                      <p class="hint-text" data-i18n="settings.sessionTransferHint">导出全部会话做备份，或把旧归档重新导回当前本地库。</p>
                     </div>
                   </div>
-                  <div class="settings-field-row">
-                    <button id="exportSessionsBtn" class="secondary-btn" data-i18n="settings.exportSessionsTitle">导出全部会话</button>
-                  </div>
-                </section>
-
-                <section class="settings-global-section">
-                  <div class="sub-panel-head">
-                    <div>
-                      <h3 data-i18n="settings.importSessionsTitle">导入会话</h3>
-                      <p class="hint-text" data-i18n="settings.importSessionsHint">从 JSON 文件导入一个或多个会话。</p>
+                  <div class="settings-card-body">
+                    <div class="settings-field-row">
+                      <button id="exportSessionsBtn" class="secondary-btn" data-i18n="settings.exportSessionsTitle">导出全部会话</button>
+                      <button id="importSessionsBtn" class="secondary-btn" data-i18n="settings.importSessionsTitle">导入会话</button>
+                      <input id="importSessionsInput" type="file" accept=".json,application/json" style="display:none">
                     </div>
-                  </div>
-                  <div class="settings-field-row">
-                    <button id="importSessionsBtn" class="secondary-btn" data-i18n="settings.importSessionsTitle">导入会话</button>
-                    <input id="importSessionsInput" type="file" accept=".json,application/json" style="display:none">
                   </div>
                 </section>
               </div>
@@ -554,7 +553,39 @@
             </div>
           </div>
 
-          <div class="stack">
+          <div id="sessionEditTopbar" class="session-edit-topbar hidden">
+            <button id="cancelEditBtn" class="session-edit-exit-btn" type="button">
+              <i class="bi bi-arrow-left" aria-hidden="true"></i>
+              <span data-i18n="create.exitEdit">退出编辑</span>
+            </button>
+          </div>
+
+          <div id="sessionEditTabs" class="session-edit-tabs hidden" role="tablist" aria-label="编辑当前会话">
+            <button id="sessionEditInfoTabBtn" class="session-edit-tab-btn active" type="button" role="tab" aria-selected="true" data-session-edit-section="details" data-i18n="create.editNavInfo">编辑会话信息</button>
+            <button id="sessionEditOverridesTabBtn" class="session-edit-tab-btn" type="button" role="tab" aria-selected="false" data-session-edit-section="overrides" data-i18n="create.editNavOverrides">本会话特调</button>
+          </div>
+
+          <div class="session-edit-workspace">
+            <aside id="sessionEditSidebar" class="session-edit-sidebar hidden" aria-label="编辑当前会话导航">
+              <div class="session-edit-sidebar-head">
+                <h3 data-i18n="create.editSidebarTitle">编辑当前会话</h3>
+                <p class="hint-text" data-i18n="create.editSidebarHint">桌面端可从这里快速切换当前会话的编辑分区。</p>
+              </div>
+              <div class="session-edit-sidebar-nav">
+                <button id="sessionEditInfoNavBtn" class="session-edit-sidebar-btn active" type="button" data-session-edit-section="details">
+                  <i class="bi bi-card-text session-edit-sidebar-icon" aria-hidden="true"></i>
+                  <span data-i18n="create.editNavInfo">编辑会话信息</span>
+                </button>
+                <button id="sessionEditOverridesNavBtn" class="session-edit-sidebar-btn" type="button" data-session-edit-section="overrides">
+                  <i class="bi bi-sliders session-edit-sidebar-icon" aria-hidden="true"></i>
+                  <span data-i18n="create.editNavOverrides">本会话特调</span>
+                </button>
+              </div>
+            </aside>
+
+            <div class="session-edit-main">
+              <div id="sessionEditInfoPanel" class="session-edit-panel active">
+                <div class="stack">
             <div class="field">
               <span data-i18n="create.modeLabel">会话模式</span>
               <div id="sessionModeSelector" class="mode-selector">
@@ -606,7 +637,126 @@
             </div>
 
             <div id="npcList" class="npc-list"></div>
+                </div>
+              </div>
 
+              <div id="sessionEditOverridesPanel" class="session-edit-panel">
+                <div class="session-overrides-grid">
+                  <section class="settings-card">
+                    <div class="settings-card-head">
+                      <div>
+                        <h3 data-i18n="create.overridesContextTitle">上下文与调度</h3>
+                        <p class="hint-text" data-i18n="create.overridesContextHint">这些改动会即时保存，只作用于当前会话。</p>
+                      </div>
+                    </div>
+                    <div class="settings-card-body settings-card-body--compact">
+                      <div class="session-override-block">
+                        <div class="settings-inline-control">
+                          <label class="field settings-number-field">
+                            <span data-i18n="settings.compressThresholdLabel">自动压缩阈值</span>
+                            <input id="sessionOverrideCompressThresholdInput" data-session-setting="compressThreshold" type="number" min="500" max="10000" step="100" class="field">
+                          </label>
+                          <p class="hint-text settings-inline-hint" data-i18n="settings.compressThresholdHint">导演上下文 Token 数超过此值后，会在发送消息时自动触发压缩。</p>
+                        </div>
+                        <div class="session-override-footer">
+                          <span class="session-override-source" data-session-override-source="compressThreshold"></span>
+                          <button class="session-override-reset-btn" data-session-override-reset="compressThreshold" type="button" data-i18n="create.overrideReset">跟随全局</button>
+                        </div>
+                      </div>
+
+                      <div class="session-override-block">
+                        <label class="settings-toggle-row" for="sessionOverrideDirectorDispatchToggle">
+                          <div class="settings-toggle-copy">
+                            <span data-i18n="settings.directorDispatchLabel">导演纯调度</span>
+                            <small class="hint-text" data-i18n="settings.directorDispatchHint">开启后导演只决定谁回答，不指挥 NPC 怎么演，NPC 自由发挥。</small>
+                          </div>
+                          <input id="sessionOverrideDirectorDispatchToggle" data-session-setting="directorDispatchOnly" class="settings-toggle-input" type="checkbox">
+                          <span class="settings-toggle-ui" aria-hidden="true"></span>
+                        </label>
+                        <div class="session-override-footer">
+                          <span class="session-override-source" data-session-override-source="directorDispatchOnly"></span>
+                          <button class="session-override-reset-btn" data-session-override-reset="directorDispatchOnly" type="button" data-i18n="create.overrideReset">跟随全局</button>
+                        </div>
+                      </div>
+
+                      <div class="session-override-block">
+                        <label class="settings-toggle-row" for="sessionOverrideModelThinkingToggle">
+                          <div class="settings-toggle-copy">
+                            <span data-i18n="create.overridesModelThinkingLabel">Agent 思考</span>
+                            <small class="hint-text" data-i18n="create.overridesModelThinkingHint">控制当前会话里的 Agent 是否默认携带思考参数。</small>
+                          </div>
+                          <input id="sessionOverrideModelThinkingToggle" data-session-setting="modelThinking" class="settings-toggle-input" type="checkbox">
+                          <span class="settings-toggle-ui" aria-hidden="true"></span>
+                        </label>
+                        <div class="session-override-footer">
+                          <span class="session-override-source" data-session-override-source="modelThinking"></span>
+                          <button class="session-override-reset-btn" data-session-override-reset="modelThinking" type="button" data-i18n="create.overrideReset">跟随全局</button>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="settings-card">
+                    <div class="settings-section-divider" aria-hidden="true"></div>
+                    <div class="settings-card-head">
+                      <div>
+                        <h3 data-i18n="create.overridesDisplayTitle">显示与阅读</h3>
+                        <p class="hint-text" data-i18n="create.overridesDisplayHint">用来微调这个会话里的阅读体验，不影响别的房间。</p>
+                      </div>
+                    </div>
+                    <div class="settings-card-body settings-card-body--compact">
+                      <div class="session-override-block">
+                        <label class="settings-toggle-row" for="sessionOverrideShowTokenDisplayToggle">
+                          <div class="settings-toggle-copy">
+                            <span data-i18n="settings.showTokenDisplayLabel">显示 Token 用量</span>
+                            <small class="hint-text" data-i18n="settings.showTokenDisplayHint">关闭后 AI 回复气泡底部将不再显示 Token 统计信息。</small>
+                          </div>
+                          <input id="sessionOverrideShowTokenDisplayToggle" data-session-setting="showTokenDisplay" class="settings-toggle-input" type="checkbox">
+                          <span class="settings-toggle-ui" aria-hidden="true"></span>
+                        </label>
+                        <div class="session-override-footer">
+                          <span class="session-override-source" data-session-override-source="showTokenDisplay"></span>
+                          <button class="session-override-reset-btn" data-session-override-reset="showTokenDisplay" type="button" data-i18n="create.overrideReset">跟随全局</button>
+                        </div>
+                      </div>
+
+                      <div class="session-override-block">
+                        <label class="settings-toggle-row" for="sessionOverrideMarkdownRenderToggle">
+                          <div class="settings-toggle-copy">
+                            <span data-i18n="settings.markdownRenderLabel">Markdown 渲染</span>
+                            <small class="hint-text" data-i18n="settings.markdownRenderHint">关闭后工作模式将使用纯文本显示，不渲染 Markdown。</small>
+                          </div>
+                          <input id="sessionOverrideMarkdownRenderToggle" data-session-setting="markdownRender" class="settings-toggle-input" type="checkbox">
+                          <span class="settings-toggle-ui" aria-hidden="true"></span>
+                        </label>
+                        <div class="session-override-footer">
+                          <span class="session-override-source" data-session-override-source="markdownRender"></span>
+                          <button class="session-override-reset-btn" data-session-override-reset="markdownRender" type="button" data-i18n="create.overrideReset">跟随全局</button>
+                        </div>
+                      </div>
+
+                      <div class="session-override-block">
+                        <label class="settings-toggle-row" for="sessionOverrideShowLineNumbersToggle">
+                          <div class="settings-toggle-copy">
+                            <span data-i18n="settings.showLineNumbersLabel">代码块行号</span>
+                            <small class="hint-text" data-i18n="settings.showLineNumbersHint">在代码左侧显示行号。</small>
+                          </div>
+                          <input id="sessionOverrideShowLineNumbersToggle" data-session-setting="showLineNumbers" class="settings-toggle-input" type="checkbox">
+                          <span class="settings-toggle-ui" aria-hidden="true"></span>
+                        </label>
+                        <div class="session-override-footer">
+                          <span class="session-override-source" data-session-override-source="showLineNumbers"></span>
+                          <button class="session-override-reset-btn" data-session-override-reset="showLineNumbers" type="button" data-i18n="create.overrideReset">跟随全局</button>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stack session-edit-footer">
             <div class="actions">
               <button id="createChatBtn" class="primary-btn" data-i18n="create.submit">创建会话</button>
             </div>
@@ -617,14 +767,6 @@
 
       <section id="chatView" class="view active">
         <div id="chatStage" class="chat-stage">
-          <button id="infoToggleBtn" class="info-btn floating" type="button" aria-label="会话信息">i</button>
-          <div id="chatInfoPopover" class="chat-info-popover hidden">
-            <div class="chat-info-card">
-              <h3>会话信息</h3>
-              <div id="chatMeta" class="chat-meta empty" data-i18n="chat.noActiveSession">还没有活动会话</div>
-            </div>
-          </div>
-
           <div id="chatWelcome" class="chat-welcome">
             <div class="chat-welcome-copy">
               <svg class="welcome-logo" viewBox="0 0 200 120" aria-hidden="true">
@@ -674,6 +816,13 @@
         </div>
       </section>
     </main>
+    <button id="infoToggleBtn" class="info-btn floating" type="button" aria-label="会话信息">i</button>
+    <div id="chatInfoPopover" class="chat-info-popover hidden">
+      <div class="chat-info-card">
+        <h3>会话信息</h3>
+        <div id="chatMeta" class="chat-meta empty" data-i18n="chat.noActiveSession">还没有活动会话</div>
+      </div>
+    </div>
   </div>
 
   <div id="dropOverlay" class="drop-overlay hidden">

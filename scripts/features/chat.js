@@ -159,8 +159,10 @@ const DIRECTOR_SUMMARY_PROMPT = [
   "你要同时兼顾两件事：信息不残、token 尽量省。",
   "不要写修辞，不要扩写，不要模仿对白，不要复述整段原文。",
   "只保留后续调度真正需要的内容：场景状态、人物关系、已公开事实、隐藏事实/危险、正在发酵的冲突、未解决悬念、临时 NPC 身份、明显的人物状态变化。",
-  "必须只输出 JSON 对象，字段固定为：scene, relationships, facts, tensions, openLoops, npcState, synopsis。",
-  "其中 relationships/facts/tensions/openLoops/npcState 都必须是字符串数组；scene/synopsis 必须是字符串。",
+  "必须只输出 JSON 对象，字段固定为：scene, relationships, facts, tensions, openLoops, npcState, synopsis, segmentSummary。",
+  "其中 relationships/facts/tensions/openLoops/npcState 都必须是字符串数组；scene/synopsis/segmentSummary 必须是字符串。",
+  "segmentSummary 只总结本次【待压缩历史】这个区间，不要混入更早的已有长期记忆；后续会按消息区间长期保存。",
+  "所有字符串内容必须是纯文本，不要使用 Markdown：不要标题符号、列表符号、代码块、表格、加粗、引用块。",
   "每个数组尽量控制在 3 到 8 条，每条一句话，短而信息密。",
   "synopsis 只写一小段总括，不要和数组内容大段重复。",
 ].join("\\n");
@@ -172,6 +174,7 @@ const DIRECTOR_MANUAL_RECOMPRESS_PROMPT = [
   "必须保留：当前场景、人物关系、关键事实、仍在生效的冲突/秘密、未解决悬念、NPC 当前状态。",
   "如果当前记忆已经足够紧凑，就只做轻度整理，不要为压缩而压缩。",
   "必须只输出 JSON 对象，字段固定为：scene, relationships, facts, tensions, openLoops, npcState, synopsis。",
+  "所有字符串内容必须是纯文本，不要使用 Markdown：不要标题符号、列表符号、代码块、表格、加粗、引用块。",
 ].join("\\n");
 
 // ── 单 AI 模式（无导演）对话摘要压缩 ──
@@ -184,6 +187,7 @@ const CHAT_COMPRESS_PROMPT = [
   "目标不是一句话概括，而是保留足够多的可用细节：已讨论的话题、重要结论、待办事项、用户偏好、人物状态、明确约定、未解决问题、时间顺序。",
   "可以分成 2 到 5 个短段落，按主题或时间顺序组织，尽量保留关键信息密度。",
   "不要修辞，不要扩写到原文长度，不要模仿对白，不要引入没出现过的新事实。",
+  "只输出纯文本摘要，不要使用 Markdown：不要标题、列表符号、代码块、表格、加粗、引用块。",
 ].join("\\n");
 
 const CHAT_MANUAL_RECOMPRESS_RECENT_LIMIT = 30;
@@ -202,8 +206,17 @@ const CHAT_LARGE_INITIAL_LOAD_COUNT = 36;
 
 function buildChatSummaryBlock(session) {
   const summary = session?.chatSummary;
-  if (!summary) return "";
-  return `[CHAT_SUMMARY]\n${summary}\n[/CHAT_SUMMARY]`;
+  const segmentMessages = typeof buildCompressionSegmentsSystemMessages === "function"
+    ? buildCompressionSegmentsSystemMessages(session, "chat")
+    : [];
+  const blocks = [];
+  if (summary) {
+    blocks.push(`[CHAT_SUMMARY]\n${summary}\n[/CHAT_SUMMARY]`);
+  }
+  segmentMessages.forEach((message) => {
+    if (message?.content) blocks.push(message.content);
+  });
+  return blocks.join("\n\n");
 }
 
 function buildChatContextTokenMetrics(session) {
@@ -212,16 +225,28 @@ function buildChatContextTokenMetrics(session) {
   const cutoffIndex = session?.compressedUntilMessageId
     ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
     : -1;
-  const activeMessages = session?.chatSummary && cutoffIndex >= 0
-    ? visibleMessages.slice(cutoffIndex + 1)
+  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
+    ? session.compressedUntilSequence
+    : Math.max(-1, ...(typeof getCompressionSegments === "function" ? getCompressionSegments(session, "chat").map((segment) => Number(segment.endSeq) || -1) : []));
+  const activeMessages = session?.chatSummary
+    ? (cutoffIndex >= 0
+      ? visibleMessages.slice(cutoffIndex + 1)
+      : (cutoffSeq >= 0
+        ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+        : visibleMessages))
     : visibleMessages;
   const summaryTokens = estimateTokens(session?.chatSummary || "");
+  const segmentTokens = estimateChatMessagesTokens(
+    typeof buildCompressionSegmentsSystemMessages === "function"
+      ? buildCompressionSegmentsSystemMessages(session, "chat")
+      : []
+  );
   const totalTokens = estimateChatMessagesTokens(
     activeMessages.map((m) => ({ role: m.role || "user", content: m.content || "" }))
-  ) + summaryTokens;
+  ) + summaryTokens + segmentTokens;
   return {
     contextCurrent: totalTokens,
-    contextThreshold: CHAT_CONVERSATION_THRESHOLD,
+    contextThreshold: getSessionSetting(session, "compressThreshold"),
     recentCount: activeMessages.length,
   };
 }
@@ -322,6 +347,9 @@ function getLoadedNonSystemMessages(session) {
 }
 
 function getMessageSequenceInSession(session, message) {
+  if (Number.isFinite(message?.sequence)) {
+    return message.sequence;
+  }
   const loaded = getLoadedNonSystemMessages(session);
   const index = loaded.indexOf(message);
   if (index < 0) {
@@ -455,11 +483,15 @@ function bindChat() {
   // Model thinking toggle (inside popover)
   if (els.modelThinkingBtn) {
     els.modelThinkingBtn.addEventListener("click", () => {
+      const session = getCurrentSession();
+      if (!session) {
+        return;
+      }
       const current = els.modelThinkingBtn.dataset.state === "enabled" ? "disabled" : "enabled";
       els.modelThinkingBtn.dataset.state = current;
-      state.settings.session = state.settings.session || {};
-      state.settings.session.modelThinking = current;
-      persistSettings();
+      setSessionSettingOverride(session, "modelThinking", current);
+      touchSession(session);
+      persistSessions();
       updateModelThinkingBtn();
     });
   }
@@ -470,10 +502,13 @@ function bindChat() {
       event.stopPropagation();
       const session = getCurrentSession();
       if (isSingleModelWorkSession(session)) {
-        const current = state.settings?.session?.modelThinking === "enabled" ? "disabled" : "enabled";
-        state.settings.session = state.settings.session || {};
-        state.settings.session.modelThinking = current;
-        persistSettings();
+        if (!session) {
+          return;
+        }
+        const current = getSessionSetting(session, "modelThinking") === "enabled" ? "disabled" : "enabled";
+        setSessionSettingOverride(session, "modelThinking", current);
+        touchSession(session);
+        persistSessions();
         if (els.thinkingPopover) {
           els.thinkingPopover.classList.add("hidden");
           els.thinkingPopover.classList.remove("visible");
@@ -754,6 +789,7 @@ function updateComposerMode() {
     if (composerShell) composerShell.classList.remove("editing");
     if (els.cancelEditBtn) els.cancelEditBtn.classList.add("hidden");
     if (els.compressMemoryBtn) els.compressMemoryBtn.disabled = true;
+    setText(els.chatStatus, state.chatInlineStatus || "正在处理中...");
     return;
   }
 
@@ -805,7 +841,7 @@ function updateComposerMode() {
   }
   if (els.modelThinkingBtn) {
     els.modelThinkingBtn.disabled = state.isSending || !currentSession;
-    const saved = state.settings?.session?.modelThinking || "disabled";
+    const saved = getSessionSetting(currentSession, "modelThinking") || "disabled";
     els.modelThinkingBtn.dataset.state = saved;
     updateModelThinkingBtn();
   }
@@ -814,6 +850,28 @@ function updateComposerMode() {
   els.sendBtn.innerHTML = '<i class="bi bi-arrow-up"></i>';
   setText(els.chatStatus, state.isSending ? "正在处理中..." : "所有单位已就绪");
   updateSuggestBtn();
+}
+
+function setInlineChatStatus(message) {
+  state.chatInlineStatus = String(message || "").trim();
+  setText(els.chatStatus, state.chatInlineStatus || "正在处理中...");
+}
+
+function clearInlineChatStatus() {
+  state.chatInlineStatus = "";
+}
+
+function formatNpcNamesForStatus(group) {
+  const names = (Array.isArray(group) ? group : [])
+    .map((npc) => npc?.name)
+    .filter(Boolean);
+  return names.join("、");
+}
+
+function getNpcGroupDebugLabel(groups) {
+  const list = Array.isArray(groups) ? groups : [];
+  const hasParallelGroup = list.some((group) => Array.isArray(group) && group.length > 1);
+  return hasParallelGroup ? "NPC 并行分组" : "NPC 串行顺序";
 }
 
 function beginUserMessageEdit(messageId) {
@@ -893,6 +951,7 @@ async function regenerateFromUserMessage(messageId) {
   }
 
   state.isSending = true;
+  setInlineChatStatus("正在处理中...");
   if (els.thinkingPopover && !els.thinkingPopover.classList.contains("hidden")) {
     els.thinkingPopover.classList.add("hidden");
     els.thinkingPopover.classList.remove("visible");
@@ -969,7 +1028,7 @@ function buildBubbleContent(message) {
   if (shouldSuppressRetrievalMarkerContent(message)) {
     return html;
   }
-  const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
+  const enableMd = message.role === "assistant" && sessionMode === SESSION_MODE_WORK && getSessionSetting(getCurrentSession(), "markdownRender") !== false;
   if (enableMd) {
     html += renderMarkdownContent(escapeHtml(message.content));
   } else if (sessionMode === SESSION_MODE_STORY) {
@@ -1077,7 +1136,7 @@ function buildToolTraceSection(message) {
 }
 
 function wrapCodeLines(el) {
-  if (state.settings?.session?.showLineNumbers !== true) return;
+  if (getSessionSetting("showLineNumbers") !== true) return;
   var codes = el.tagName === 'CODE' ? [el] : el.querySelectorAll('pre code');
   Array.from(codes).forEach(function (code) {
     var raw = code.innerHTML;
@@ -1224,7 +1283,7 @@ function updateStreamingBubble(targetMessage) {
 
     const session = getCurrentSession();
     const sessionMode = session?.mode || SESSION_MODE_STORY;
-    const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
+    const enableMd = sessionMode === SESSION_MODE_WORK && getSessionSetting(session, "markdownRender") !== false;
     if (typeof hljs !== 'undefined' && enableMd) {
       bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
       wrapCodeLines(bubble);
@@ -1470,7 +1529,7 @@ function renderMessages(options = {}) {
   }
 
   const sessionMode = session.mode || SESSION_MODE_STORY;
-  const enableMd = sessionMode === SESSION_MODE_WORK && state.settings?.session?.markdownRender !== false;
+  const enableMd = sessionMode === SESSION_MODE_WORK && getSessionSetting(session, "markdownRender") !== false;
   syncRenderedMessageWindow(session, {
     keepWindow,
     forceRecent: !keepWindow && (shouldStickToBottom || state.isSending),
@@ -1829,6 +1888,7 @@ function stopGeneration() {
     state.abortController = null;
   }
   state.isSending = false;
+  clearInlineChatStatus();
   els.sendBtn.disabled = false;
   els.chatInput.disabled = false;
   finishUserTopAnchor();
@@ -1888,16 +1948,23 @@ async function sendUserMessage() {
           session.messageCount = Math.max(Number(session.messageCount) || 0, savedSeq + 1);
         } else {
           const userSeq = getMessageSequenceInSession(session, lastUser);
-          await window.__chatDB.saveMessage(session.id, lastUser, userSeq);
+          const savedSeq = window.__chatDB.updateMessage
+            ? await window.__chatDB.updateMessage(session.id, lastUser, userSeq)
+            : userSeq;
+          if (!window.__chatDB.updateMessage) {
+            await window.__chatDB.saveMessage(session.id, lastUser, userSeq);
+          }
+          session.messageCount = Math.max(Number(session.messageCount) || 0, Number(savedSeq) + 1);
         }
         await window.__chatDB.updateSessionMeta(session);
       } catch (err) {
         console.error("[chat] save user message failed", err);
-        setText(els.chatStatus, "用户消息保存失败，请稍后重试");
         state.isSending = false;
+        clearInlineChatStatus();
         els.sendBtn.disabled = false;
         els.chatInput.disabled = false;
         updateComposerMode();
+        setText(els.chatStatus, "用户消息保存失败，请稍后重试");
         return;
       }
     }
@@ -1928,7 +1995,7 @@ async function runSessionTurn(session) {
     const userMsgs = session.messages.filter((m) => m.role === "user");
     const lastUser = userMsgs[userMsgs.length - 1];
     if (lastUser) {
-      const mention = resolveDirectMentionTarget(session, lastUser.content);
+        const mention = resolveDirectMentionTarget(session, lastUser.content);
       if (mention?.npc) {
         const targetNpc = mention.npc;
         const before = lastUser.content.slice(0, mention.atPos);
@@ -1936,7 +2003,7 @@ async function runSessionTurn(session) {
         const strippedContent = `${before} ${after}`.replace(/\s+/g, " ").trim();
         lastUser.content = strippedContent || lastUser.content;
         try {
-          setText(els.chatStatus, `${targetNpc.name} 正在回复...`);
+          setInlineChatStatus(`${targetNpc.name} 正在回复...`);
           await callNpc(session, targetNpc, {});
           touchSession(session);
           persistSessions();
@@ -1983,6 +2050,7 @@ async function runSessionTurn(session) {
         } finally {
           state.abortController = null;
           state.isSending = false;
+          clearInlineChatStatus();
           els.sendBtn.disabled = false;
           els.chatInput.disabled = false;
           finishUserTopAnchor();
@@ -1991,6 +2059,7 @@ async function runSessionTurn(session) {
           if (!window.matchMedia?.("(pointer: coarse)").matches) {
             queueMicrotask(() => els.chatInput.focus());
           }
+          scheduleAutoCompressAfterTurn(session);
         }
         return;
       }
@@ -2002,7 +2071,7 @@ async function runSessionTurn(session) {
   if (isNoDirector) {
     try {
       const npc = session.npcs[0];
-      setText(els.chatStatus, `${npc.name} 正在回复...`);
+      setInlineChatStatus(`${npc.name} 正在回复...`);
       await callNpc(session, npc, {});
       touchSession(session);
       persistSessions();
@@ -2086,6 +2155,7 @@ async function runSessionTurn(session) {
     } finally {
       state.abortController = null;
       state.isSending = false;
+      clearInlineChatStatus();
       els.sendBtn.disabled = false;
       els.chatInput.disabled = false;
       finishUserTopAnchor();
@@ -2094,11 +2164,13 @@ async function runSessionTurn(session) {
       if (!window.matchMedia?.("(pointer: coarse)").matches) {
         queueMicrotask(() => els.chatInput.focus());
       }
+      scheduleAutoCompressAfterTurn(session);
     }
     return;
   }
 
   try {
+    setInlineChatStatus("导演正在调度...");
     debugLog("turn", t("debug.msg.directorTurnStarted"), {
       sessionId: session.id,
       messageCount: session.messages.length,
@@ -2162,7 +2234,7 @@ async function runSessionTurn(session) {
       setText(els.chatStatus, directive.narration ? "旁白已更新，本轮没有 NPC 需要回答" : "本轮没有 NPC 需要回答");
     } else {
       const parallelGroups = resolveNpcParallelGroups(session, responders, directive);
-      debugLog("director", "NPC 并行分组", parallelGroups.map((group) => group.map((npc) => npc.name)));
+      debugLog("director", getNpcGroupDebugLabel(parallelGroups), parallelGroups.map((group) => group.map((npc) => npc.name)));
       for (const group of parallelGroups) {
         await callNpcGroup(session, group, directive.npcInstructions);
       }
@@ -2209,6 +2281,7 @@ async function runSessionTurn(session) {
   } finally {
     state.abortController = null;
     state.isSending = false;
+    clearInlineChatStatus();
     els.sendBtn.disabled = false;
     els.chatInput.disabled = false;
     finishUserTopAnchor();
@@ -2217,6 +2290,7 @@ async function runSessionTurn(session) {
     if (!window.matchMedia?.("(pointer: coarse)").matches) {
       queueMicrotask(() => els.chatInput.focus());
     }
+    scheduleAutoCompressAfterTurn(session);
   }
 }
 
@@ -2278,9 +2352,10 @@ async function callDirector(session) {
       content: [
         "你可以额外输出 parallel_groups 字段，用来声明 NPC 回复并行分组。",
         "格式：\"parallel_groups\":[[\"NPC甲\",\"NPC乙\"],[\"NPC丙\"]]。",
-        "parallel_groups 必须只包含 responders 中已经出现的 NPC 名字；没有把握时可以省略，系统会按 responders 串行执行。",
-        "判断规则：用户要求“分别、各自、都说说、一起回答、每个人”这类独立观点时，可以把这些 NPC 放进同一个并行组。",
-        "用户要求“接着、反驳、吵、轮流、先后、总结、回应他/她”这类互相接话时，必须拆成多个单人组，保持串行。",
+        "parallel_groups 必须只包含 responders 中已经出现的 NPC 名字；没有十足把握就省略，默认按 responders 串行执行。",
+        "默认偏向串行。只有用户明确要求“并行、同时、分别、各自、都说说、一起回答、每个人”这类独立观点时，才允许把多个 NPC 放进同一个并行组。",
+        "只要用户表达了顺序、承接、分工先后，哪怕很轻微，也必须保持串行。例如“串行、先后、轮流、接着、反驳、回应他/她、总结、开头、打头阵、收尾”。",
+        "像“Deepseek 打头阵，Claude 总结”“你先说，他补充”“A 先来，B 收尾”这种都必须拆成多个单人组，绝对不能并行。",
       ].join("\n"),
     },
     ...(session.mode === SESSION_MODE_STORY ? [{
@@ -2294,7 +2369,7 @@ async function callDirector(session) {
     ...buildDirectorContextMessages(session),
   ];
 
-  if (state.settings?.session?.directorDispatchOnly) {
+  if (getSessionSetting(session, "directorDispatchOnly")) {
     messages.push({ role: "system", content: "你只负责调度。禁止输出 npc_instructions 字段——NPC 不需要你的指挥，让他们自由发挥。" });
   }
 
@@ -2665,6 +2740,8 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
   const baseRulesText = baseRules.join("\n");
 
   const directorMemoryMsgs = buildDirectorMemorySystemMessage(session);
+  const directorSegmentMsgs = buildCompressionSegmentsSystemMessages(session, "director");
+  const chatSummaryBlock = buildChatSummaryBlock(session);
 
   let messages = [
     { role: "system", content: baseRulesText },
@@ -2683,8 +2760,14 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
           ...directorMemoryMsgs,
         ]
       : []),
+    ...(directorSegmentMsgs.length
+      ? [
+          { role: "system", content: "以下压缩历史片段按消息区间保存，用于补足较早剧情。它们是背景记忆，不代表当前正在发生；不要逐字复述。" },
+          ...directorSegmentMsgs,
+        ]
+      : []),
     // For single AI mode: include chat summary for context of older conversation
-    ...(session.chatSummary ? [{ role: "system", content: buildChatSummaryBlock(session) }] : []),
+    ...(chatSummaryBlock ? [{ role: "system", content: chatSummaryBlock }] : []),
     ...buildNpcContextMessages(session, npc),
   ];
   // Single AI mode: hard rule for search — MUST be inserted right before the user's last message
@@ -3056,6 +3139,7 @@ async function ensureDirectorSummary(session, options = {}) {
   });
   console.log("[MOYU:compress]", "压缩结果文本", payload.content);
   const nextMemory = parseDirectorMemoryPayload(payload.content, session);
+  const segmentSummary = mode === "manual" ? "" : extractDirectorSegmentSummary(payload.content, nextMemory);
   const nextMemoryBlock = buildDirectorMemoryBlock(nextMemory);
   const nextSummary = nextMemory.synopsis || nextMemoryBlock;
   const nextMemoryTokens = estimateTokens(nextMemoryBlock || nextSummary);
@@ -3082,8 +3166,15 @@ async function ensureDirectorSummary(session, options = {}) {
   if (mode === "manual") {
     const visibleMessages = getVisibleHistoryMessages(session);
     session.compressedUntilMessageId = visibleMessages[visibleMessages.length - 1]?.id || session.compressedUntilMessageId || "";
+    session.compressedUntilSequence = visibleMessages.length
+      ? getMessageSequenceInSession(session, visibleMessages[visibleMessages.length - 1])
+      : (Number.isFinite(session.compressedUntilSequence) ? session.compressedUntilSequence : null);
   } else {
+    appendCompressionSegment(session, "director", candidateMessages, segmentSummary);
     session.compressedUntilMessageId = candidateMessages[candidateMessages.length - 1]?.id || session.compressedUntilMessageId || "";
+    session.compressedUntilSequence = candidateMessages.length
+      ? getMessageSequenceInSession(session, candidateMessages[candidateMessages.length - 1])
+      : (Number.isFinite(session.compressedUntilSequence) ? session.compressedUntilSequence : null);
   }
   touchSession(session);
   persistSessions();
@@ -3110,13 +3201,17 @@ async function ensureChatSummary(session, options = {}) {
   const cutoffIdx = session?.compressedUntilMessageId
     ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
     : -1;
-
-  // Messages before the cutoff are the "old" ones to summarize
-  const oldMessages = cutoffIdx >= 0 ? visibleMessages.slice(0, cutoffIdx) : [];
-  // If force mode, take everything up to the last few messages
+  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
+    ? session.compressedUntilSequence
+    : Math.max(-1, ...(typeof getCompressionSegments === "function" ? getCompressionSegments(session, "chat").map((segment) => Number(segment.endSeq) || -1) : []));
+  const unsummarizedMessages = cutoffIdx >= 0
+    ? visibleMessages.slice(cutoffIdx + 1)
+    : (cutoffSeq >= 0
+      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+      : visibleMessages);
   const compressible = force
     ? visibleMessages.slice(0, Math.max(0, visibleMessages.length - 4))
-    : oldMessages;
+    : unsummarizedMessages.slice(0, Math.max(0, unsummarizedMessages.length - 4));
 
   if (!compressible.length && !force) return false;
 
@@ -3189,7 +3284,9 @@ async function ensureChatSummary(session, options = {}) {
 
   session.chatSummary = nextSummary;
   if (recentMessages.length) {
+    appendCompressionSegment(session, "chat", recentMessages, nextSummary);
     session.compressedUntilMessageId = recentMessages[recentMessages.length - 1]?.id || session.compressedUntilMessageId || "";
+    session.compressedUntilSequence = getMessageSequenceInSession(session, recentMessages[recentMessages.length - 1]);
   }
   touchSession(session);
   persistSessions();
@@ -3202,6 +3299,70 @@ let _autoCompressPending = false;
 function setCompressionUiLocked(locked) {
   const shell = document.querySelector(".app-shell");
   if (shell) shell.classList.toggle("compress-lock", Boolean(locked));
+}
+
+function normalizeCompressionSegmentSummary(summary) {
+  return String(summary || "")
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/^\s{0,3}(#{1,6}|[-*+>]|\d+\.)\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .trim();
+}
+
+function extractDirectorSegmentSummary(rawContent, fallbackMemory) {
+  try {
+    const parsed = parseDirectorJsonLoose(String(rawContent || ""));
+    const segmentSummary = normalizeCompressionSegmentSummary(parsed?.segmentSummary);
+    if (segmentSummary) return segmentSummary;
+  } catch {}
+  return normalizeCompressionSegmentSummary(fallbackMemory?.synopsis || buildDirectorMemoryBlock(fallbackMemory));
+}
+
+function appendCompressionSegment(session, kind, messages, summary) {
+  if (!session || !Array.isArray(messages) || !messages.length) return null;
+  const cleanSummary = normalizeCompressionSegmentSummary(summary);
+  if (!cleanSummary) return null;
+
+  const first = messages[0];
+  const last = messages[messages.length - 1];
+  const startSeq = getMessageSequenceInSession(session, first);
+  const endSeq = getMessageSequenceInSession(session, last);
+  const segment = {
+    id: `seg-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    kind,
+    startMessageId: first?.id || "",
+    endMessageId: last?.id || "",
+    startSeq,
+    endSeq,
+    messageCount: messages.length,
+    summary: cleanSummary,
+    tokenCount: estimateTokens(cleanSummary),
+    createdAt: new Date().toISOString(),
+  };
+
+  const segments = Array.isArray(session.compressionSegments) ? session.compressionSegments.slice() : [];
+  const duplicateIndex = segments.findIndex((item) =>
+    item && item.kind === kind && item.startSeq === startSeq && item.endSeq === endSeq
+  );
+  if (duplicateIndex >= 0) {
+    segments[duplicateIndex] = { ...segments[duplicateIndex], ...segment };
+  } else {
+    segments.push(segment);
+  }
+  segments.sort((a, b) => (Number(a.startSeq) || 0) - (Number(b.startSeq) || 0));
+  session.compressionSegments = segments.slice(-80);
+  session.compressedUntilSequence = Math.max(Number(session.compressedUntilSequence) || -1, endSeq);
+  return segment;
+}
+
+function scheduleAutoCompressAfterTurn(session) {
+  if (!session?.id) return;
+  const sessionId = session.id;
+  setTimeout(() => {
+    const latestSession = getCurrentSession();
+    const targetSession = latestSession?.id === sessionId ? latestSession : session;
+    void tryAutoCompressSession(targetSession);
+  }, 0);
 }
 
 async function tryAutoCompressSession(session) {
@@ -3225,9 +3386,14 @@ async function tryAutoCompressSession(session) {
     const cutoffIdx = session?.compressedUntilMessageId
       ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
       : -1;
+    const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
+      ? session.compressedUntilSequence
+      : Math.max(-1, ...(typeof getCompressionSegments === "function" ? getCompressionSegments(session, "director").map((segment) => Number(segment.endSeq) || -1) : []));
     unsummarizedCount = cutoffIdx >= 0
       ? Math.max(0, visibleMessages.length - cutoffIdx - 1)
-      : visibleMessages.length;
+      : (cutoffSeq >= 0
+        ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq).length
+        : visibleMessages.length);
     const needsMerge = unsummarizedCount > DIRECTOR_RECENT_HISTORY_LIMIT;
     const hasEnoughFreshMessages = unsummarizedCount >= DIRECTOR_AUTO_COMPRESS_MIN_UNSUMMARIZED;
     const shouldAutoCompress = needsRecompress && hasEnoughFreshMessages;
@@ -3281,9 +3447,14 @@ async function tryAutoCompressChat(session) {
   const cutoffIdx = session?.compressedUntilMessageId
     ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
     : -1;
+  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
+    ? session.compressedUntilSequence
+    : Math.max(-1, ...(typeof getCompressionSegments === "function" ? getCompressionSegments(session, "chat").map((segment) => Number(segment.endSeq) || -1) : []));
   const unsummarizedMessages = cutoffIdx >= 0
     ? visibleMessages.slice(cutoffIdx + 1)
-    : visibleMessages;
+    : (cutoffSeq >= 0
+      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+      : visibleMessages);
   const unsummarizedCount = unsummarizedMessages.length;
   const unsummarizedTokens = estimateChatMessagesTokens(
     unsummarizedMessages.map((m) => ({ role: m.role || "user", content: m.content || "" }))
@@ -3452,13 +3623,15 @@ function buildCompressMemoryPopoverMarkup(session) {
   const headText = isSingleAi ? "对话上下文与压缩进度" : "导演上下文与自动压缩进度";
   const progressTone = contextPercent >= 100 ? "full" : contextPercent >= 76 ? "high" : contextPercent >= 48 ? "mid" : "low";
   const summaryText = isSingleAi ? String(session?.chatSummary || "").trim() : String(session?.directorSummary || "").trim();
-  const summaryPreview = summaryText
-    ? escapeHtml(summaryText.length > 360 ? `${summaryText.slice(0, 360)}…` : summaryText).replace(/\n/g, "<br>")
-    : "";
-  const summaryCollapsed = summaryPreview && summaryText.split(/\n+/).filter(Boolean).length > 3 ? "collapsed" : "expanded";
+  const summaryMarkup = summaryText ? escapeHtml(summaryText).replace(/\n/g, "<br>") : "";
+  const summaryCollapsed = summaryMarkup && (summaryText.length > 360 || summaryText.split(/\n+/).filter(Boolean).length > 3) ? "collapsed" : "expanded";
   const rows = [
     ["上下文", `${formatTokenCount(metrics.contextCurrent)} / ${formatTokenCount(metrics.contextThreshold)}`],
   ];
+  const segmentCount = Array.isArray(session?.compressionSegments) ? session.compressionSegments.length : 0;
+  if (segmentCount > 0) {
+    rows.push(["分段记忆", String(segmentCount)]);
+  }
   if (isSingleAi && metrics.recentCount > 0) {
     rows.push(["消息数", String(metrics.recentCount)]);
   }
@@ -3480,10 +3653,10 @@ function buildCompressMemoryPopoverMarkup(session) {
           </div>
         `).join("")}
       </dl>
-      ${summaryPreview ? `
+      ${summaryMarkup ? `
       <div class="memory-compress-summary ${summaryCollapsed}">
         <div class="memory-compress-summary-label">${isSingleAi ? "压缩摘要" : "导演记忆"}</div>
-        <div class="memory-compress-summary-body">${summaryPreview}</div>
+        <div class="memory-compress-summary-body">${summaryMarkup}</div>
         <button class="memory-compress-summary-toggle" type="button">${summaryCollapsed === "collapsed" ? "展开" : "收起"}</button>
       </div>
       ` : ""}
@@ -3695,7 +3868,7 @@ function updateThinkingToggleMode() {
   if (!els.thinkingToggleBtn) return;
   const session = getCurrentSession();
   const singleModel = isSingleModelWorkSession(session);
-  const enabled = state.settings?.session?.modelThinking === "enabled";
+  const enabled = getSessionSetting(session, "modelThinking") === "enabled";
   els.thinkingToggleBtn.classList.toggle("single-model-thinking", singleModel);
   els.thinkingToggleBtn.classList.toggle("state-enabled", singleModel && enabled);
   els.thinkingToggleBtn.classList.toggle("state-disabled", singleModel && !enabled);
@@ -3709,7 +3882,7 @@ function updateThinkingToggleMode() {
 }
 
 function getModelThinkingState() {
-  return state.settings?.session?.modelThinking || "disabled";
+  return getSessionSetting("modelThinking") || "disabled";
 }
 
 function buildModelThinkingExtra(modelName) {
@@ -3761,11 +3934,11 @@ function getLatestUserMessageText(session) {
 }
 
 function shouldPreferParallelNpcReply(text) {
-  return /分别|各自|都说说|一起回答|一起说|每个人|每位|各说|同时|各抒己见|都回答/u.test(String(text || ""));
+  return /并行|同时|一起回答|一起说|分别|各自|各说|各聊|各写|各自展开|分别展开|每个人|每位|都说说|都回答|各抒己见/u.test(String(text || ""));
 }
 
 function shouldForceSerialNpcReply(text) {
-  return /接着|反驳|吵|争吵|轮流|先后|总结|回应他|回应她|回应它|接话|插话|打断|辩论|质问|追问|收尾/u.test(String(text || ""));
+  return /串行|依次|逐个|一个一个|挨个|轮流|先后|先来|后来|接着|接话|插话|打断|反驳|吵|争吵|辩论|质问|追问|总结|收尾|开头|打头阵|收个尾|最后总结|最后收尾|回应他|回应她|回应它|先.*后/u.test(String(text || ""));
 }
 
 function buildFallbackParallelGroups(session, responders) {
@@ -3784,6 +3957,9 @@ function resolveNpcParallelGroups(session, responders, directive) {
   const byName = new Map(responders.map((npc) => [npc.name, npc]));
   const used = new Set();
   const groups = [];
+  const text = getLatestUserMessageText(session);
+  const forceSerial = shouldForceSerialNpcReply(text);
+  const allowParallel = shouldPreferParallelNpcReply(text) && !forceSerial;
 
   if (Array.isArray(directive?.parallelGroups) && directive.parallelGroups.length) {
     directive.parallelGroups.forEach((group) => {
@@ -3793,7 +3969,7 @@ function resolveNpcParallelGroups(session, responders, directive) {
         .filter((npc) => npc && !used.has(npc.name));
       resolved.forEach((npc) => used.add(npc.name));
       if (resolved.length) {
-        groups.push(resolved);
+        groups.push(forceSerial || !allowParallel ? resolved.map((npc) => [npc]) : [resolved]);
       }
     });
     responders.forEach((npc) => {
@@ -3801,7 +3977,7 @@ function resolveNpcParallelGroups(session, responders, directive) {
         groups.push([npc]);
       }
     });
-    return groups;
+    return groups.flat();
   }
 
   return buildFallbackParallelGroups(session, responders);
@@ -3810,12 +3986,15 @@ function resolveNpcParallelGroups(session, responders, directive) {
 async function callNpcGroup(session, group, npcInstructions) {
   if (!group.length) return;
   if (group.length === 1) {
+    setInlineChatStatus(`${group[0].name} 正在回复...`);
     await callNpc(session, group[0], npcInstructions);
     return;
   }
 
   for (let index = 0; index < group.length; index += NPC_PARALLEL_GROUP_LIMIT) {
     const chunk = group.slice(index, index + NPC_PARALLEL_GROUP_LIMIT);
+    const names = formatNpcNamesForStatus(chunk);
+    setInlineChatStatus(`${names} 正在组织语言...`);
     await Promise.all(chunk.map((npc) => callNpc(
       session,
       npc,
@@ -3844,7 +4023,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     () => updateStreamingBubble(targetMessage)
   );
 
-  const shouldTrackUsage = state.settings?.session?.showTokenDisplay !== false;
+  const shouldTrackUsage = getSessionSetting(session, "showTokenDisplay") !== false;
 
   const buildStreamBody = (withUsage, withTemp = true) => {
     const body = {

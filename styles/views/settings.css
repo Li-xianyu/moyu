@@ -62,6 +62,9 @@
 }
 
 .settings-section-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   padding: 11px 12px;
   border: 1px solid transparent;
@@ -73,8 +76,25 @@
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
+.settings-section-icon {
+  flex: 0 0 auto;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--muted);
+  transition: color 0.15s ease;
+}
+
+.settings-section-label {
+  min-width: 0;
+}
+
 .settings-section-btn:hover {
   background: #2a2d2e;
+}
+
+.settings-section-btn:hover .settings-section-icon,
+.settings-section-btn.active .settings-section-icon {
+  color: var(--text);
 }
 
 .settings-section-btn.active {
@@ -120,6 +140,61 @@
   scrollbar-color: #424242 transparent;
 }
 
+.settings-page-grid {
+  display: grid;
+  gap: 0;
+  align-content: start;
+  padding: 8px 20px 40px 24px;
+}
+
+.settings-card {
+  display: grid;
+  gap: 14px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.settings-section-divider {
+  width: 90%;
+  margin: 28px auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.settings-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-card-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.settings-card-head .hint-text {
+  margin: 6px 0 0;
+  max-width: 60ch;
+  line-height: 1.6;
+}
+
+.settings-card-body {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-card-body--compact {
+  gap: 2px;
+}
+
+.settings-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 320px));
+  gap: 14px 16px;
+}
+
 .settings-global-grid {
   height: auto;
   min-height: 0;
@@ -145,6 +220,10 @@
   padding: 0;
 }
 
+.settings-global-section .settings-field-row {
+  align-items: flex-start;
+}
+
 .settings-field-row {
   display: flex;
   gap: 12px;
@@ -153,6 +232,28 @@
 
 .settings-language-field {
   width: min(320px, 100%);
+}
+
+.settings-number-field {
+  width: min(180px, 100%);
+}
+
+.settings-number-field input {
+  width: 100%;
+}
+
+.settings-inline-control {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+}
+
+.settings-inline-hint {
+  max-width: 420px;
+  margin: 0;
+  line-height: 1.6;
 }
 
 .settings-toggle-row {
@@ -322,6 +423,23 @@
   line-height: 1;
 }
 
+.settings-danger-btn {
+  min-width: 180px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: rgba(198, 40, 40, 0.1);
+  border-color: rgba(198, 40, 40, 0.26);
+  color: #f0b2ac;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.settings-danger-btn:hover {
+  background: rgba(198, 40, 40, 0.16);
+  border-color: rgba(198, 40, 40, 0.34);
+  color: #ffd8d3;
+}
+
 .settings-config-host {
   color: var(--muted);
   font-size: 12px;
@@ -397,6 +515,25 @@
 
 .field-full {
   grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .settings-page-grid {
+    padding: 8px 14px 32px 14px;
+  }
+
+  .settings-card {
+    gap: 12px;
+  }
+
+  .settings-section-divider {
+    width: 88%;
+    margin: 20px auto;
+  }
+
+  .settings-field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .actions-compact {

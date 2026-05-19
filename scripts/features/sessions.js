@@ -5,6 +5,7 @@
   // Welcome page: don't load session content
   if (state.showWelcomeHome) {
     if (els.chatStage) els.chatStage.classList.add("empty-state");
+    if (els.views.chat) els.views.chat.classList.add("empty-state");
     state.chatRenderActiveSessionId = null;
     els.chatMessages.innerHTML = "";
     return;
@@ -12,6 +13,9 @@
 
   if (els.chatStage) {
     els.chatStage.classList.toggle("empty-state", !session);
+  }
+  if (els.views.chat) {
+    els.views.chat.classList.toggle("empty-state", !session);
   }
 
   if (!session) {
@@ -55,6 +59,9 @@
 function renderSessionLoadingShell(session) {
   if (els.chatStage) {
     els.chatStage.classList.remove("empty-state");
+  }
+  if (els.views.chat) {
+    els.views.chat.classList.remove("empty-state");
   }
   state.chatRenderActiveSessionId = null;
   els.chatMeta.className = "chat-meta";
@@ -944,6 +951,7 @@ function buildArchiveSessionMeta(session) {
     model: session.model || "",
     directorModel: session.directorModel || session.model || "",
     globalPrompt: session.globalPrompt || "",
+    settingsOverrides: normalizeSessionOverrides(session.settingsOverrides),
     npcs: Array.isArray(session.npcs) ? session.npcs.map((n) => ({ ...n })) : [],
     transientNpcs: [],
     directorMemory: normalizeDirectorMemory(session.directorMemory),
@@ -974,12 +982,15 @@ function createImportedSessionShell(raw) {
     model: raw.model || "",
     directorModel: raw.directorModel || raw.model || "",
     globalPrompt: raw.globalPrompt || "",
+    settingsOverrides: normalizeSessionOverrides(raw.settingsOverrides),
     npcs: Array.isArray(raw.npcs) ? raw.npcs.map((n) => ({ ...n })) : [],
     transientNpcs: [],
     directorMemory: normalizeDirectorMemory(raw.directorMemory),
     directorSummary: raw.directorSummary || "",
     chatSummary: raw.chatSummary || "",
     compressedUntilMessageId: raw.compressedUntilMessageId || "",
+    compressedUntilSequence: Number.isFinite(raw.compressedUntilSequence) ? raw.compressedUntilSequence : null,
+    compressionSegments: Array.isArray(raw.compressionSegments) ? raw.compressionSegments.map((segment) => ({ ...segment })) : [],
     suggestionGuide: raw.suggestionGuide || "",
     host: raw.host || "",
     key: raw.key || "",
