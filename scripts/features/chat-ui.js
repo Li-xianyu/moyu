@@ -384,7 +384,8 @@ function updateComposerMode() {
 
   // 输出中 → 暂停按钮优先于一切
   if (state.isSending) {
-    els.sendBtn.innerHTML = '<i class="bi bi-stop-fill"></i>';
+    els.sendBtn.innerHTML = '<i data-lucide="square"></i>';
+    lucide.createIcons();
     els.sendBtn.disabled = false;
     els.sendBtn.classList.add("sending");
     els.chatInput.classList.remove("editing");
@@ -398,7 +399,8 @@ function updateComposerMode() {
   }
 
   if (state.editingUserMessageId) {
-    els.sendBtn.innerHTML = '<i class="bi bi-check-lg"></i>';
+    els.sendBtn.innerHTML = '<i data-lucide="check"></i>';
+    lucide.createIcons();
     els.chatInput.classList.add("editing");
     if (els.mobileNewlineBtn) els.mobileNewlineBtn.disabled = false;
     if (composer) {
@@ -451,7 +453,8 @@ function updateComposerMode() {
   }
   updateThinkingToggleMode();
   renderCompressMemoryPopover();
-  els.sendBtn.innerHTML = '<i class="bi bi-arrow-up"></i>';
+  els.sendBtn.innerHTML = '<i data-lucide="arrow-up"></i>';
+  lucide.createIcons();
   setText(els.chatStatus, state.isSending ? t("chat.statusProcessing") : t("chat.statusReady"));
   updateSuggestBtn();
 }
@@ -790,10 +793,12 @@ function updateStreamingBubble(targetMessage) {
           const code = pre ? pre.querySelector('code').textContent : '';
           navigator.clipboard.writeText(code).then(() => {
             btn.className = 'code-copy-btn copied';
-            btn.innerHTML = '<i class="bi bi-check"></i>';
+            btn.innerHTML = '<i data-lucide="check"></i>';
+            lucide.createIcons();
             setTimeout(() => {
               btn.className = 'code-copy-btn';
-              btn.innerHTML = '<i class="bi bi-clipboard"></i>';
+              btn.innerHTML = '<i data-lucide="clipboard"></i>';
+              lucide.createIcons();
             }, 1500);
           }).catch(() => {});
         });
@@ -1099,11 +1104,13 @@ function renderMessages(options = {}) {
     } else {
       clearUserTopAnchorSpacer();
     }
+    lucide.createIcons();
     return;
   }
 
   const heightDelta = scrollEl.scrollHeight - previousScrollHeight;
   scrollEl.scrollTop = previousScrollTop + Math.max(0, heightDelta);
+  lucide.createIcons();
 }
 
 /* ---- Narration helpers ---- */
@@ -1298,7 +1305,7 @@ function buildMessageTools(message) {
   copyBtn.type = "button";
   copyBtn.className = "message-edit-btn";
   copyBtn.title = t("chat.copy");
-  copyBtn.innerHTML = `<i class="bi bi-copy message-edit-icon"></i>`;
+  copyBtn.innerHTML = `<i data-lucide="copy" class="message-edit-icon"></i>`;
   copyBtn.addEventListener("click", () => copyMessageContent(message.id, copyBtn.querySelector(".message-edit-icon")));
   tools.appendChild(copyBtn);
 
@@ -1306,18 +1313,19 @@ function buildMessageTools(message) {
     const editBtn = document.createElement("button");
     editBtn.type = "button";
     editBtn.className = `message-edit-btn ${state.editingUserMessageId === message.id ? "active" : ""}`.trim();
-    editBtn.innerHTML = `<i class="bi bi-pencil message-edit-icon"></i>`;
+    editBtn.innerHTML = `<i data-lucide="pencil" class="message-edit-icon"></i>`;
     editBtn.addEventListener("click", () => beginUserMessageEdit(message.id));
     tools.appendChild(editBtn);
 
     const retryBtn = document.createElement("button");
     retryBtn.type = "button";
     retryBtn.className = "message-edit-btn";
-    retryBtn.innerHTML = `<i class="bi bi-arrow-counterclockwise message-edit-icon"></i>`;
+    retryBtn.innerHTML = `<i data-lucide="rotate-ccw" class="message-edit-icon"></i>`;
     retryBtn.addEventListener("click", () => regenerateFromUserMessage(message.id));
     tools.appendChild(retryBtn);
   }
 
+  lucide.createIcons();
   return tools;
 }
 
@@ -1365,10 +1373,12 @@ function bindCodeCopyBtn(btn) {
     }
     navigator.clipboard.writeText(code).then(() => {
       btn.className = 'code-copy-btn copied';
-      btn.innerHTML = '<i class="bi bi-check"></i>';
+      btn.innerHTML = '<i data-lucide="check"></i>';
+      lucide.createIcons();
       setTimeout(() => {
         btn.className = 'code-copy-btn';
-        btn.innerHTML = '<i class="bi bi-clipboard"></i>';
+        btn.innerHTML = '<i data-lucide="clipboard"></i>';
+        lucide.createIcons();
       }, 1500);
     }).catch(() => {});
   });

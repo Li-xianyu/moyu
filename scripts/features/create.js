@@ -35,7 +35,141 @@ function getMinNpcWarning() {
 }
 
 function getCurrentCreateEditSection() {
-  return state.currentSessionEditSection === "overrides" ? "overrides" : "details";
+  const valid = ["details", "overrides", "advanced"];
+  return valid.includes(state.currentSessionEditSection) ? state.currentSessionEditSection : "details";
+}
+
+function getSessionAgents(session) {
+  if (!session) return [];
+  const agents = [];
+  const isSingleNpc = session.mode === SESSION_MODE_WORK
+    && (!session.directorModel || (session.npcs || []).length <= 1);
+  if (!isSingleNpc && session.directorModel) {
+    agents.push({ key: "director", label: "导演", model: session.directorModel });
+  }
+  (session.npcs || []).forEach(function (npc) {
+    if (npc.name && npc.model) {
+      agents.push({ key: npc.name, label: npc.name, model: npc.model });
+    }
+  });
+  return agents;
+}
+
+function renderSessionAdvancedControls() {
+  var session = getEditingSessionTarget();
+  var container = els.sessionAdvancedAgentList;
+  if (!container) return;
+
+  container.innerHTML = "";
+  if (!session) return;
+
+  var agents = getSessionAgents(session);
+  agents.forEach(function (agent) {
+    var tempVal = getSessionAgentParam(session, agent.key, "temperature");
+    var topPVal = getSessionAgentParam(session, agent.key, "top_p");
+    var defaultTemp = agent.key === "director" ? 0.5 : getNpcResponseTemperature(session, agent.model);
+    var defaultTopP = 1.0;
+    var displayTemp = tempVal !== undefined && tempVal !== null ? tempVal : defaultTemp;
+    var displayTopP = topPVal !== undefined && topPVal !== null ? topPVal : defaultTopP;
+
+    var row = document.createElement("div");
+    row.className = "session-agent-param-row";
+
+    var header = document.createElement("div");
+    header.className = "session-agent-param-header";
+
+    var nameSpan = document.createElement("span");
+    nameSpan.className = "session-agent-param-name";
+    nameSpan.textContent = agent.label;
+
+    var modelSpan = document.createElement("span");
+    modelSpan.className = "session-agent-param-model";
+    modelSpan.textContent = agent.model;
+
+    header.appendChild(nameSpan);
+    header.appendChild(modelSpan);
+
+    var controls = document.createElement("div");
+    controls.className = "session-agent-param-controls";
+
+    // Temperature field
+    var tempField = document.createElement("label");
+    tempField.className = "session-agent-param-field";
+    var tempLabel = document.createElement("span");
+    tempLabel.textContent = t("create.advancedTemperatureLabel");
+    var tempInput = document.createElement("input");
+    tempInput.type = "number";
+    tempInput.min = "0";
+    tempInput.max = "2";
+    tempInput.step = "0.1";
+    tempInput.className = "field";
+    tempInput.value = String(displayTemp);
+    tempInput.placeholder = t("create.overrideGlobalDefault", { value: String(defaultTemp) });
+    tempInput.dataset.agent = agent.key;
+    tempInput.dataset.param = "temperature";
+    tempField.appendChild(tempLabel);
+    tempField.appendChild(tempInput);
+
+    // Top P field
+    var topPField = document.createElement("label");
+    topPField.className = "session-agent-param-field";
+    var topPLabel = document.createElement("span");
+    topPLabel.textContent = t("create.advancedTopPLabel");
+    var topPInput = document.createElement("input");
+    topPInput.type = "number";
+    topPInput.min = "0";
+    topPInput.max = "1";
+    topPInput.step = "0.05";
+    topPInput.className = "field";
+    topPInput.value = String(displayTopP);
+    topPInput.placeholder = t("create.overrideGlobalDefault", { value: String(defaultTopP) });
+    topPInput.dataset.agent = agent.key;
+    topPInput.dataset.param = "top_p";
+    topPField.appendChild(topPLabel);
+    topPField.appendChild(topPInput);
+
+    controls.appendChild(tempField);
+    controls.appendChild(topPField);
+
+    row.appendChild(header);
+    row.appendChild(controls);
+    container.appendChild(row);
+  });
+
+  // Bind change events
+  container.querySelectorAll("input[data-param]").forEach(function (input) {
+    input.addEventListener("change", function () {
+      if (!state.editingSessionId) return;
+      var s = getEditingSessionTarget();
+      if (!s) return;
+      var agentName = this.dataset.agent;
+      var param = this.dataset.param;
+      var raw = this.value.trim();
+      if (raw === "") {
+        if (s.agentParams && s.agentParams[agentName]) {
+          var next = {};
+          Object.keys(s.agentParams[agentName]).forEach(function (k) {
+            if (k !== param) next[k] = s.agentParams[agentName][k];
+          });
+          if (Object.keys(next).length === 0) {
+            var cleaned = {};
+            Object.keys(s.agentParams).forEach(function (k) {
+              if (k !== agentName) cleaned[k] = s.agentParams[k];
+            });
+            s.agentParams = cleaned;
+          } else {
+            s.agentParams[agentName] = next;
+          }
+        }
+      } else {
+        setSessionAgentParam(s, agentName, param, raw);
+      }
+      touchSession(s);
+      persistSessions();
+    });
+  });
+
+  lucide.createIcons();
 }
 
 const SESSION_OVERRIDE_KEYS = [
@@ -229,18 +363,19 @@ function syncCreateEditNavigation() {
   const isEditing = Boolean(state.editingSessionId);
   const activeSection = isEditing ? getCurrentCreateEditSection() : "details";
   const showDetails = activeSection === "details";
-  const tabButtons = [els.sessionEditInfoTabBtn, els.sessionEditOverridesTabBtn];
-  const navButtons = [els.sessionEditInfoNavBtn, els.sessionEditOverridesNavBtn];
+  const tabButtons = [els.sessionEditInfoTabBtn, els.sessionEditOverridesTabBtn, els.sessionEditAdvancedTabBtn];
+  const navButtons = [els.sessionEditInfoNavBtn, els.sessionEditOverridesNavBtn, els.sessionEditAdvancedNavBtn];
 
   updateCreateExitButton();
   if (els.sessionEditTabs) {
-    els.sessionEditTabs.classList.add("hidden");
+    const showTabs = isEditing && window.matchMedia("(max-width: 960px)").matches;
+    els.sessionEditTabs.classList.toggle("hidden", !showTabs);
   }
   if (els.sessionEditSidebar) {
     els.sessionEditSidebar.classList.toggle("hidden", !isEditing);
   }
   if (els.sessionEditFooter) {
-    els.sessionEditFooter.classList.toggle("hidden", isEditing && activeSection === "overrides");
+    els.sessionEditFooter.classList.toggle("hidden", isEditing && activeSection !== "details");
   }
 
   tabButtons.forEach((button) => {
@@ -263,18 +398,26 @@ function syncCreateEditNavigation() {
   if (els.sessionEditOverridesPanel) {
     els.sessionEditOverridesPanel.classList.toggle("active", isEditing && activeSection === "overrides");
   }
+  if (els.sessionEditAdvancedPanel) {
+    els.sessionEditAdvancedPanel.classList.toggle("active", isEditing && activeSection === "advanced");
+  }
   if (isEditing) {
     renderSessionOverrideControls();
+    if (activeSection === "advanced") {
+      renderSessionAdvancedControls();
+    }
   }
 }
 
 function switchCreateEditSection(section) {
-  state.currentSessionEditSection = section === "overrides" ? "overrides" : "details";
+  var valid = ["details", "overrides", "advanced"];
+  state.currentSessionEditSection = valid.includes(section) ? section : "details";
   updateCreateViewMode();
 }
 
 function bindCreateEditNavigation() {
-  [els.sessionEditInfoTabBtn, els.sessionEditOverridesTabBtn, els.sessionEditInfoNavBtn, els.sessionEditOverridesNavBtn]
+  [els.sessionEditInfoTabBtn, els.sessionEditOverridesTabBtn, els.sessionEditAdvancedTabBtn,
+   els.sessionEditInfoNavBtn, els.sessionEditOverridesNavBtn, els.sessionEditAdvancedNavBtn]
     .filter(Boolean)
     .forEach((button) => {
       button.addEventListener("click", () => {
@@ -366,6 +509,7 @@ function bindCreateFlow() {
       directorModel: payload.directorModel || "",
       directorConfigId: payload.directorConfigId || "",
       settingsOverrides: {},
+      agentParams: {},
       npcs: payload.npcs,
       transientNpcs: [],
       directorMemory: normalizeDirectorMemory(null),
@@ -684,6 +828,7 @@ function populateModelSelect(select, preferredValue = "") {
     option.value = "";
     option.textContent = t("create.workModelsEmpty");
     select.appendChild(option);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
     return;
   }
 
@@ -701,6 +846,8 @@ function populateModelSelect(select, preferredValue = "") {
     }
     select.appendChild(option);
   });
+
+  select.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 function getAllWorkModels() {
@@ -916,7 +1063,9 @@ function updateCreateViewMode() {
     els.createViewSubtitle.textContent = isEditing
       ? (activeSection === "overrides"
         ? t("create.overridesSubtitle")
-        : t("create.editSubtitle", { entityType: term }))
+        : activeSection === "advanced"
+          ? t("create.advancedSubtitle")
+          : t("create.editSubtitle", { entityType: term }))
       : t("create.newSubtitle", { entityType: term });
   }
   els.createChatBtn.textContent = isEditing ? t("create.saveBtn") : t("create.submit");
@@ -963,6 +1112,16 @@ function saveSessionEdits(payload, activeConfig) {
   session.globalPrompt = payload.globalPrompt;
   session.npcs = payload.npcs.map((npc) => ({ ...npc }));
   session.transientNpcs = (session.transientNpcs || []).filter((npc) => !session.npcs.some((baseNpc) => baseNpc.name === npc.name));
+  // Clean up orphaned agentParams keys (NPCs renamed or removed)
+  if (session.agentParams) {
+    var validKeys = new Set(["director"]);
+    (session.npcs || []).forEach(function (npc) { validKeys.add(npc.name); });
+    var cleaned = {};
+    Object.keys(session.agentParams).forEach(function (k) {
+      if (validKeys.has(k)) cleaned[k] = session.agentParams[k];
+    });
+    session.agentParams = cleaned;
+  }
   session.directorMemory = normalizeDirectorMemory(null);
   session.directorSummary = "";
   session.chatSummary = "";
@@ -978,7 +1137,4 @@ function saveSessionEdits(payload, activeConfig) {
   switchView("chat");
   setCreateStatus(t("create.statusSaved"), "success");
   setText(els.chatStatus, state.isSending ? t("create.statusProcessing") : t("chat.readyAfterCreate"));
-  if (session.titleSource !== "manual") {
-    void generateSessionTitle(session);
-  }
 }

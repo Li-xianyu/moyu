@@ -494,7 +494,16 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
       stream: true,
     };
     if (withTemp) {
-      body.temperature = getNpcResponseTemperature(session, model);
+      var agentTemp = typeof getSessionAgentParam === "function"
+        ? getSessionAgentParam(session, speaker, "temperature")
+        : undefined;
+      body.temperature = agentTemp !== undefined ? agentTemp : getNpcResponseTemperature(session, model);
+      var agentTopP = typeof getSessionAgentParam === "function"
+        ? getSessionAgentParam(session, speaker, "top_p")
+        : undefined;
+      if (agentTopP !== undefined) {
+        body.top_p = agentTopP;
+      }
     }
     if (withUsage) {
       body.stream_options = { include_usage: true };
@@ -648,6 +657,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     initialThinkingBuffer = "";
   }
   streamBatch.flushFinal();
+  targetMessage.streaming = false;
 
   if (!targetMessage.content.trim()) {
     targetMessage.streaming = false;

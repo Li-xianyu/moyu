@@ -6,7 +6,7 @@ const DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT = 4;
 const DIRECTOR_AUTO_COMPRESS_THRESHOLD_DEFAULT = 1800;
 const DIRECTOR_AUTO_COMPRESS_MIN_UNSUMMARIZED = 6;
 const DIRECTOR_MEMORY_TARGET_MIN = 260;
-const DIRECTOR_MEMORY_TARGET_MAX = 720;
+const DIRECTOR_MEMORY_TARGET_MAX = 1800;
 // ── 单 AI 模式（无导演）对话摘要压缩 ──
 const CHAT_CONVERSATION_THRESHOLD = 3000;
 const CHAT_SUMMARY_TARGET_MAX = 800;
@@ -928,7 +928,11 @@ async function callDirector(session) {
     const promptMessages = !state.directorThinking && !supportsThinkingParam(session.directorModel)
       ? [...requestMessages, { role: "system", content: "直接输出，不要输出思考过程。" }]
       : requestMessages;
-    const payload = await createChatCompletionPayload(directorConfig.host, directorConfig.key, session.directorModel, promptMessages, false, 0.5, directorExtra);
+    const dirAgentTemp = typeof getSessionAgentParam === "function"
+      ? getSessionAgentParam(session, "director", "temperature")
+      : undefined;
+    const dirEffectiveTemp = dirAgentTemp !== undefined ? dirAgentTemp : 0.5;
+    const payload = await createChatCompletionPayload(directorConfig.host, directorConfig.key, session.directorModel, promptMessages, false, dirEffectiveTemp, directorExtra);
     const content = payload.content;
     debugLog("director", t("debug.msg.rawResponseReceived"), {
       attempt: attempt + 1,

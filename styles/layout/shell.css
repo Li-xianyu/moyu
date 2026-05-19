@@ -32,7 +32,6 @@ button,
 .sidebar {
   padding: 18px 14px;
   background: var(--sidebar);
-  border-right: 1px solid #333333;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -42,6 +41,27 @@ button,
 
 .brand {
   min-width: 0;
+}
+
+.sidebar-collapse-btn {
+  margin-left: auto;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.sidebar-collapse-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .moyu-logo-defs {
@@ -85,7 +105,9 @@ button,
   color: var(--text-strong);
 }
 
-.brand p,
+.brand p {
+  display: none;
+}
 .panel-head p,
 .npc-header p {
   margin: 6px 0 0;
@@ -95,6 +117,10 @@ button,
 .nav {
   display: grid;
   gap: 8px;
+}
+
+.nav-main {
+  margin-top: 10px;
 }
 
 .nav-bottom {
@@ -131,15 +157,11 @@ button,
 }
 
 .nav-btn-create {
-  border-color: #333333;
-  background: #007acc;
-  color: #cccccc;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
-.nav-btn-create:hover {
-  background: #1177bb;
-  border-color: #333333;
+.nav-btn.nav-btn-create:hover {
+  background: transparent;
 }
 
 .nav-btn-icon {
@@ -151,9 +173,15 @@ button,
 }
 
 .nav-icon-svg {
-  font-size: 18px;
-  line-height: 1;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+.nav-icon-svg svg {
+  width: 100%;
+  height: 100%;
 }
 
 .nav-btn.active {
@@ -162,8 +190,6 @@ button,
 }
 
 .nav-btn-create.active {
-  background: #007acc;
-  border-color: #333333;
   color: #cccccc;
 }
 
@@ -188,16 +214,21 @@ button,
   transition: margin-left 0.22s ease;
 }
 
-.nav-text-toggle {
-  width: 100%;
+.chat-list-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+}
+
+.nav-text-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 8px 2px;
   border: 0;
   background: transparent;
-  color: #b6beca;
+  color: var(--muted);
   cursor: pointer;
 }
 
@@ -239,7 +270,8 @@ button,
 }
 
 .toggle-action-btn .nav-icon-svg {
-  font-size: 14px;
+  width: 14px;
+  height: 14px;
 }
 
 .toggle-action-btn:hover {
@@ -253,10 +285,9 @@ button,
 
 .chat-list-menu-toolbar {
   display: flex;
-  justify-content: flex-end;
   gap: 6px;
-  padding-right: 6px;
-  margin-bottom: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .chat-search-input {
@@ -291,6 +322,7 @@ button,
 }
 
 .chat-list-menu {
+  width: 100%;
   margin-top: 6px;
   display: grid;
   gap: 2px;
@@ -312,7 +344,7 @@ button,
 
 .chat-list-item,
 .chat-list-empty {
-  padding: 8px 10px;
+  padding: 8px 10px 8px 20px;
   border-radius: 10px;
   font-size: 13px;
 }
@@ -331,17 +363,8 @@ button,
   overflow: visible;
 }
 
-.chat-list-item:hover {
-  background: #2a2d2e;
-}
-
 .chat-list-item.active {
   border-color: transparent;
-  background: #37373d;
-}
-
-.chat-list-item.active:hover {
-  background: #37373d;
 }
 
 .chat-list-main {
@@ -588,4 +611,28 @@ button,
 
 .app-shell.sidebar-collapsed .shell-toggle-btn {
   left: 16px;
+}
+
+/* Desktop: hide floating toggle and show chevrons when sidebar is expanded */
+@media (min-width: 961px) {
+  .app-shell:not(.sidebar-collapsed) .shell-toggle-btn {
+    display: none;
+  }
+
+  .app-shell.sidebar-collapsed .sidebar-collapse-btn {
+    display: none;
+  }
+}
+
+/* Mobile/tablet: hide floating toggle when sidebar drawer is open */
+@media (max-width: 960px) {
+  .app-shell.sidebar-drawer-open .shell-toggle-btn {
+    display: none;
+  }
+}
+
+@media (min-width: 961px) {
+  .chat-list-control {
+    padding-left: 12px;
+  }
 }

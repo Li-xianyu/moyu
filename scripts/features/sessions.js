@@ -268,7 +268,7 @@ function renderChatListMenu() {
     button.type = "button";
     button.className = `chat-list-item ${(showActive && session.id === state.currentSessionId) ? "active" : ""} ${state.openChatMenuId === session.id ? "menu-open" : ""}`.trim();
     button.addEventListener("click", async () => {
-      if (state.currentSessionId === session.id && !state.showWelcomeHome) {
+      if (state.currentSessionId === session.id && !state.showWelcomeHome && els.views.chat?.classList.contains("active")) {
         return;
       }
       const previousSession = getCurrentSession();
@@ -348,7 +348,7 @@ function renderChatListMenu() {
     moreBtn.type = "button";
     moreBtn.className = `chat-list-more-btn ${state.openChatMenuId === session.id ? "active" : ""}`.trim();
     moreBtn.innerHTML = `
-      <i class="bi bi-three-dots-vertical nav-icon-svg"></i>
+      <i data-lucide="ellipsis-vertical" class="nav-icon-svg"></i>
     `;
     moreBtn.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -366,7 +366,7 @@ function renderChatListMenu() {
     editBtn.className = "chat-item-menu-btn";
     editBtn.innerHTML = `
       <span class="chat-item-menu-icon">
-        <i class="bi bi-gear nav-icon-svg"></i>
+        <i data-lucide="settings" class="nav-icon-svg"></i>
       </span>
       <span>${t("chat.menuEditSession")}</span>
     `;
@@ -391,7 +391,7 @@ function renderChatListMenu() {
     restartBtn.className = "chat-item-menu-btn";
     restartBtn.innerHTML = `
       <span class="chat-item-menu-icon">
-        <i class="bi bi-arrow-counterclockwise nav-icon-svg"></i>
+        <i data-lucide="rotate-ccw" class="nav-icon-svg"></i>
       </span>
       <span>${t("chat.menuRestart")}</span>
     `;
@@ -405,7 +405,7 @@ function renderChatListMenu() {
     renameBtn.className = "chat-item-menu-btn";
     renameBtn.innerHTML = `
       <span class="chat-item-menu-icon">
-        <i class="bi bi-pencil nav-icon-svg"></i>
+        <i data-lucide="pencil" class="nav-icon-svg"></i>
       </span>
       <span>${t("chat.menuRename")}</span>
     `;
@@ -424,13 +424,13 @@ function renderChatListMenu() {
     deleteBtn.innerHTML = isDeleteConfirm
       ? `
         <span class="chat-item-menu-icon">
-          <i class="bi bi-check-lg nav-icon-svg"></i>
+          <i data-lucide="check" class="nav-icon-svg"></i>
         </span>
         <span>${t("chat.menuDelete")}</span>
       `
       : `
         <span class="chat-item-menu-icon">
-          <i class="bi bi-trash nav-icon-svg"></i>
+          <i data-lucide="trash-2" class="nav-icon-svg"></i>
         </span>
         <span>${t("chat.menuDelete")}</span>
       `;
@@ -453,7 +453,7 @@ function renderChatListMenu() {
     exportBtn.className = "chat-item-menu-btn";
     exportBtn.innerHTML = `
       <span class="chat-item-menu-icon">
-        <i class="bi bi-download nav-icon-svg"></i>
+        <i data-lucide="download" class="nav-icon-svg"></i>
       </span>
       <span>${t("chat.menuExport")}</span>
     `;
@@ -477,6 +477,7 @@ function renderChatListMenu() {
     button.appendChild(actions);
     els.chatListItems.appendChild(button);
   });
+  lucide.createIcons();
 }
 
 function positionChatItemMenu(menu, anchorButton) {

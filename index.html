@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="dark">
   <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=2026.05.19.04">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.19.02";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.19.01";window.__moyuBootStart = performance.now();</script>
   <style>
     .loading-screen {
       position: fixed; inset: 0; z-index: 9999;
@@ -74,7 +74,6 @@
         "./styles/views/chat.css",
         "./styles/base/responsive.css",
         "./styles/base/scrollbars.css",
-        "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css",
         "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css",
         "./styles/base/mobile-viewport-fix.css",
         "./styles/base/drop-overlay.css"
@@ -153,6 +152,9 @@
             <use href="#moyuFishIcon"></use>
           </svg>
           <h1 class="brand-inline-title" data-i18n="brand.sidebarTitle">MOYU</h1>
+          <button id="sidebarCollapseBtn" class="sidebar-collapse-btn" type="button" aria-label="收起侧栏">
+            <i data-lucide="chevrons-left" class="nav-icon-svg"></i>
+          </button>
         </div>
         <h1 data-i18n="brand.title">MOYU-模鱼</h1>
         <p data-i18n="brand.subtitle">开始模鱼，开始摸鱼！</p>
@@ -161,38 +163,40 @@
       <nav class="nav nav-main">
         <button class="nav-btn nav-btn-create" data-view="create">
           <span class="nav-btn-icon" aria-hidden="true">
-            <i class="bi bi-plus-lg nav-icon-svg"></i>
+            <i data-lucide="square-pen" class="nav-icon-svg"></i>
           </span>
           <span data-i18n="nav.create">创建聊天</span>
         </button>
-        
+
         <div class="chat-list-control">
 
-          <button id="chatListToggleBtn" class="nav-text-toggle" type="button">
+          <div class="chat-list-head">
+            <button id="chatListToggleBtn" class="nav-text-toggle" type="button">
 
-            <span data-i18n="nav.chatList">聊天列表</span>
+              <span data-i18n="nav.chatList">聊天列表</span>
 
-            <span class="toggle-icon" aria-hidden="true">
-          <i class="bi bi-chevron-right nav-icon-svg expanded" id="chatListArrowIcon"></i>
+              <span class="toggle-icon" aria-hidden="true">
+          <i data-lucide="chevron-right" class="nav-icon-svg expanded" id="chatListArrowIcon"></i>
 
-            </span>
+              </span>
 
-          </button>
-
-          <div id="chatListMenu" class="chat-list-menu">
+            </button>
 
             <div class="chat-list-menu-toolbar">
               <button id="chatExportBtn" class="toggle-action-btn" type="button" title="导出全部会话">
-                <i class="bi bi-download nav-icon-svg"></i>
+                <i data-lucide="download" class="nav-icon-svg"></i>
               </button>
               <button id="chatImportBtn" class="toggle-action-btn" type="button" title="导入会话">
-                <i class="bi bi-upload nav-icon-svg"></i>
+                <i data-lucide="upload" class="nav-icon-svg"></i>
               </button>
               <button id="chatSearchBtn" class="toggle-action-btn" type="button" title="搜索会话">
-                <i class="bi bi-search nav-icon-svg"></i>
+                <i data-lucide="search" class="nav-icon-svg"></i>
               </button>
               <input id="chatImportInput" type="file" accept=".json,application/json" hidden>
             </div>
+          </div>
+
+          <div id="chatListMenu" class="chat-list-menu">
             <input id="chatSearchInput" class="chat-search-input" type="text" placeholder="搜索会话标题或内容..." hidden>
             <div id="chatListItems" class="chat-list-items"></div>
 
@@ -204,7 +208,7 @@
       <nav class="nav nav-bottom">
         <button class="nav-btn nav-btn-settings" data-view="settings">
           <span class="nav-btn-icon" aria-hidden="true">
-            <i class="bi bi-gear nav-icon-svg"></i>
+            <i data-lucide="settings" class="nav-icon-svg"></i>
           </span>
           <span data-i18n="nav.settings">设置</span>
         </button>
@@ -212,7 +216,7 @@
     </aside>
 
     <button id="sidebarToggleBtn" class="shell-toggle-btn" type="button" aria-label="切换侧栏">
-      <i class="bi bi-list nav-icon-svg"></i>
+      <i data-lucide="menu" class="nav-icon-svg"></i>
     </button>
     <button id="sidebarBackdrop" class="sidebar-backdrop hidden" type="button" aria-label="关闭侧栏"></button>
 
@@ -228,31 +232,25 @@
             </div>
             <div class="settings-section-nav">
               <button id="globalSettingsTabBtn" class="settings-section-btn active" type="button">
-                <i class="bi bi-sliders2 settings-section-icon" aria-hidden="true"></i>
+                <i data-lucide="sliders-horizontal" class="settings-section-icon" aria-hidden="true"></i>
                 <span class="settings-section-label" data-i18n="settings.globalTab">全局设置</span>
               </button>
               <button id="assistantSettingsTabBtn" class="settings-section-btn" type="button">
-                <i class="bi bi-magic settings-section-icon" aria-hidden="true"></i>
+                <i data-lucide="wand-sparkles" class="settings-section-icon" aria-hidden="true"></i>
                 <span class="settings-section-label" data-i18n="settings.assistantTab">辅助 AI</span>
               </button>
               <button id="sessionSettingsTabBtn" class="settings-section-btn" type="button">
-                <i class="bi bi-chat-square-text settings-section-icon" aria-hidden="true"></i>
+                <i data-lucide="message-square-text" class="settings-section-icon" aria-hidden="true"></i>
                 <span class="settings-section-label" data-i18n="settings.sessionTab">会话设置</span>
               </button>
               <button id="apiSettingsTabBtn" class="settings-section-btn" type="button">
-                <i class="bi bi-hdd-network settings-section-icon" aria-hidden="true"></i>
+                <i data-lucide="server" class="settings-section-icon" aria-hidden="true"></i>
                 <span class="settings-section-label" data-i18n="settings.apiTab">接口设置</span>
               </button>
             </div>
           </section>
 
           <section class="settings-main-panel">
-            <div class="settings-main-head">
-              <div>
-                <h2 id="settingsPanelTitle" data-i18n="settings.globalTitle">全局设置</h2>
-                <p id="settingsPanelSubtitle" data-i18n="settings.globalSubtitle">调整整个应用通用的设置项。</p>
-              </div>
-            </div>
 
             <section id="globalSettingsPanel" class="settings-page-panel active">
               <div class="settings-page-grid">
@@ -533,7 +531,7 @@
         <div class="panel">
           <div id="sessionEditTopbar" class="session-edit-topbar hidden">
             <button id="cancelEditBtn" class="session-edit-exit-btn" type="button">
-              <i class="bi bi-arrow-left" aria-hidden="true"></i>
+              <i data-lucide="arrow-left" aria-hidden="true"></i>
               <span id="sessionEditExitLabel" data-i18n="create.exitEdit">退出编辑</span>
             </button>
           </div>
@@ -546,8 +544,9 @@
           </div>
 
           <div id="sessionEditTabs" class="session-edit-tabs hidden" role="tablist" aria-label="编辑当前会话">
-            <button id="sessionEditInfoTabBtn" class="session-edit-tab-btn active" type="button" role="tab" aria-selected="true" data-session-edit-section="details" data-i18n="create.editNavInfo">编辑会话信息</button>
-            <button id="sessionEditOverridesTabBtn" class="session-edit-tab-btn" type="button" role="tab" aria-selected="false" data-session-edit-section="overrides" data-i18n="create.editNavOverrides">本会话特调</button>
+            <button id="sessionEditInfoTabBtn" class="session-edit-tab-btn active" type="button" role="tab" aria-selected="true" data-session-edit-section="details" data-i18n="create.editNavInfo"><i data-lucide="file-text" class="nav-icon-svg"></i><span>会话信息</span></button>
+            <button id="sessionEditOverridesTabBtn" class="session-edit-tab-btn" type="button" role="tab" aria-selected="false" data-session-edit-section="overrides" data-i18n="create.editNavOverrides"><i data-lucide="sliders" class="nav-icon-svg"></i><span>会话界面</span></button>
+            <button id="sessionEditAdvancedTabBtn" class="session-edit-tab-btn" type="button" role="tab" aria-selected="false" data-session-edit-section="advanced" data-i18n="create.editNavAdvanced"><i data-lucide="sliders-horizontal" class="nav-icon-svg"></i><span>高级设置</span></button>
           </div>
 
           <div class="session-edit-workspace">
@@ -558,12 +557,16 @@
               </div>
               <div class="session-edit-sidebar-nav">
                 <button id="sessionEditInfoNavBtn" class="session-edit-sidebar-btn active" type="button" data-session-edit-section="details">
-                  <i class="bi bi-card-text session-edit-sidebar-icon" aria-hidden="true"></i>
+                  <i data-lucide="file-text" class="session-edit-sidebar-icon" aria-hidden="true"></i>
                   <span data-i18n="create.editNavInfo">编辑会话信息</span>
                 </button>
                 <button id="sessionEditOverridesNavBtn" class="session-edit-sidebar-btn" type="button" data-session-edit-section="overrides">
-                  <i class="bi bi-sliders session-edit-sidebar-icon" aria-hidden="true"></i>
-                  <span data-i18n="create.editNavOverrides">本会话特调</span>
+                  <i data-lucide="sliders" class="session-edit-sidebar-icon" aria-hidden="true"></i>
+                  <span data-i18n="create.editNavOverrides">会话界面</span>
+                </button>
+                <button id="sessionEditAdvancedNavBtn" class="session-edit-sidebar-btn" type="button" data-session-edit-section="advanced">
+                  <i data-lucide="sliders-horizontal" class="session-edit-sidebar-icon" aria-hidden="true"></i>
+                  <span data-i18n="create.editNavAdvanced">高级设置</span>
                 </button>
               </div>
             </aside>
@@ -590,7 +593,7 @@
                 </label>
               </div>
               <div id="sessionModeHint" class="mode-lock-warning">
-                <i class="bi bi-lock-fill"></i>
+                <i data-lucide="lock"></i>
                 <span data-i18n="create.modeHint">创建时选择会话模式；创建后<strong>永久锁定</strong>，无法切换。请谨慎选择！</span>
               </div>
             </div>
@@ -739,6 +742,20 @@
                 </div>
               </div>
             </div>
+
+            <div id="sessionEditAdvancedPanel" class="session-edit-panel">
+              <div class="session-advanced-grid">
+                <section class="settings-card">
+                  <div class="settings-card-head">
+                    <div>
+                      <h3 data-i18n="create.editNavAdvanced">高级设置</h3>
+                      <p class="hint-text" data-i18n="create.advancedSubtitle">单独调节每个 Agent 的生成参数，仅影响当前会话。</p>
+                    </div>
+                  </div>
+                  <div class="settings-card-body" id="sessionAdvancedAgentList"></div>
+                </section>
+              </div>
+            </div>
           </div>
 
           <div class="stack session-edit-footer">
@@ -772,7 +789,7 @@
             </div>
             <div class="composer-status-bar">
               <button id="suggestBtn" class="suggest-btn" type="button" disabled title="推荐回复">
-                <i class="bi bi-magic"></i>
+                <i data-lucide="wand-sparkles"></i>
               </button>
               <div id="chatStatus" class="status-text" data-i18n="chat.readyAfterCreate" data-tone="success">所有单位已就绪</div>
             </div>
@@ -793,8 +810,8 @@
                     <button id="modelThinkingBtn" class="secondary-btn model-thinking-btn" type="button" disabled data-state="disabled" data-i18n="chat.agentThinking">Agent思考</button>
                   </div>
                 </div>
-                <button id="mobileNewlineBtn" class="mobile-newline-btn" type="button" disabled aria-label="换行" title="换行"><i class="bi bi-arrow-return-left"></i></button>
-                <button id="sendBtn" class="primary-btn send-inside-btn" disabled aria-label="发送"><i class="bi bi-arrow-up"></i></button>
+                <button id="mobileNewlineBtn" class="mobile-newline-btn" type="button" disabled aria-label="换行" title="换行"><i data-lucide="corner-down-left"></i></button>
+                <button id="sendBtn" class="primary-btn send-inside-btn" disabled aria-label="发送"><i data-lucide="arrow-up"></i></button>
               </div>
             </div>
           </div>
@@ -813,7 +830,7 @@
   <div id="dropOverlay" class="drop-overlay hidden">
     <div class="drop-overlay-content">
       <div class="drop-overlay-icon">
-        <i class="bi bi-cloud-upload"></i>
+        <i data-lucide="cloud-upload"></i>
       </div>
       <p id="dropOverlayText" class="drop-overlay-text">松开以导入文件</p>
     </div>
@@ -931,6 +948,8 @@
   <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/markdown.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/graphql.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/yaml.js"></script>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script>lucide.createIcons();</script>
   <script>
     (function() {
       var v = window.APP_VERSION;

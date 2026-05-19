@@ -300,20 +300,6 @@ function renderSettingsSection() {
   els.apiSettingsPanel.classList.toggle("active", isApi);
   els.sessionSettingsPanel.classList.toggle("active", isSession);
 
-  els.settingsPanelTitle.textContent = isGlobal
-    ? t("settings.globalTitle")
-    : isAssistant
-      ? t("settings.assistantTitle")
-      : isSession
-        ? t("settings.sessionTitle")
-        : t("settings.apiTitle");
-  els.settingsPanelSubtitle.textContent = isGlobal
-    ? t("settings.globalSubtitle")
-    : isAssistant
-      ? t("settings.assistantSubtitle")
-      : isSession
-        ? t("settings.sessionSubtitle")
-        : t("settings.apiSubtitle");
 }
 
 function hydrateSettingsInputs() {
@@ -376,6 +362,7 @@ function hydrateAssistantModelSelect() {
     state.settings.assistant.model = "";
     persistSettings();
   }
+  els.assistantModelSelect.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 function getAllAssistantModels() {
@@ -406,7 +393,7 @@ function renderSavedConfigs() {
       <div class="settings-config-top">
         <strong class="settings-config-name">${escapeHtml(getConfigLabel(config))}</strong>
         <button type="button" class="settings-config-delete-btn ${isDeleteConfirm ? "confirm" : ""}" aria-label="${escapeHtml(state.locale === "en-US" ? "Delete API profile" : "删除接口")}">
-          <i class="bi bi-x-lg settings-config-delete-icon"></i>
+          <i data-lucide="x" class="settings-config-delete-icon"></i>
         </button>
       </div>
       <span class="settings-config-host">${escapeHtml(config.host || (state.locale === "en-US" ? "Host not set" : "未填写 Host"))}</span>
@@ -438,6 +425,7 @@ function renderSavedConfigs() {
 
     els.savedConfigs.appendChild(button);
   });
+  lucide.createIcons();
 }
 
 function deleteConfig(configId) {

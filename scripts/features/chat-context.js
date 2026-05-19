@@ -1185,7 +1185,7 @@ function renderMarkdownContent(text) {
           const rawLang = (langMatch && langMatch[1]) || "";
           const lang = normalizeCodeLang(rawLang);
           const langAttr = lang ? ` class="language-${lang}"` : "";
-          const copyBtnHtml = "<button class=\"code-copy-btn\" type=\"button\" title=\"复制代码\"><i class=\"bi bi-clipboard\"></i></button>";
+          const copyBtnHtml = "<button class=\"code-copy-btn\" type=\"button\" title=\"复制代码\"><i data-lucide=\"clipboard\"></i></button>";
           const langLabelHtml = lang
             ? `<div class="code-block-header"><span>${escapeHtml(lang.toUpperCase())}</span>${copyBtnHtml}</div>`
             : `<div class="code-block-header no-lang">${copyBtnHtml}</div>`;
@@ -1285,7 +1285,7 @@ function renderMarkdownContent(text) {
     const rawLang = (langMatch && langMatch[1]) || "";
     const lang = normalizeCodeLang(rawLang);
     const langAttr = lang ? ` class="language-${lang}"` : "";
-    const copyBtnHtml = "<button class=\"code-copy-btn\" type=\"button\" title=\"复制代码\"><i class=\"bi bi-clipboard\"></i></button>";
+    const copyBtnHtml = "<button class=\"code-copy-btn\" type=\"button\" title=\"复制代码\"><i data-lucide=\"clipboard\"></i></button>";
     const langLabelHtml = lang
       ? `<div class="code-block-header"><span>${escapeHtml(lang.toUpperCase())}</span>${copyBtnHtml}</div>`
       : `<div class="code-block-header no-lang">${copyBtnHtml}</div>`;

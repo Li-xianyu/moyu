@@ -470,6 +470,12 @@
   display: none;
 }
 
+/* 非聊天视图下隐藏浮动按钮 */
+.app-shell:has(#settingsView.active) .info-btn.floating,
+.app-shell:has(#createView.active) .info-btn.floating {
+  display: none;
+}
+
 /* ----- Story mode text highlights ----- */
 .message.agent .story-dialogue {
   color: #f0c674;
@@ -1300,8 +1306,10 @@
   border-color: #777;
   color: #fff;
 }
-.composer-cancel-btn .bi-x {
-  font-weight: 700;
+.composer-cancel-btn svg,
+.send-inside-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
 .composer-cancel-btn.hidden {
@@ -1309,8 +1317,15 @@
 }
 
 .message-edit-icon {
-  font-size: 15px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+}
+.message-edit-icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 .copy-feedback {
@@ -1895,19 +1910,12 @@
   transition: background 0.16s ease;
 }
 
-.send-inside-btn .bi-arrow-up {
-  font-weight: 700;
-}
-
 .send-inside-btn.sending {
   background: #c62828;
   border-color: #c62828;
 }
 .send-inside-btn.sending:hover {
   background: #e53935;
-}
-.send-inside-btn.sending .bi-stop-fill {
-  font-weight: 700;
 }
 
 /* ----- Thinking settings toggle & popover ----- */
@@ -2228,34 +2236,34 @@
 }
 
 .session-edit-tabs {
-  display: none !important;
+  display: none;
 }
 
 .session-edit-tab-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
+  gap: 6px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  min-height: 34px;
+  padding: 5px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: transparent;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .session-edit-tab-btn:hover {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.04);
+  background: #2a2d2e;
   color: var(--text);
 }
 
 .session-edit-tab-btn.active {
-  border-color: rgba(0, 122, 204, 0.5);
-  background: rgba(0, 122, 204, 0.14);
+  background: #37373d;
   color: var(--text);
 }
 
@@ -2354,10 +2362,17 @@
 
 .session-edit-sidebar-icon {
   flex: 0 0 auto;
-  font-size: 15px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
   color: var(--muted);
   transition: color 0.15s ease;
+}
+.session-edit-sidebar-icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 .session-edit-sidebar-btn:hover .session-edit-sidebar-icon,
@@ -2391,6 +2406,93 @@
   gap: 0;
   align-content: start;
   padding: 6px 0 20px;
+}
+
+.session-advanced-grid {
+  display: grid;
+  gap: 0;
+  align-content: start;
+  padding: 6px 0 20px;
+}
+
+.session-agent-param-row {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.session-agent-param-row:last-child {
+  border-bottom: none;
+}
+.session-agent-param-row:first-child {
+  padding-top: 0;
+}
+
+.session-agent-param-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.session-agent-param-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.session-agent-param-model {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-agent-param-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.session-agent-param-field {
+  display: grid;
+  gap: 4px;
+}
+
+.session-agent-param-field > span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.session-agent-param-field input {
+  height: 32px;
+  font-size: 13px;
+  padding: 0 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: var(--text);
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.session-agent-param-field input:focus {
+  border-color: var(--accent);
+}
+
+.session-agent-param-field input::placeholder {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 11px;
 }
 
 .session-override-block {
@@ -2500,10 +2602,17 @@
   line-height: 1.5;
   user-select: none;
 }
-.mode-lock-warning .bi-lock-fill {
+.mode-lock-warning [data-lucide="lock"],
+.mode-lock-warning .lucide-lock {
   flex-shrink: 0;
-  font-size: 15px;
+  width: 15px;
+  height: 15px;
   opacity: 0.9;
+}
+.mode-lock-warning [data-lucide="lock"] svg,
+.mode-lock-warning .lucide-lock svg {
+  width: 100%;
+  height: 100%;
 }
 .mode-lock-warning strong {
   color: #f5d06a;
@@ -2541,10 +2650,13 @@
 }
 
 @media (max-width: 960px) {
-  .main:has(#createView.create-view-editing.active) {
-    overflow: auto !important;
-  }
-
+  /* ── 编辑态滚动策略 ──
+     移动端编辑会话时，#createView 自己有 overflow-y: auto
+     （来自 mobile-viewport-fix.css），独立处理内容滚动。
+     外层的 .main 有 scroll-lock → overflow-y: hidden，
+     避免出现内外双层滚条。
+     因此这里只需让面板内容正常展开（overflow: visible），
+     不需要让 .main 参与滚动。                              */
   #createView.create-view-editing {
     overflow: visible;
   }
@@ -2559,6 +2671,20 @@
     height: auto;
     overflow: visible;
     padding-right: 0;
+  }
+
+  #createView.create-view-editing .session-edit-tabs {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 6px;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+  }
+  #createView.create-view-editing .session-edit-tabs::-webkit-scrollbar {
+    display: none;
   }
 }
 

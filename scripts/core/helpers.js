@@ -144,6 +144,36 @@ function clearSessionSettingOverride(session, key) {
   session.settingsOverrides = normalizeSessionOverrides(next);
 }
 
+function normalizeAgentParamValue(key, value) {
+  if (key === "temperature") {
+    const num = Number.parseFloat(value);
+    return Number.isFinite(num) ? Math.max(0, Math.min(2, Math.round(num * 10) / 10)) : undefined;
+  }
+  if (key === "top_p") {
+    const num = Number.parseFloat(value);
+    return Number.isFinite(num) ? Math.max(0, Math.min(1, Math.round(num * 100) / 100)) : undefined;
+  }
+  return value;
+}
+
+function getSessionAgentParam(session, agentName, param) {
+  if (!session?.agentParams || !agentName || !param) return undefined;
+  const agent = session.agentParams[agentName];
+  if (!agent) return undefined;
+  return agent[param];
+}
+
+function setSessionAgentParam(session, agentName, param, value) {
+  if (!session) return;
+  session.agentParams = {
+    ...(session.agentParams || {}),
+    [agentName]: {
+      ...((session.agentParams || {})[agentName] || {}),
+      [param]: normalizeAgentParamValue(param, value),
+    },
+  };
+}
+
 function buildFallbackTitle(session) {
   const text = session?.globalPrompt?.trim() || "未命名会话";
   return text.length > 12 ? `${text.slice(0, 12)}...` : text;

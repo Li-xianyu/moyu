@@ -98,6 +98,7 @@ async function restoreViewFromHistory(entry) {
       switchView("create");
     }
   } else if (entry.view === "settings") {
+    await _loadScript("./scripts/features/create.js");
     await _loadScript("./scripts/features/settings.js");
     initSettingsView();
     switchView("settings");
@@ -117,6 +118,18 @@ function bindNav() {
         state.mobileSidebarOpen = !state.mobileSidebarOpen;
       } else {
         state.sidebarCollapsed = !(state.sidebarCollapsed === null ? false : state.sidebarCollapsed);
+        persistSidebarCollapsed();
+      }
+      applySidebarState();
+    });
+  }
+
+  if (els.sidebarCollapseBtn) {
+    els.sidebarCollapseBtn.addEventListener("click", () => {
+      if (isMobileViewport()) {
+        state.mobileSidebarOpen = false;
+      } else {
+        state.sidebarCollapsed = true;
         persistSidebarCollapsed();
       }
       applySidebarState();
@@ -144,8 +157,10 @@ function bindNav() {
       if (view === "create") {
         await _loadScript("./scripts/features/create.js");
         initCreateView();
-        prepareCreateViewForNewSession({ returnTarget: "chat" });
+        const returnTarget = state.showWelcomeHome ? "welcome" : "chat";
+        prepareCreateViewForNewSession({ returnTarget });
       } else if (view === "settings") {
+        await _loadScript("./scripts/features/create.js");
         await _loadScript("./scripts/features/settings.js");
         initSettingsView();
       }
@@ -266,6 +281,11 @@ function bindChatList() {
     if (isHidden) {
       els.chatSearchInput.value = state.chatSearchQuery || "";
       els.chatSearchInput.focus();
+      // auto-expand chat list so the search input is visible
+      if (els.chatListMenu.classList.contains("hidden")) {
+        els.chatListMenu.classList.remove("hidden");
+        els.chatListArrowIcon.classList.add("expanded");
+      }
     } else {
       state.chatSearchQuery = "";
       els.chatSearchInput.value = "";
@@ -348,7 +368,7 @@ function mountSessionEditButton() {
   button.type = "button";
   button.className = "info-btn floating session-edit-btn icon-only-btn";
   button.setAttribute("aria-label", "编辑当前会话");
-  button.innerHTML = `<i class="bi bi-gear nav-icon-svg"></i>`;
+  button.innerHTML = `<i data-lucide="settings" class="nav-icon-svg"></i>`;
   button.addEventListener("click", async () => {
     if (state.isSending) {
       return;
@@ -366,6 +386,7 @@ function mountSessionEditButton() {
 
   els.infoToggleBtn.insertAdjacentElement("beforebegin", button);
   els.editSessionBtn = button;
+  lucide.createIcons();
 }
 
 function mountComposerCancelButton() {
@@ -376,11 +397,12 @@ function mountComposerCancelButton() {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "secondary-btn composer-cancel-btn hidden";
-  button.innerHTML = '<i class="bi bi-x"></i>';
+  button.innerHTML = '<i data-lucide="x"></i>';
   button.addEventListener("click", () => {
     clearUserMessageEdit();
   });
 
   els.sendBtn.insertAdjacentElement("beforebegin", button);
   els.cancelEditBtn = button;
+  lucide.createIcons();
 }

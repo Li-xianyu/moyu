@@ -53,9 +53,13 @@ function copyMessageContent(messageId, iconEl) {
   const showCopied = () => {
     setText(els.chatStatus, t("chat.copied"));
     if (iconEl) {
-      iconEl.className = "bi bi-check-lg message-edit-icon message-edit-icon-copied";
+      iconEl.setAttribute("data-lucide", "check");
+      iconEl.classList.add("message-edit-icon-copied");
+      lucide.createIcons();
       setTimeout(() => {
-        iconEl.className = "bi bi-copy message-edit-icon";
+        iconEl.setAttribute("data-lucide", "copy");
+        iconEl.classList.remove("message-edit-icon-copied");
+        lucide.createIcons();
       }, 3000);
     }
   };

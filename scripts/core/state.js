@@ -52,8 +52,6 @@ const els = {
   assistantSettingsPanel: document.getElementById("assistantSettingsPanel"),
   apiSettingsPanel: document.getElementById("apiSettingsPanel"),
   sessionSettingsPanel: document.getElementById("sessionSettingsPanel"),
-  settingsPanelTitle: document.getElementById("settingsPanelTitle"),
-  settingsPanelSubtitle: document.getElementById("settingsPanelSubtitle"),
   localeSelect: document.getElementById("localeSelect"),
   initialPageSelect: document.getElementById("initialPageSelect"),
   assistantModelSelect: document.getElementById("assistantModelSelect"),
@@ -92,6 +90,10 @@ const els = {
   sessionEditOverridesNavBtn: document.getElementById("sessionEditOverridesNavBtn"),
   sessionEditInfoPanel: document.getElementById("sessionEditInfoPanel"),
   sessionEditOverridesPanel: document.getElementById("sessionEditOverridesPanel"),
+  sessionEditAdvancedTabBtn: document.getElementById("sessionEditAdvancedTabBtn"),
+  sessionEditAdvancedNavBtn: document.getElementById("sessionEditAdvancedNavBtn"),
+  sessionEditAdvancedPanel: document.getElementById("sessionEditAdvancedPanel"),
+  sessionAdvancedAgentList: document.getElementById("sessionAdvancedAgentList"),
   sessionEditFooter: document.querySelector("#createView .session-edit-footer"),
   chatStage: document.getElementById("chatStage"),
   chatWelcome: document.getElementById("chatWelcome"),
@@ -119,6 +121,7 @@ const els = {
   chatListItems: document.getElementById("chatListItems"),
   chatListArrowIcon: document.getElementById("chatListArrowIcon"),
   sidebarToggleBtn: document.getElementById("sidebarToggleBtn"),
+  sidebarCollapseBtn: document.getElementById("sidebarCollapseBtn"),
   sidebarBackdrop: document.getElementById("sidebarBackdrop"),
   openCurrentChatBtn: document.getElementById("openCurrentChatBtn"),
   chatListEmpty: document.getElementById("chatListEmpty"),
@@ -217,6 +220,7 @@ function migrateLegacySessions() {
       : Array.isArray(session.messages)
         ? session.messages.filter((message) => message.role !== "system").length
         : 0,
+    agentParams: session.agentParams || {},
     messagesHydrated: Array.isArray(session.messages) && session.messages.length
       ? session.messagesHydrated !== false
       : Boolean(session.messagesHydrated),
