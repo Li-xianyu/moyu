@@ -384,10 +384,10 @@ function updateSingleNpcVisibility() {
 function ensureMinimumNpcs() {
   const min = getModeMinNpcs();
   while (els.npcList.children.length < min) {
-    addNpcCard();
+    addNpcCard({}, { expandOnMount: false });
   }
   refreshModelSelectors();
-  ensureSingleExpandedNpc();
+  collapseAllNpcAccordions();
   updateSingleNpcVisibility();
   updateEntityTerms();
 }
@@ -395,7 +395,7 @@ function ensureMinimumNpcs() {
 function ensureModeMinNpcs() {
   const min = getModeMinNpcs();
   while (els.npcList.children.length < min) {
-    addNpcCard();
+    addNpcCard({}, { expandOnMount: false });
   }
   const cards = [...els.npcList.querySelectorAll(".npc-card")];
   while (cards.length > min) {
@@ -410,12 +410,12 @@ function ensureModeMinNpcs() {
     }
   }
   refreshModelSelectors();
-  ensureSingleExpandedNpc();
+  collapseAllNpcAccordions();
   updateSingleNpcVisibility();
   updateEntityTerms();
 }
 
-function addNpcCard(prefill = {}) {
+function addNpcCard(prefill = {}, options = {}) {
   const fragment = els.npcTemplate.content.cloneNode(true);
   const card = fragment.querySelector(".npc-card");
   const accordionToggle = fragment.querySelector(".npc-accordion-toggle");
@@ -428,7 +428,6 @@ function addNpcCard(prefill = {}) {
   nameInput.value = prefill.name || "";
   promptInput.value = prefill.prompt || "";
   syncNpcCardTitle(card, accordionName, nameInput.value);
-  bindAccordionBody(card);
 
   nameInput.addEventListener("input", () => {
     syncNpcCardTitle(card, accordionName, nameInput.value);
@@ -452,9 +451,26 @@ function addNpcCard(prefill = {}) {
     setCreateStatus(t("create.statusNpcDeleted", { entityType: getEntityTerm(getSelectedMode()) }), "success");
   });
 
+  // Set collapsed inline styles before DOM insertion to prevent
+  // CSS transition flash when the card first renders.
+  if (!options.expandOnMount) {
+    const body = card.querySelector(".npc-accordion-body");
+    if (body) {
+      body.style.height = "0px";
+      body.style.opacity = "0";
+    }
+    card.classList.add("collapsed");
+    if (accordionToggle) {
+      accordionToggle.setAttribute("aria-expanded", "false");
+    }
+  }
+
   els.npcList.appendChild(fragment);
+  bindAccordionBody(card);
   populateModelSelect(modelSelect, buildModelOptionValue(prefill.model, prefill.configId || prefill.modelConfigId));
-  toggleNpcAccordion(els.npcList.lastElementChild, { force: true });
+  if (options.expandOnMount) {
+    toggleNpcAccordion(card, { force: true });
+  }
 }
 
 function refreshModelSelectors() {
@@ -577,6 +593,18 @@ function ensureSingleExpandedNpc() {
   }
   const expandedCard = cards.find((card) => card.classList.contains("expanded"));
   toggleNpcAccordion(expandedCard || cards[0], { force: true });
+}
+
+function collapseAllNpcAccordions() {
+  const cards = [...els.npcList.querySelectorAll(".npc-card")];
+  cards.forEach((card) => {
+    bindAccordionBody(card);
+    setAccordionBodyState(card, false);
+    const toggle = card.querySelector(".npc-accordion-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  });
 }
 
 function populateModelSelect(select, preferredValue = "") {
