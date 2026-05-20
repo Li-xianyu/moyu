@@ -221,6 +221,7 @@ function resolveInitialView() {
 
 async function init() {
   applyI18n();
+  applyTheme(state.theme);
   mountSessionEditButton();
   mountComposerCancelButton();
   bindNav();
@@ -304,4 +305,9 @@ async function init() {
 
   // 4. 启动
   await init();
+
+  // 5. 注册 PWA Service Worker（安装到桌面支持）
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(function() {});
+  }
 })();

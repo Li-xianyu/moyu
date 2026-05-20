@@ -3,16 +3,47 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#1e1e1e">
-  <meta name="color-scheme" content="dark">
   <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=2026.05.19.04">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.20.03";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.21.02";window.__moyuBootStart = performance.now();</script>
+  <script>
+    (function() {
+      var theme = "dark";
+      try {
+        var t = JSON.parse(localStorage.getItem("moyu-theme"));
+        if (t === "dark" || t === "light") theme = t;
+      } catch(e) {}
+      document.documentElement.setAttribute("data-theme", theme);
+      var isLight = theme === "light";
+      var metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (!metaTheme) {
+        metaTheme = document.createElement("meta");
+        metaTheme.setAttribute("name", "theme-color");
+        document.head.appendChild(metaTheme);
+      }
+      metaTheme.setAttribute("content", isLight ? "#f3f3f3" : "#1e1e1e");
+      var metaScheme = document.querySelector('meta[name="color-scheme"]');
+      if (!metaScheme) {
+        metaScheme = document.createElement("meta");
+        metaScheme.setAttribute("name", "color-scheme");
+        document.head.appendChild(metaScheme);
+      }
+      metaScheme.setAttribute("content", isLight ? "light" : "dark");
+      document.documentElement.style.colorScheme = isLight ? "light" : "dark";
+      document.documentElement.style.backgroundColor = isLight ? "#f3f3f3" : "#1e1e1e";
+      document.documentElement.style.setProperty("--loading-bg", isLight ? "#f3f3f3" : "#1e1e1e");
+      document.documentElement.style.setProperty("--loading-text", isLight ? "#1f1f1f" : "#cccccc");
+    })();
+  </script>
   <style>
     .loading-screen {
       position: fixed; inset: 0; z-index: 9999;
       display: flex; align-items: center; justify-content: center;
-      background: #1e1e1e;
+      background: var(--loading-bg, #1e1e1e);
       transition: opacity 0.4s ease;
     }
     .loading-screen--fade-out {
@@ -24,7 +55,7 @@
     }
     .loading-typewriter {
       font-size: clamp(24px, 5vw, 38px);
-      color: #cccccc;
+      color: var(--loading-text, #cccccc);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       white-space: nowrap;
       display: inline-flex;
@@ -66,6 +97,10 @@
   <script>
     (function() {
       var v = window.APP_VERSION;
+      var theme = (document.documentElement.getAttribute("data-theme") || "dark");
+      var hljsTheme = theme === "light"
+        ? "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css"
+        : "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css";
       var hrefs = [
         "./styles/base/variables.css",
         "./styles/layout/shell.css",
@@ -75,7 +110,7 @@
         "./styles/views/roles.css",
         "./styles/base/responsive.css",
         "./styles/base/scrollbars.css",
-        "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css",
+        hljsTheme,
         "./styles/base/mobile-viewport-fix.css",
         "./styles/base/drop-overlay.css"
       ];
@@ -276,6 +311,13 @@
                         <select id="localeSelect">
                           <option value="zh-CN" data-i18n="settings.locale.zh-CN">简体中文</option>
                           <option value="en-US" data-i18n="settings.locale.en-US">English</option>
+                        </select>
+                      </label>
+                      <label class="field settings-language-field">
+                        <span data-i18n="settings.themeLabel">界面主题</span>
+                        <select id="themeSelect">
+                          <option value="dark" data-i18n="settings.theme.dark">深色</option>
+                          <option value="light" data-i18n="settings.theme.light">浅色</option>
                         </select>
                       </label>
                       <label class="field settings-language-field">
@@ -1000,7 +1042,7 @@
         });
       };
 
-      var all = ["1c","abnf","accesslog","actionscript","ada","angelscript","apache","applescript","arcade","arduino","armasm","asciidoc","aspectj","autohotkey","autoit","avrasm","awk","axapta","bash","basic","bnf","brainfuck","c","cal","capnproto","ceylon","clean","clojure","clojure-repl","cmake","coffeescript","coq","cos","cpp","crmsh","crystal","csharp","csp","css","d","dart","delphi","diff","django","dns","dockerfile","dos","dsconfig","dts","dust","ebnf","elixir","elm","erb","erlang","erlang-repl","excel","fix","flix","fortran","fsharp","gams","gauss","gcode","gherkin","glsl","gml","go","golo","gradle","graphql","groovy","haml","handlebars","haskell","haxe","hsp","http","hy","inform7","ini","irpf90","isbl","java","javascript","jboss-cli","json","julia","julia-repl","kotlin","lasso","latex","ldif","leaf","less","lisp","livecodeserver","livescript","llvm","lsl","lua","makefile","markdown","mathematica","matlab","maxima","mel","mercury","mipsasm","mizar","mojolicious","monkey","moonscript","n1ql","nestedtext","nginx","nim","nix","node-repl","nsis","objectivec","ocaml","openscad","oxygene","parser3","perl","pf","pgsql","php","php-template","plaintext","pony","powershell","processing","profile","prolog","properties","protobuf","puppet","purebasic","python","python-repl","q","qml","r","reasonml","rib","roboconf","routeros","rsl","ruby","ruleslanguage","rust","sas","scala","scheme","scilab","scss","shell","smali","smalltalk","sml","sqf","sql","stan","stata","step21","stylus","subunit","swift","taggerscript","tap","tcl","thrift","tp","twig","typescript","vala","vbnet","vbscript","vbscript-html","verilog","vhdl","vim","wasm","wren","x86asm","xl","xml","xquery","yaml","zephir","zig"];
+      var all = ["1c","abnf","accesslog","actionscript","ada","angelscript","apache","applescript","arcade","arduino","armasm","asciidoc","aspectj","autohotkey","autoit","avrasm","awk","axapta","bash","basic","bnf","brainfuck","c","cal","capnproto","ceylon","clean","clojure","clojure-repl","cmake","coffeescript","coq","cos","cpp","crmsh","crystal","csharp","csp","css","d","dart","delphi","diff","django","dns","dockerfile","dos","dsconfig","dts","dust","ebnf","elixir","elm","erb","erlang","erlang-repl","excel","fix","flix","fortran","fsharp","gams","gauss","gcode","gherkin","glsl","gml","go","golo","gradle","graphql","groovy","haml","handlebars","haskell","haxe","hsp","http","hy","inform7","ini","irpf90","isbl","java","javascript","jboss-cli","json","julia","julia-repl","kotlin","lasso","latex","ldif","leaf","less","lisp","livecodeserver","livescript","llvm","lsl","lua","makefile","markdown","mathematica","matlab","maxima","mel","mercury","mipsasm","mizar","mojolicious","monkey","moonscript","n1ql","nestedtext","nginx","nim","nix","node-repl","nsis","objectivec","ocaml","openscad","oxygene","parser3","perl","pf","pgsql","php","php-template","plaintext","pony","powershell","processing","profile","prolog","properties","protobuf","puppet","purebasic","python","python-repl","q","qml","r","reasonml","rib","roboconf","routeros","rsl","ruby","ruleslanguage","rust","sas","scala","scheme","scilab","scss","shell","smali","smalltalk","sml","sqf","sql","stan","stata","step21","stylus","subunit","swift","taggerscript","tap","tcl","thrift","tp","twig","typescript","vala","vbnet","vbscript","vbscript-html","verilog","vhdl","vim","wasm","wren","x86asm","xl","xml","xquery","yaml","zephir"];
       // Pre-mark all bulk languages so the dynamic wrapper doesn't re-request them
       all.forEach(function(lang) { loadingLangs[lang] = true; });
       // Only load languages not already in the core bundle (skip duplicates)

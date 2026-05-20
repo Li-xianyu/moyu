@@ -1392,14 +1392,42 @@ function bindCodeCopyBtn(btn) {
   });
 }
 
-function updateSuggestBtn() {
+function getSuggestionAvailability() {
   const session = getCurrentSession();
-  const isIdle = session && !state.isSending && !state.editingUserMessageId;
+  const isIdle = Boolean(session) && !state.isSending && !state.editingUserMessageId;
   const lastMsg = isIdle && session.messages.length ? session.messages[session.messages.length - 1] : null;
-  const aiReplied = lastMsg && lastMsg.role !== "user";
   const hasAssistant = Boolean(state.settings?.assistant?.model) && state.settings.configs.length > 0;
 
-  els.suggestBtn.disabled = !(isIdle && aiReplied && hasAssistant);
+  if (!hasAssistant) {
+    return { enabled: false, reasonKey: "chat.suggestHintNoAssistant" };
+  }
+  if (!lastMsg || lastMsg.role === "user") {
+    return { enabled: false, reasonKey: "chat.suggestHintNeedReply" };
+  }
+
+  return { enabled: true, reasonKey: "" };
+}
+
+function showSuggestHint(reasonKey) {
+  if (!reasonKey || !els.chatStatus) return;
+  if (state.suggestHintTimer) {
+    clearTimeout(state.suggestHintTimer);
+    state.suggestHintTimer = null;
+  }
+  setText(els.chatStatus, t(reasonKey));
+  els.chatStatus.dataset.tone = "muted";
+  state.suggestHintTimer = setTimeout(() => {
+    state.suggestHintTimer = null;
+    updateComposerMode();
+  }, 2000);
+}
+
+function updateSuggestBtn() {
+  const availability = getSuggestionAvailability();
+
+  els.suggestBtn.disabled = false;
+  els.suggestBtn.classList.toggle("is-disabled", !availability.enabled);
+  els.suggestBtn.setAttribute("aria-disabled", availability.enabled ? "false" : "true");
 }
 
 function clearSuggestions() {
@@ -1426,9 +1454,15 @@ async function generateSuggestions() {
   const session = getCurrentSession();
   if (!session || state.isSending) return;
 
+  const availability = getSuggestionAvailability();
+  if (!availability.enabled) {
+    showSuggestHint(availability.reasonKey);
+    return;
+  }
+
   const assistantKey = state.settings?.assistant?.model;
   if (!assistantKey) {
-    setText(els.chatStatus, "请先在设置-辅助 AI 中配置辅助模型");
+    showSuggestHint("chat.suggestHintNoAssistant");
     return;
   }
 
@@ -1445,7 +1479,9 @@ async function generateSuggestions() {
   }
 
   els.suggestBtn.classList.add("generating");
-  els.suggestBtn.disabled = true;
+  els.suggestBtn.classList.add("is-disabled");
+  els.suggestBtn.disabled = false;
+  els.suggestBtn.setAttribute("aria-disabled", "true");
   setText(els.chatStatus, "正在生成推荐回复...");
 
   const contextMessages = getSuggestionContextMessages(session);

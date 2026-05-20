@@ -4,6 +4,7 @@
   "use strict";
 
   const REFRESH_QUEUE = new Set();
+  const INSTANCES = new Set();
   let refreshScheduled = false;
   let CUSTOM_SELECT_SEQ = 0;
 
@@ -37,11 +38,12 @@
 
       this._build();
       this._sync();
+      INSTANCES.add(this);
 
       /* auto-refresh when select options change */
       /* split into two observers so attributeFilter can't suppress childList */
       this._obsChild = new MutationObserver(() => scheduleRefresh(this));
-      this._obsChild.observe(this.el, { childList: true, subtree: true });
+      this._obsChild.observe(this.el, { childList: true, subtree: true, characterData: true });
       this._obsAttr = new MutationObserver(() => scheduleRefresh(this));
       this._obsAttr.observe(this.el, { attributes: true, attributeFilter: ["value", "selected", "label"] });
       this.el.addEventListener("change", () => this._sync());
@@ -51,6 +53,7 @@
       this._close();
       this._obsChild?.disconnect();
       this._obsAttr?.disconnect();
+      INSTANCES.delete(this);
       this.wrap.remove();
       /* if panel was orphaned on body, remove it */
       if (this.panel.parentNode !== this.wrap) this.panel.remove();
@@ -383,5 +386,9 @@
   }
 
   /* expose */
-  window.__customSelect = { CustomSelect, initCustomSelects };
+  function refreshAll() {
+    INSTANCES.forEach((instance) => scheduleRefresh(instance));
+  }
+
+  window.__customSelect = { CustomSelect, initCustomSelects, refreshAll };
 })();

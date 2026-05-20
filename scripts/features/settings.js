@@ -27,6 +27,11 @@ function bindSettings() {
     renderSession();
   });
 
+  els.themeSelect.addEventListener("change", () => {
+    setTheme(els.themeSelect.value);
+    renderSettingsSection();
+  });
+
   els.initialPageSelect.addEventListener("change", () => {
     state.settings.startup = state.settings.startup || {};
     state.settings.startup.initialPage = els.initialPageSelect.value || "welcome";
@@ -305,6 +310,7 @@ function renderSettingsSection() {
 function hydrateSettingsInputs() {
   const activeConfig = getActiveConfig();
   els.localeSelect.value = state.locale || "zh-CN";
+  els.themeSelect.value = state.theme || "dark";
   els.initialPageSelect.value = state.settings?.startup?.initialPage || "welcome";
   hydrateAssistantModelSelect();
   els.debugModeToggle.checked = Boolean(state.settings?.developer?.debugMode);
@@ -327,6 +333,7 @@ function hydrateSettingsInputs() {
   els.apiHostInput.value = activeConfig?.host || "";
   els.apiKeyInput.value = activeConfig?.key || "";
   renderSettingsSection();
+  window.__customSelect?.refreshAll?.();
 }
 
 function hydrateAssistantModelSelect() {

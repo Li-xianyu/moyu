@@ -25,7 +25,7 @@
   gap: 16px;
   padding: 2px 18px 2px 0;
   overflow: hidden;
-  border-right: 1px solid #333333;
+  border-right: 1px solid var(--theme-border-default);
 }
 
 .settings-list-head {
@@ -44,6 +44,7 @@
 }
 
 .settings-list-head-copy h3 {
+  margin: 0;
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -96,7 +97,7 @@
 }
 
 .settings-section-btn:hover {
-  background: #2a2d2e;
+  background: var(--theme-bg-active);
 }
 
 .settings-section-btn:hover .settings-section-icon,
@@ -105,7 +106,7 @@
 }
 
 .settings-section-btn.active {
-  background: #37373d;
+  background: var(--theme-bg-active-strong);
 }
 
 .settings-main-panel {
@@ -145,7 +146,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: #424242 transparent;
+  scrollbar-color: var(--theme-scrollbar-thumb) transparent;
 }
 
 .settings-page-grid {
@@ -167,7 +168,7 @@
 .settings-section-divider {
   width: 90%;
   margin: 28px auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid var(--theme-bg-hover);
 }
 
 .settings-card-head {
@@ -220,7 +221,7 @@
   display: grid;
   gap: 12px;
   padding: 16px 0 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--theme-bg-hover);
 }
 
 .settings-global-section:first-child {
@@ -313,8 +314,8 @@
   width: 46px;
   height: 28px;
   border-radius: 999px;
-  background: #333333;
-  border: 1px solid #3c3c3c;
+  background: var(--theme-toggle-track);
+  border: 1px solid var(--theme-toggle-track-border);
   transition: background 0.18s ease, border-color 0.18s ease;
 }
 
@@ -326,16 +327,18 @@
   width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: #cccccc;
-  transition: transform 0.18s ease;
+  background: var(--theme-toggle-thumb);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+  transition: transform 0.18s ease, background 0.18s ease;
 }
 
 .settings-toggle-input:checked + .settings-toggle-ui {
-  background: #007acc;
-  border-color: #007acc;
+  background: var(--theme-toggle-track-on);
+  border-color: var(--theme-toggle-track-on);
 }
 
 .settings-toggle-input:checked + .settings-toggle-ui::after {
+  background: var(--theme-toggle-thumb-on);
   transform: translateX(18px);
 }
 
@@ -389,7 +392,7 @@
   align-content: start;
   padding: 0 2px 2px 0;
   scrollbar-width: thin;
-  scrollbar-color: #424242 transparent;
+  scrollbar-color: var(--theme-scrollbar-thumb) transparent;
 }
 
 .settings-config-item {
@@ -414,11 +417,11 @@
 }
 
 .settings-config-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--theme-bg-hover);
 }
 
 .settings-config-item.active {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--theme-bg-active);
 }
 
 .settings-config-name {
@@ -444,17 +447,17 @@
 }
 
 .settings-config-delete-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--theme-bg-hover);
   color: var(--text);
 }
 
 .settings-config-delete-btn.confirm {
-  background: #c42b1c;
-  color: #ffffff;
+  background: var(--theme-danger);
+  color: var(--theme-button-danger-text);
 }
 
 .settings-config-delete-btn.confirm:hover {
-  background: #d13426;
+  background: var(--theme-danger-hover);
 }
 
 .settings-config-delete-icon {
@@ -473,17 +476,33 @@
   min-width: 180px;
   padding: 10px 16px;
   border-radius: 10px;
-  background: rgba(198, 40, 40, 0.1);
+  background: var(--theme-danger-soft);
   border-color: rgba(198, 40, 40, 0.26);
-  color: #f0b2ac;
+  color: var(--theme-danger);
   font-weight: 600;
   box-shadow: none;
 }
 
 .settings-danger-btn:hover {
-  background: rgba(198, 40, 40, 0.16);
+  background: var(--theme-danger-soft);
   border-color: rgba(198, 40, 40, 0.34);
-  color: #ffd8d3;
+  color: var(--theme-danger);
+}
+
+html[data-theme="light"] .settings-danger-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #d74b40;
+  border-color: #d74b40;
+  color: #ffffff;
+  box-shadow: none;
+  filter: none;
+}
+
+html[data-theme="light"] .settings-danger-btn:hover {
+  background: #e0564b;
+  border-color: #e0564b;
+  color: #ffffff;
 }
 
 .settings-config-host {
@@ -511,7 +530,7 @@
 }
 
 .settings-config-count {
-  color: rgba(255, 255, 255, 0.34);
+  color: var(--theme-text-muted);
   white-space: nowrap;
 }
 
@@ -544,7 +563,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: #424242 transparent;
+  scrollbar-color: var(--theme-scrollbar-thumb) transparent;
 }
 
 .settings-model-panel,
@@ -553,7 +572,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: #424242 transparent;
+  scrollbar-color: var(--theme-scrollbar-thumb) transparent;
 }
 
 .settings-resize-handle {
@@ -580,7 +599,7 @@
   display: flex;
   flex-direction: column;
   scrollbar-width: thin;
-  scrollbar-color: #424242 transparent;
+  scrollbar-color: var(--theme-scrollbar-thumb) transparent;
 }
 
 .settings-plain-section {
@@ -639,7 +658,7 @@
 .work-model-group-label {
   font-size: 12px;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--theme-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -659,13 +678,13 @@
   padding: 8px 10px;
   border-radius: 6px;
   border: 0;
-  background: #1f1f1f;
+  background: var(--theme-bg-panel-alt);
   max-width: 100%;
   transition: background 0.14s ease, color 0.14s ease;
 }
 
 .work-model-item:hover {
-  background: #252526;
+  background: var(--theme-bg-elevated);
 }
 
 .work-model-name {
@@ -833,7 +852,7 @@
   top: 50%;
   height: 1px;
   transform: translateY(-50%);
-  background: #333333;
+  background: var(--theme-border-default);
 }
 
 .settings-resize-handle::after {
@@ -845,7 +864,7 @@
   height: 4px;
   transform: translate(-50%, -50%);
   border-radius: 999px;
-  background: #424242;
+  background: var(--theme-scrollbar-thumb);
 }
 
 .work-model-item {
@@ -854,13 +873,13 @@
   gap: 10px;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid #333333;
-  background: #1e1e1e;
+  border: 1px solid var(--theme-border-default);
+  background: var(--theme-bg-panel);
   max-width: 100%;
 }
 
 .work-model-item:hover {
-  background: #2a2d2e;
+  background: var(--theme-bg-active);
 }
 
 .work-model-name {
@@ -877,10 +896,10 @@
 }
 
 .model-list-item:hover {
-  background: #2a2d2e;
+  background: var(--theme-bg-active);
 }
 
 .model-list-item.selected {
-  background: #37373d;
-  border-color: #007acc;
+  background: var(--theme-bg-active-strong);
+  border-color: var(--theme-accent);
 }

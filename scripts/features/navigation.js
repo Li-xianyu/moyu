@@ -228,12 +228,59 @@ function applySidebarState() {
   }
 }
 
+function setSidebarGestureProgress(progress) {
+  const sb = els.sidebar || document.querySelector(".sidebar");
+  const bd = els.sidebarBackdrop || document.querySelector(".sidebar-backdrop");
+  const clamped = Math.max(0, Math.min(1, Number(progress) || 0));
+  const eased = 1 - Math.pow(1 - clamped, 1.55);
+
+  if (els.appShell) {
+    els.appShell.classList.toggle("sidebar-swiping", clamped > 0.001);
+  }
+
+  if (sb) {
+    sb.style.transform = `translateX(${-100 * (1 - clamped)}%)`;
+    sb.style.opacity = clamped;
+  }
+
+  if (bd) {
+    const visible = clamped > 0.001;
+    bd.classList.toggle("hidden", !visible);
+    bd.style.display = visible ? "block" : "none";
+    bd.style.opacity = visible ? String(eased) : "0";
+    bd.style.pointerEvents = visible ? "auto" : "none";
+  }
+}
+
+function clearSidebarGestureProgress() {
+  const sb = els.sidebar || document.querySelector(".sidebar");
+  const bd = els.sidebarBackdrop || document.querySelector(".sidebar-backdrop");
+
+  if (els.appShell) {
+    els.appShell.classList.remove("sidebar-swiping");
+  }
+
+  if (sb) {
+    sb.style.transform = "";
+    sb.style.opacity = "";
+    sb.style.transition = "";
+  }
+
+  if (bd) {
+    bd.style.display = "";
+    bd.style.opacity = "";
+    bd.style.pointerEvents = "";
+    bd.style.transition = "";
+  }
+}
+
 function bindMobileSwipeGesture() {
   if (!("ontouchstart" in window)) return;
 
   let touchStartX = 0;
   let touchStartY = 0;
   let isDragging = false;
+  let gestureBlocked = false;
   let wasOpen = false;
   let sbWidth = 0;
   const SENSITIVITY = 1.4;
@@ -241,21 +288,41 @@ function bindMobileSwipeGesture() {
 
   function getSb() { return els.sidebar || document.querySelector(".sidebar"); }
   function getBd() { return els.sidebarBackdrop || document.querySelector(".sidebar-backdrop"); }
+  function isFormField(target) {
+    return Boolean(target?.closest?.('input, textarea, select, [contenteditable="true"]'));
+  }
+  function isCodeBlockHorizontalScrollArea(target) {
+    const block = target instanceof Element ? target.closest(".pre-code-block") : null;
+    if (!block) {
+      return false;
+    }
+    const codeLines = block.querySelector(".code-lines");
+    if (codeLines && codeLines.scrollWidth > codeLines.clientWidth + 2) {
+      return true;
+    }
+    return block.scrollWidth > block.clientWidth + 2;
+  }
 
   document.addEventListener("touchstart", (e) => {
     if (!isMobileViewport()) return;
     const target = e.target;
-    if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") return;
+    if (isFormField(target)) return;
 
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     wasOpen = state.mobileSidebarOpen;
     isDragging = false;
+    gestureBlocked = false;
     sbWidth = 0;
+
+    if (isCodeBlockHorizontalScrollArea(target)) {
+      gestureBlocked = true;
+      touchStartX = 0;
+    }
   }, { passive: true });
 
   document.addEventListener("touchmove", (e) => {
-    if (!isMobileViewport() || touchStartX === 0) return;
+    if (!isMobileViewport() || touchStartX === 0 || gestureBlocked) return;
     const t = e.touches[0];
     const dx = t.clientX - touchStartX;
     const dy = Math.abs(t.clientY - touchStartY);
@@ -284,25 +351,7 @@ function bindMobileSwipeGesture() {
     // Visual: never let sidebar go past its bounds
     const visualProgress = Math.max(0, Math.min(1, progress));
 
-    const sb = getSb();
-    if (sb) {
-      sb.style.transform = `translateX(${-100 * (1 - visualProgress)}%)`;
-      sb.style.opacity = visualProgress;
-    }
-    const bd = getBd();
-    if (bd) {
-      if (wasOpen) {
-        // 侧栏本来就是展开的 → 遮罩全程保持不动
-        // 不设 opacity——CSS 已有 background: rgba(0,0,0,0.38)，
-        // 再设 opacity:0.38 会让黑色再乘一层导致变淡
-        bd.style.display = "block";
-        bd.style.opacity = "1";
-      } else {
-        // 侧栏关闭中拖开 → 遮罩随进度淡入
-        bd.style.display = visualProgress > 0.01 ? "block" : "none";
-        bd.style.opacity = 0.38 * visualProgress;
-      }
-    }
+    setSidebarGestureProgress(visualProgress);
 
     e.preventDefault();
   }, { passive: false });
@@ -338,11 +387,19 @@ function bindMobileSwipeGesture() {
         : "opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1)";
     }
     applySidebarState();
-    if (sb) { sb.style.transform = ""; sb.style.opacity = ""; }
-    if (bd) { bd.style.opacity = ""; bd.style.display = ""; }
+    clearSidebarGestureProgress();
 
     touchStartX = 0;
     touchStartY = 0;
+    gestureBlocked = false;
+  }, { passive: true });
+
+  document.addEventListener("touchcancel", () => {
+    isDragging = false;
+    clearSidebarGestureProgress();
+    touchStartX = 0;
+    touchStartY = 0;
+    gestureBlocked = false;
   }, { passive: true });
 }
 

@@ -1187,7 +1187,7 @@ function renderMarkdownContent(text) {
           const langAttr = lang ? ` class="language-${lang}"` : "";
           const copyBtnHtml = "<button class=\"code-copy-btn\" type=\"button\" title=\"复制代码\"><i data-lucide=\"clipboard\"></i></button>";
           const langLabelHtml = lang
-            ? `<div class="code-block-header"><span>${escapeHtml(lang.toUpperCase())}</span>${copyBtnHtml}</div>`
+            ? `<div class="code-block-header"><span class="code-block-lang">${escapeHtml(lang.toUpperCase())}</span>${copyBtnHtml}</div>`
             : `<div class="code-block-header no-lang">${copyBtnHtml}</div>`;
           // Unescape → format → re-escape for proper indentation
           const rawCode = unescapeHtml(codeBuffer.join("\n"));
@@ -1287,7 +1287,7 @@ function renderMarkdownContent(text) {
     const langAttr = lang ? ` class="language-${lang}"` : "";
     const copyBtnHtml = "<button class=\"code-copy-btn\" type=\"button\" title=\"复制代码\"><i data-lucide=\"clipboard\"></i></button>";
     const langLabelHtml = lang
-      ? `<div class="code-block-header"><span>${escapeHtml(lang.toUpperCase())}</span>${copyBtnHtml}</div>`
+      ? `<div class="code-block-header"><span class="code-block-lang">${escapeHtml(lang.toUpperCase())}</span>${copyBtnHtml}</div>`
       : `<div class="code-block-header no-lang">${copyBtnHtml}</div>`;
     const rawCode = unescapeHtml(codeBuffer.join("\n"));
     const escapedCode = escapeHtml(rawCode);

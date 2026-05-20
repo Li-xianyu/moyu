@@ -496,3 +496,39 @@ function debugWarn(...args) {
   }
   console.warn(...args);
 }
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme || "dark");
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  const metaScheme = document.querySelector('meta[name="color-scheme"]');
+  if (metaTheme) {
+    metaTheme.setAttribute("content", theme === "light" ? "#f3f3f3" : "#1e1e1e");
+  }
+  if (metaScheme) {
+    metaScheme.setAttribute("content", theme === "light" ? "light" : "dark");
+  }
+  swapHighlightTheme(theme || "dark");
+}
+
+function setTheme(theme) {
+  const next = theme === "light" ? "light" : "dark";
+  state.theme = next;
+  applyTheme(next);
+  localStorage.setItem(STORAGE_KEYS.theme, JSON.stringify(next));
+  if (els?.themeSelect) {
+    els.themeSelect.value = next;
+  }
+  window.__customSelect?.refreshAll?.();
+}
+
+function swapHighlightTheme(theme) {
+  const links = document.querySelectorAll('link[href*="highlight.js"]');
+  links.forEach(function (link) {
+    link.href = link.href.replace(/atom-one-(dark|light)/, "atom-one-" + (theme === "light" ? "light" : "dark"));
+  });
+}
+
+function cycleTheme() {
+  const next = state.theme === "dark" ? "light" : "dark";
+  setTheme(next);
+}

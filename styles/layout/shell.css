@@ -61,7 +61,7 @@ button,
 
 .sidebar-collapse-btn:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--theme-bg-hover);
 }
 
 .moyu-logo-defs {
@@ -79,7 +79,7 @@ button,
   width: 28px;
   height: auto;
   flex: 0 0 auto;
-  color: #7a8793;
+  color: var(--theme-text-muted);
 }
 
 .brand-inline-title {
@@ -129,7 +129,7 @@ button,
 
 .nav-bottom {
   margin-top: auto;
-  border-top: 1px solid #2a2a2a;
+  border-top: 1px solid var(--theme-border-subtle);
   padding-top: 12px;
 }
 
@@ -164,7 +164,7 @@ button,
 
 .nav-btn:hover,
 .ghost-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--theme-bg-hover);
 }
 
 .nav-btn-create {
@@ -198,12 +198,12 @@ button,
 }
 
 .nav-btn.active {
-  background: #37373d;
-  color: #cccccc;
+  background: var(--theme-bg-active-strong);
+  color: var(--theme-text-primary);
 }
 
 .nav-btn-create.active {
-  color: #cccccc;
+  color: var(--theme-text-primary);
 }
 
 .chat-meta.empty {
@@ -218,7 +218,7 @@ button,
 }
 
 .nav-btn-settings:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--theme-bg-hover);
   color: var(--text);
 }
 
@@ -256,7 +256,7 @@ button,
 }
 
 .nav-text-toggle:hover {
-  color: #cccccc;
+  color: var(--theme-text-primary);
 }
 
 .toggle-icon {
@@ -287,7 +287,7 @@ button,
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #6e7681;
+  color: var(--theme-text-muted);
   cursor: pointer;
   transition: color 0.15s ease, background 0.15s ease;
 }
@@ -298,12 +298,12 @@ button,
 }
 
 .toggle-action-btn:hover {
-  color: #cccccc;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--theme-text-primary);
+  background: var(--theme-bg-hover);
 }
 
 .toggle-action-btn.active {
-  color: #007acc;
+  color: var(--theme-accent);
 }
 
 .chat-list-menu-toolbar {
@@ -319,7 +319,7 @@ button,
   margin-bottom: 4px;
   padding: 6px 0;
   border: 0;
-  border-bottom: 1px solid #444444;
+  border-bottom: 1px solid var(--theme-border-strong);
   background: transparent;
   color: var(--text);
   font-size: 13px;
@@ -333,15 +333,15 @@ button,
 }
 
 .chat-search-input:focus {
-  border-bottom-color: #007acc;
+  border-bottom-color: var(--theme-accent);
 }
 
 .chat-search-input::placeholder {
-  color: #6e7681;
+  color: var(--theme-text-muted);
 }
 
 .chat-search-input::placeholder {
-  color: #6e7681;
+  color: var(--theme-text-muted);
 }
 
 .chat-list-menu {
@@ -367,7 +367,7 @@ button,
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: #424242 transparent;
+  scrollbar-color: var(--theme-scrollbar-thumb) transparent;
 }
 
 .chat-list-item,
@@ -397,7 +397,7 @@ button,
 }
 
 .chat-list-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--theme-bg-hover);
 }
 
 .chat-list-main {
@@ -420,9 +420,9 @@ button,
   height: 28px;
   padding: 4px 8px;
   border-radius: 8px;
-  border: 1px solid #3c3c3c;
-  background: #3c3c3c;
-  color: #cccccc;
+  border: 1px solid var(--theme-bg-input);
+  background: var(--theme-bg-input);
+  color: var(--theme-text-primary);
   outline: none;
 }
 
@@ -440,7 +440,7 @@ button,
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #d4d4d4;
+  color: var(--theme-text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -472,9 +472,9 @@ button,
   max-width: min(220px, calc(100vw - 24px));
   padding: 6px;
   border-radius: 12px;
-  border: 1px solid #333333;
-  background: #252526;
-  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.14);
+  border: 1px solid var(--theme-border-default);
+  background: var(--theme-bg-elevated);
+  box-shadow: var(--theme-shadow-md);
   display: grid;
   gap: 4px;
   z-index: 48;
@@ -499,24 +499,24 @@ button,
 }
 
 .chat-item-menu-btn:hover {
-  background: #2a2d2e;
+  background: var(--theme-bg-active);
 }
 
 .chat-item-menu-btn.danger {
-  color: #ffb3b3;
+  color: var(--theme-danger);
 }
 
 .chat-item-menu-btn.danger.confirm {
-  background: #c42b1c;
-  color: #ffffff;
+  background: var(--theme-danger);
+  color: var(--theme-button-danger-text);
 }
 
 .chat-item-menu-btn.danger.confirm:hover {
-  background: #d13426;
+  background: var(--theme-danger-hover);
 }
 
 .chat-item-menu-btn.danger.confirm .chat-item-menu-icon {
-  color: #ffffff;
+  color: var(--theme-button-danger-text);
 }
 
 .chat-item-menu-icon {
@@ -541,7 +541,7 @@ button,
   overflow-x: hidden;
   position: relative;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--theme-scrollbar-thumb) transparent;
 }
 
 
@@ -608,17 +608,17 @@ button,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #333333;
+  border: 1px solid var(--theme-border-default);
   border-radius: 999px;
-  background: rgba(37, 37, 38, 0.92);
+  background: var(--theme-bg-elevated);
   color: var(--text);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
+  box-shadow: var(--theme-shadow-md);
   cursor: pointer;
   transition: left 0.22s ease, top 0.22s ease, background 0.15s ease;
 }
 
 .shell-toggle-btn:hover {
-  background: #2a2d2e;
+  background: var(--theme-bg-active);
 }
 
 .shell-toggle-btn .nav-icon-svg {
@@ -630,7 +630,7 @@ button,
   inset: 0;
   z-index: 28;
   border: 0;
-  background: rgba(0, 0, 0, 0.38);
+  background: var(--theme-bg-overlay);
   backdrop-filter: blur(2px);
   opacity: 1;
   pointer-events: auto;
@@ -665,6 +665,10 @@ button,
 /* Mobile/tablet: hide floating toggle when sidebar drawer is open */
 @media (max-width: 960px) {
   .app-shell.sidebar-drawer-open .shell-toggle-btn {
+    display: none;
+  }
+
+  .app-shell.sidebar-swiping .shell-toggle-btn {
     display: none;
   }
 }

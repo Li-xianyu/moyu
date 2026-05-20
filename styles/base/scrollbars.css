@@ -53,7 +53,7 @@
 .code-lines::-webkit-scrollbar-thumb,
 .pre-code-block code::-webkit-scrollbar-thumb,
 .chat-list-items::-webkit-scrollbar-thumb {
-  background: #424242;
+  background: var(--theme-scrollbar-thumb);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
@@ -75,7 +75,7 @@
 .code-lines::-webkit-scrollbar-thumb:hover,
 .pre-code-block code::-webkit-scrollbar-thumb:hover,
 .chat-list-items::-webkit-scrollbar-thumb:hover {
-  background: #424242;
+  background: var(--theme-scrollbar-thumb);
   border: 2px solid transparent;
   background-clip: padding-box;
 }

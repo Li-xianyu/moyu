@@ -7,6 +7,7 @@ const state = {
   sessions: [],
   currentSessionId: loadJson(STORAGE_KEYS.currentSessionId, null),
   sidebarCollapsed: loadJson(STORAGE_KEYS.sidebarCollapsed, null),
+  theme: loadJson(STORAGE_KEYS.theme, "dark"),
   mobileSidebarOpen: false,
   currentSettingsSection: "global",
   showWelcomeHome: false,
@@ -26,6 +27,7 @@ const state = {
   deleteConfirmSessionId: null,
   deleteConfirmConfigId: null,
   chatSearchQuery: "",
+  suggestHintTimer: null,
   userScrolledAway: false,
   userTopAnchorActive: false,
   userTopAnchorAutoFollow: false,
@@ -55,6 +57,7 @@ const els = {
   apiSettingsPanel: document.getElementById("apiSettingsPanel"),
   sessionSettingsPanel: document.getElementById("sessionSettingsPanel"),
   localeSelect: document.getElementById("localeSelect"),
+  themeSelect: document.getElementById("themeSelect"),
   initialPageSelect: document.getElementById("initialPageSelect"),
   assistantModelSelect: document.getElementById("assistantModelSelect"),
   debugModeToggle: document.getElementById("debugModeToggle"),
@@ -295,4 +298,5 @@ function applyI18n() {
   document.documentElement.lang = state.locale || "zh-CN";
   document.title = t("app.title");
   localStorage.setItem(STORAGE_KEYS.locale, JSON.stringify(state.locale));
+  window.__customSelect?.refreshAll?.();
 }

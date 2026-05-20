@@ -16,7 +16,7 @@
     gap: 10px 12px;
     padding: 12px;
     border-right: 0;
-    border-bottom: 1px solid #333333;
+    border-bottom: 1px solid var(--theme-border-default);
     overflow: visible;
   }
 
@@ -87,9 +87,9 @@
     overflow: hidden;
     margin-top: 0;
     padding: 8px;
-    border: 1px solid #333333;
+    border: 1px solid var(--theme-border-default);
     border-radius: 14px;
-    background: #252526;
+    background: var(--theme-bg-elevated);
     box-shadow: var(--shadow);
     z-index: 30;
   }
@@ -167,7 +167,7 @@
     padding-right: 0;
     padding-bottom: 12px;
     border-right: 0;
-    border-bottom: 1px solid #333333;
+    border-bottom: 1px solid var(--theme-border-default);
     gap: 12px;
   }
 
@@ -488,6 +488,7 @@
   }
 
   .nav-btn-create,
+  .nav-btn-roles,
   .nav-btn-settings,
   .nav-text-toggle {
     min-height: 42px;

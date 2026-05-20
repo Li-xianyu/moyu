@@ -1,5 +1,30 @@
 "use strict";
 
+let compressPopoverHideTimer = null;
+
+function clearCompressPopoverHideTimer() {
+  if (compressPopoverHideTimer) {
+    clearTimeout(compressPopoverHideTimer);
+    compressPopoverHideTimer = null;
+  }
+}
+
+function scheduleCompressPopoverHide() {
+  clearCompressPopoverHideTimer();
+  compressPopoverHideTimer = setTimeout(() => {
+    compressPopoverHideTimer = null;
+    if (!state.openCompressMemoryInfo) {
+      hideCompressPopover();
+      const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
+      if (popover) {
+        popover.style.setProperty("--memory-compress-popover-shift-x", "0px");
+        popover.style.setProperty("--memory-compress-popover-shift-y", "0px");
+        popover.style.maxHeight = "";
+      }
+    }
+  }, 120);
+}
+
 function bindChat() {
   els.sendBtn.addEventListener("click", function onSendClick() {
     const session = getCurrentSession();
@@ -22,17 +47,12 @@ function bindChat() {
       toggleCompressPopover();
     });
     els.compressMemoryBtn.addEventListener("pointerenter", () => {
+      clearCompressPopoverHideTimer();
       showCompressPopover();
     });
     els.compressMemoryBtn.addEventListener("pointerleave", () => {
       if (!state.openCompressMemoryInfo) {
-        hideCompressPopover();
-        const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
-        if (popover) {
-          popover.style.setProperty("--memory-compress-popover-shift-x", "0px");
-          popover.style.setProperty("--memory-compress-popover-shift-y", "0px");
-          popover.style.maxHeight = "";
-        }
+        scheduleCompressPopoverHide();
       }
     });
   }
@@ -153,7 +173,15 @@ function bindChat() {
     }
   });
   if (els.suggestBtn) {
-    els.suggestBtn.addEventListener("click", generateSuggestions);
+    els.suggestBtn.disabled = false;
+    els.suggestBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (els.suggestBtn.classList.contains("generating")) {
+        return;
+      }
+      generateSuggestions();
+    });
   }
   const suggestionClose = els.suggestionBar?.querySelector(".suggestion-close-btn");
   if (suggestionClose) {
@@ -382,6 +410,18 @@ function ensureCompressMemoryPopover() {
     debugLog("compress", t("debug.msg.popoverMounted"));
     els.compressMemoryBtn.appendChild(popover);
   }
+  if (!popover.dataset.hoverBound) {
+    popover.dataset.hoverBound = "true";
+    popover.addEventListener("pointerenter", () => {
+      clearCompressPopoverHideTimer();
+      showCompressPopover();
+    });
+    popover.addEventListener("pointerleave", () => {
+      if (!state.openCompressMemoryInfo) {
+        scheduleCompressPopoverHide();
+      }
+    });
+  }
   return popover;
 }
 
@@ -510,6 +550,7 @@ function updateCompressMemoryButtonProgress(session) {
 }
 
 function showCompressPopover() {
+  clearCompressPopoverHideTimer();
   const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
   if (!popover || popover.classList.contains("hidden")) return;
   popover.style.setProperty("transition", "opacity 0.18s ease");
@@ -522,6 +563,7 @@ function showCompressPopover() {
 }
 
 function hideCompressPopover() {
+  clearCompressPopoverHideTimer();
   const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
   if (!popover) return;
   popover.classList.remove("visible");
@@ -752,13 +794,6 @@ function shouldRenderThinkingForModel(modelName) {
   }
   return true;
 }
-
-
-
-
-
-
-
 
 
 
