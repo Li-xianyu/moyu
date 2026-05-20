@@ -13,6 +13,34 @@ const CHAT_SUMMARY_TARGET_MAX = 800;
 const CHAT_AUTO_COMPRESS_THRESHOLD = 600;
 
 const CHAT_MANUAL_RECOMPRESS_RECENT_LIMIT = 30;
+const CHAOS_MODE_MAX_CYCLES = 4;
+const CHAOS_MODE_MAX_RESPONDERS = 3;
+const CHAOS_MODE_TRANSCRIPT_LIMIT = 12;
+const CHAOS_MODE_REPLY_HARD_LIMIT = 50;
+const CHAOS_MODE_INTENT_BASELINE = 56;
+const CHAOS_REACTION_TAGS = ["典", "孝", "急", "乐", "崩", "无", "草", "哈", "赞", "？"];
+const CHAOS_AUTOPLAY_MAX_STREAK = 10;
+const CHAOS_SUMMARY_TARGET = 400;
+const CHAOS_AUTO_COMPRESS_THRESHOLD = 30;
+const CHAOS_PERSONAS = [
+  { label: "严谨学者", desc: "喜欢深挖问题本质，说话有逻辑，偶尔引用数据或例子但不掉书袋。对肤浅的讨论没耐心，会追问关键点。" },
+  { label: "直爽吐槽", desc: "嘴快心直，看不惯就当面说，语气糙但理不糙。经常拆台反转打破砂锅问到底，不会恶意人身攻击。" },
+  { label: "随和乐天", desc: "好说话，爱打圆场，看到气氛僵了会接一句缓和的话。不太较真，偶尔跑题聊日常。" },
+  { label: "抬杠能手", desc: "不管别人说什么都要挑个反方向想想，专门唱反调帮大家看到另一面。语气带点挑衅但能接住。" },
+  { label: "感性表达", desc: "说话带情绪，喜欢用自己的经历来举例。容易共情也容易上头，不太喜欢冷冰冰的逻辑分析。" },
+  { label: "冷面吐槽", desc: "话少但精，经常一句冷幽默让全场安静。不主动带话题，喜欢用比喻和反讽。" },
+  { label: "务实老哥", desc: "说话实在，不喜欢虚的。别人聊理论他聊落地，别人争对错他问「所以呢」。经常把话题拉回现实。" },
+  { label: "好奇宝宝", desc: "对新鲜东西充满兴趣，喜欢追问细节。语气体贴不过度热情，偶尔自嘲。遇到不懂的就直说不装。" },
+];
+
+function getChaosPersona(npc) {
+  if (npc?.prompt?.trim()) return null;
+  const index = Math.abs(hashStringForPrompt(`${npc?.name || ""}|${npc?.model || ""}|persona`)) % CHAOS_PERSONAS.length;
+  return CHAOS_PERSONAS[index];
+}
+
+let chaosAutoplayTimer = null;
+let chaosAutoplaySessionId = "";
 
 function buildChatSummaryBlock(session) {
   const summary = session?.chatSummary;
@@ -518,11 +546,533 @@ async function executeDirectorRetrieval(session, traceMessage, content) {
   };
 }
 
+function clampChaosValue(value, min = 0, max = 100) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return min;
+  return Math.max(min, Math.min(max, numeric));
+}
+
+function normalizeChaosReactionTag(value) {
+  return CHAOS_REACTION_TAGS.includes(value) ? value : "无";
+}
+
+function buildChaosSeed(npc, salt) {
+  return hashStringForPrompt(`${salt}|${npc?.name || ""}|${npc?.model || ""}|${npc?.prompt || ""}`);
+}
+
+function buildChaosTrait(npc, salt, min, max) {
+  const span = Math.max(1, max - min + 1);
+  return min + (buildChaosSeed(npc, salt) % span);
+}
+
+function ensureChaosState(session) {
+  if (!session) return { npcStates: {}, turnIndex: 0 };
+  const existing = session.chaosState && typeof session.chaosState === "object" ? session.chaosState : {};
+  const npcStates = existing.npcStates && typeof existing.npcStates === "object" ? existing.npcStates : {};
+  const nextStates = {};
+  getSceneNpcs(session).forEach((npc) => {
+    if (!npc?.name) return;
+    const current = npcStates[npc.name] && typeof npcStates[npc.name] === "object" ? npcStates[npc.name] : {};
+    nextStates[npc.name] = {
+      rationality: clampChaosValue(current.rationality ?? buildChaosTrait(npc, "rationality", 35, 85)),
+      aggression: clampChaosValue(current.aggression ?? buildChaosTrait(npc, "aggression", 15, 65)),
+      expressiveness: clampChaosValue(current.expressiveness ?? buildChaosTrait(npc, "expressiveness", 30, 92)),
+      emotion: clampChaosValue(current.emotion ?? buildChaosTrait(npc, "emotion", 24, 72)),
+      fatigue: clampChaosValue(current.fatigue ?? 0),
+      reactionTag: normalizeChaosReactionTag(current.reactionTag),
+      speakCount: Math.max(0, Number(current.speakCount) || 0),
+      lastSpokeTurn: Number.isFinite(current.lastSpokeTurn) ? current.lastSpokeTurn : -1,
+      lastSpokeCycle: Number.isFinite(current.lastSpokeCycle) ? current.lastSpokeCycle : -1,
+    };
+  });
+  session.chaosState = {
+    turnIndex: Number.isFinite(existing.turnIndex) ? existing.turnIndex : 0,
+    autoplayStreak: Number.isFinite(existing.autoplayStreak) ? existing.autoplayStreak : 0,
+    npcStates: nextStates,
+  };
+  return session.chaosState;
+}
+
+function cancelChaosAutoplay() {
+  if (chaosAutoplayTimer) {
+    clearTimeout(chaosAutoplayTimer);
+    chaosAutoplayTimer = null;
+  }
+  chaosAutoplaySessionId = "";
+}
+
+function scheduleChaosAutoplay(session, options = {}) {
+  if (!session || session.mode !== SESSION_MODE_CHAOS) {
+    cancelChaosAutoplay();
+    return;
+  }
+  const nonSystemCount = (session.messages || []).filter((message) => message && message.role !== "system").length;
+  const delayMs = Math.max(220, Number(options.delayMs) || (nonSystemCount === 0 ? 1200 : 1400 + Math.round(Math.random() * 1200)));
+  cancelChaosAutoplay();
+  chaosAutoplaySessionId = session.id;
+  chaosAutoplayTimer = setTimeout(async () => {
+    chaosAutoplayTimer = null;
+    if (state.isSending) return;
+    if (state.showWelcomeHome) return;
+    if (state.currentSessionId !== session.id) return;
+    const activeSession = getCurrentSession();
+    if (!activeSession || activeSession.mode !== SESSION_MODE_CHAOS) return;
+    if (!els.views.chat?.classList.contains("active")) return;
+    state.isSending = true;
+    updateComposerMode();
+    await runSessionTurn(activeSession);
+  }, delayMs);
+}
+
+window.__scheduleChaosAutoplay = scheduleChaosAutoplay;
+window.__cancelChaosAutoplay = cancelChaosAutoplay;
+
+function buildChaosTranscriptMessages(session, stagedMessages = [], limit = CHAOS_MODE_TRANSCRIPT_LIMIT) {
+  const visibleMessages = (session?.messages || []).filter((message) =>
+    message && message.role !== "system" && message.content && !message.pending
+  );
+  return visibleMessages.concat(stagedMessages).slice(-Math.max(1, limit));
+}
+
+function buildChaosTranscript(session, stagedMessages = [], limit = CHAOS_MODE_TRANSCRIPT_LIMIT) {
+  const summaryBlock = session?.chaosSummary
+    ? `[聊天概况]\n${session.chaosSummary}\n[/聊天概况]\n`
+    : "";
+  return summaryBlock + buildChaosTranscriptMessages(session, stagedMessages, limit)
+    .map((message) => {
+      const speaker = message.role === "user" ? "用户" : (message.speaker || "某人");
+      return `[${speaker}] ${String(message.content || "").replace(/\s+/g, " ").trim()}`;
+    })
+    .join("\n");
+}
+
+function buildChaosRoster(session) {
+  return getSceneNpcs(session)
+    .map((npc) => {
+      const prompt = String(npc?.prompt || "").replace(/\s+/g, " ").trim().slice(0, 52);
+      if (prompt) return `${npc.name}：${prompt}`;
+      const persona = getChaosPersona(npc);
+      return persona ? `${npc.name}（${persona.label}）` : `${npc.name}`;
+    })
+    .join("\n");
+}
+
+function parseChaosJson(rawContent) {
+  if (!rawContent) return null;
+  try {
+    return parseDirectorJsonLoose(String(rawContent || ""));
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeChaosReply(content) {
+  let text = String(content || "").replace(/\r/g, "").split("\n")[0].trim();
+  text = text.replace(/^["“”'「」『』]+|["“”'「」『』]+$/g, "").trim();
+  text = text.replace(/^[\[(（【]?(?:用户|群友|路人|我|你|他|她|它|AI|NPC|agent|Agent|模型|[^:：\]\)）】]{1,12})[\]）】]?\s*[:：]\s*/i, "");
+  text = text.replace(/\s+/g, " ").trim();
+  if (text === "<SKIP>") return "";
+  if (text.length > CHAOS_MODE_REPLY_HARD_LIMIT) {
+    text = text.slice(0, CHAOS_MODE_REPLY_HARD_LIMIT).trim();
+  }
+  return text;
+}
+
+function buildChaosStateSummary(npcState) {
+  return [
+    `情绪=${Math.round(npcState.emotion)}`,
+    `理性=${Math.round(npcState.rationality)}`,
+    `攻击性=${Math.round(npcState.aggression)}`,
+    `表达欲=${Math.round(npcState.expressiveness)}`,
+    `疲劳=${Math.round(npcState.fatigue)}`,
+    `上轮反应=${normalizeChaosReactionTag(npcState.reactionTag)}`,
+  ].join("，");
+}
+
+function isChaosNpcTargeted(session, npc, stagedMessages = []) {
+  const transcriptMessages = buildChaosTranscriptMessages(session, stagedMessages, 4);
+  const latestMessage = transcriptMessages[transcriptMessages.length - 1];
+  if (!latestMessage?.content) return false;
+  return String(latestMessage.content).includes(npc.name);
+}
+
+async function evaluateChaosNpcIntent(session, npc, npcState, stagedMessages, cycle) {
+  const transcript = buildChaosTranscript(session, stagedMessages);
+  const roster = buildChaosRoster(session);
+  const config = resolveModelConfig(npc.configId, npc.model, session.configId);
+  const transcriptMessages = buildChaosTranscriptMessages(session, stagedMessages, 4);
+  const latestVisible = transcriptMessages[transcriptMessages.length - 1] || null;
+  const latestSpeaker = latestVisible?.role === "assistant" ? latestVisible.speaker : "用户";
+  const isEmptyRoom = transcriptMessages.length === 0;
+  const messages = [
+    {
+      role: "system",
+      content: [
+        `你是群聊成员 ${npc.name}。`,
+        npc.prompt ? `你的人设：${npc.prompt}` : `你的性格：${getChaosPersona(npc)?.desc || "有自己的脾气和说话习惯"}`,
+        session.globalPrompt ? `世界观：${session.globalPrompt}` : "",
+        `你的隐藏状态：${buildChaosStateSummary(npcState)}。`,
+        "你正在一个群聊里跟人聊天。",
+        "这不是你和用户的一对一聊天。",
+        "群里其他成员也都是真人在场，你可以接任何人的话，不需要只对用户负责。",
+        "判断你这一拍要不要接话。",
+        "该认真就认真，该轻松就轻松，语气跟着话题走。",
+        "如果群里刚安静下来、没人先开口、或者同一个话题聊腻了，你可以主动起个新话题。",
+        "主动起话题时别总跳到推荐东西上（推荐好吃的、好剧、好游戏之类的），聊点别的。",
+        "只输出一个 JSON 对象，不要解释，不要 markdown。",
+        '格式固定：{"speak":true,"impulse":0-100,"reactionTag":"典|孝|急|乐|崩|无|草|哈|赞|？","target":"用户|某个群友名|","style":"一句8字内概括","reason":"12字内简因"}',
+        "规则：",
+        "1. speak 表示你这一拍到底想不想说。",
+        "2. impulse 越高越想说；被点名、被戳中、有共鸣、想接话时提高。",
+        "3. 若你懒得理、刚说过、兴趣不大、局势冷掉，就降低。",
+        "4. 如果群里在复读或者同一个话题绕了 3 轮以上，主动起个新话题——别又绕回推荐吃的喝的玩的。",
+        "5. reason 极短即可，不要解释链条。",
+        "6. 无话可说或者不想顺着聊就别接，不用硬凑。",
+      ].join("\n"),
+    },
+    {
+      role: "user",
+      content: [
+        `当前群成员：\n${roster || "无"}`,
+        `\n最近群聊：\n${transcript || "[暂无消息]"}`,
+        `\n最新一条来自：${latestSpeaker || "无人"}。`,
+        isEmptyRoom ? "\n现在群里还没人正式开口，你可以主动冒一句。" : "",
+        `\n当前是这一轮的第 ${cycle + 1} 拍。`,
+        "\n只输出 JSON。",
+      ].join("\n"),
+    },
+  ];
+
+  const payload = await createChatCompletionPayload(config.host, config.key, npc.model, messages, false, 0.45);
+  const parsed = parseChaosJson(payload.content) || {};
+  const targeted = isChaosNpcTargeted(session, npc, stagedMessages);
+  const latestIsPeer = latestVisible?.role === "assistant" && latestVisible.speaker && latestVisible.speaker !== npc.name;
+  const latestIsSelf = latestVisible?.role === "assistant" && latestVisible.speaker === npc.name;
+  const turnGap = Number.isFinite(npcState.lastSpokeTurn)
+    ? Math.max(0, (ensureChaosState(session).turnIndex || 0) - npcState.lastSpokeTurn)
+    : 99;
+  let impulse = clampChaosValue(parsed.impulse ?? (parsed.speak ? 72 : 48));
+  impulse = clampChaosValue(
+    impulse
+      - Math.round((npcState.fatigue || 0) * 0.15)
+      - (npcState.lastSpokeCycle === cycle - 1 ? 10 : 0)
+      - (turnGap <= 1 ? 14 : turnGap === 2 ? 6 : 0)
+      + (targeted ? 16 : 0)
+      + (latestIsPeer ? 24 : 0)
+      - (latestIsSelf ? 28 : 0)
+      + (isEmptyRoom ? 18 : 0)
+      + Math.round((npcState.expressiveness - 50) * 0.16)
+      + Math.round((npcState.aggression - 50) * 0.08)
+      + Math.round((Math.random() - 0.5) * 10)
+      + 12  // 基础发言冲动，保证群聊不会冷场
+  );
+
+  return {
+    npc,
+    speak: Boolean(parsed.speak),
+    impulse,
+    targeted,
+    reactionTag: normalizeChaosReactionTag(parsed.reactionTag),
+    style: String(parsed.style || "").trim().slice(0, 24),
+    reason: String(parsed.reason || "").trim().slice(0, 20),
+  };
+}
+
+function selectChaosResponders(intents, cycle) {
+  const ranked = (Array.isArray(intents) ? intents : [])
+    .filter((item) => item && (item.speak || item.impulse >= 24))
+    .sort((a, b) => b.impulse - a.impulse);
+  if (!ranked.length) return [];
+
+  const threshold = cycle === 0 ? 24 : 30;
+  const selected = [];
+  const topImpulse = ranked[0].impulse;
+  ranked.forEach((item, index) => {
+    if (selected.length >= CHAOS_MODE_MAX_RESPONDERS) return;
+    if (index === 0) {
+      if (item.impulse >= Math.max(18, threshold - 10)) {
+        selected.push(item);
+      }
+      return;
+    }
+    if (item.impulse < threshold) return;
+    if (item.impulse < topImpulse - 20 && !item.targeted) return;
+    selected.push(item);
+  });
+  return selected;
+}
+
+async function generateChaosNpcReply(session, npc, npcState, intent, stagedMessages, cycle) {
+  const transcript = buildChaosTranscript(session, stagedMessages);
+  const roster = buildChaosRoster(session);
+  const config = resolveModelConfig(npc.configId, npc.model, session.configId);
+  const recentMessages = buildChaosTranscriptMessages(session, stagedMessages, 6);
+  const latestComparable = [...recentMessages].reverse().find((item) => item.role === "assistant" && item.speaker === npc.name);
+  const messages = [
+    {
+      role: "system",
+      content: [
+        `你是群聊成员 ${npc.name}。`,
+        npc.prompt ? `你的人设：${npc.prompt}` : `你的性格：${getChaosPersona(npc)?.desc || "有明确态度和表达习惯"}`,
+        session.globalPrompt ? `世界观：${session.globalPrompt}` : "",
+        `你的隐藏状态：${buildChaosStateSummary(npcState)}。`,
+        `你这一拍的反应态：${intent.reactionTag}。`,
+        intent.style ? `你这句的感觉：${intent.style}。` : "",
+        intent.reason ? `你想说的原因：${intent.reason}。` : "",
+        "这不是回复客服单，群聊里有轻松也有正经话题。",
+        "你是在群里说话，回应别人、分享见解、吐个槽都可以，说话水平跟着话题走。",
+        "你现在要往群里发一条短消息。",
+        "硬规则：",
+        "1. 只输出消息正文，不要说话人标签，不要引号，不要括号动作，不要 markdown。",
+        "2. 长度 4-30 个字，可以写一两句，但别写成小作文。",
+        "3. 该正经就正经，该随意就随意——聊严肃话题时拿出见识和分量，聊日常时可以轻松随意。",
+        "4. 别写成教科书，但可以说出有内容的见解。",
+        "5. 不要重复你自己刚说过的话，也别顺着别人的句式复读。",
+        "6. 同一个话题绕了 3 轮以上就别硬续了，可以抛个新话题——别总跳到推荐东西上。",
+        "7. 如果你这一拍其实不想说，输出 <SKIP>。",
+      ].filter(Boolean).join("\n"),
+    },
+    {
+      role: "user",
+      content: [
+        `群成员：\n${roster || "无"}`,
+        `\n最近群聊：\n${transcript || "[暂无消息]"}`,
+        latestComparable?.content ? `\n你上一次刚说过：${latestComparable.content}` : "",
+        `\n当前是这一轮的第 ${cycle + 1} 拍。`,
+        "\n只输出这一条消息正文。",
+      ].join("\n"),
+    },
+  ];
+
+  const payload = await createChatCompletionPayload(config.host, config.key, npc.model, messages, false, 0.72);
+  const content = sanitizeChaosReply(payload.content);
+  if (!content) return null;
+  if (latestComparable && normalizeComparableText(latestComparable.content) === normalizeComparableText(content)) {
+    return null;
+  }
+  const usage = normalizeUsage(payload.usage) || null;
+  const estimatedUsage = usage ? null : {
+    input: estimateChatMessagesTokens(messages),
+    output: estimateTokens(content),
+    total: estimateChatMessagesTokens(messages) + estimateTokens(content),
+  };
+  return {
+    id: createMessageId("chaos"),
+    role: "assistant",
+    speaker: npc.name,
+    content,
+    createdAt: new Date().toISOString(),
+    pending: false,
+    streaming: false,
+    usage,
+    estimatedUsage,
+  };
+}
+
+function applyChaosReplyState(session, reply, intent, cycle) {
+  const chaosState = ensureChaosState(session);
+  const npcState = chaosState.npcStates[reply.speaker];
+  if (!npcState) return;
+  npcState.emotion = clampChaosValue(npcState.emotion + Math.round((intent.impulse - 50) / 7) + (intent.reactionTag === "崩" ? 10 : 0));
+  npcState.fatigue = clampChaosValue(npcState.fatigue + 18);
+  npcState.reactionTag = normalizeChaosReactionTag(intent.reactionTag);
+  npcState.speakCount = Math.max(0, Number(npcState.speakCount) || 0) + 1;
+  npcState.lastSpokeTurn = Number.isFinite(chaosState.turnIndex) ? chaosState.turnIndex : 0;
+  npcState.lastSpokeCycle = cycle;
+}
+
+function coolDownChaosStates(session, selectedNames = new Set()) {
+  const chaosState = ensureChaosState(session);
+  Object.entries(chaosState.npcStates || {}).forEach(([name, npcState]) => {
+    if (!npcState) return;
+    if (selectedNames.has(name)) return;
+    npcState.fatigue = clampChaosValue(npcState.fatigue - 10);
+    npcState.emotion = clampChaosValue(npcState.emotion - 4);
+    if (npcState.reactionTag !== "无") {
+      npcState.reactionTag = "无";
+    }
+  });
+  chaosState.turnIndex = (Number(chaosState.turnIndex) || 0) + 1;
+}
+
+async function runChaosTurn(session) {
+  const sceneNpcs = getSceneNpcs(session).filter((npc) => npc?.name && npc?.model);
+  if (!sceneNpcs.length) {
+    setText(els.chatStatus, "混沌模式暂无可发言成员");
+    return;
+  }
+
+  ensureChaosState(session);
+  let totalReplies = 0;
+  let highestSelectedImpulse = 0;
+
+  for (let cycle = 0; cycle < CHAOS_MODE_MAX_CYCLES; cycle += 1) {
+    if (state.abortController?.signal.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    if (state.currentSessionId !== session.id) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    setInlineChatStatus(cycle === 0 ? "群成员正在判断要不要接话..." : "群聊还在继续发酵...");
+    const chaosState = ensureChaosState(session);
+    const intents = [];
+    for (const npc of sceneNpcs) {
+      try {
+        const intent = await evaluateChaosNpcIntent(session, npc, chaosState.npcStates[npc.name], [], cycle);
+        if (intent) intents.push(intent);
+      } catch (error) {
+        debugWarn("[chaos] intent failed", { npc: npc.name, error: error?.message || String(error) });
+      }
+      await new Promise((r) => setTimeout(r, 180));
+    }
+
+    const responders = selectChaosResponders(intents, cycle);
+    if (!responders.length) {
+      break;
+    }
+    if (state.currentSessionId !== session.id) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+    highestSelectedImpulse = Math.max(
+      highestSelectedImpulse,
+      ...responders.map((item) => Number(item.impulse) || 0)
+    );
+
+    setInlineChatStatus(`${responders.map((item) => item.npc.name).join("、")} 正在回嘴...`);
+
+    // 逐条生成——串行发请求避免 API 网关截断
+    const replies = [];
+    for (const intent of responders) {
+      try {
+        const reply = await generateChaosNpcReply(session, intent.npc, chaosState.npcStates[intent.npc.name], intent, [], cycle);
+        if (reply) {
+          session.messages.push(reply);
+          applyChaosReplyState(session, reply, intent, cycle);
+          renderMessages({ stickToBottom: true });
+          replies.push(reply);
+          // 让出主线程，让浏览器有机会把这条消息画出来
+          await new Promise((r) => setTimeout(r, 16));
+        }
+      } catch (error) {
+        debugWarn("[chaos] reply failed", { npc: intent.npc.name, error: error?.message || String(error) });
+      }
+    }
+
+    if (!replies.length) {
+      break;
+    }
+    if (state.currentSessionId !== session.id) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const selectedNames = new Set(replies.map((r) => r.speaker));
+    coolDownChaosStates(session, selectedNames);
+
+    // 持久化：每轮回复写入 IndexedDB，防止刷新丢失
+    if (window.__chatDB?.saveMessages && replies.length) {
+      const startSeq = getSessionMessageCount(session);
+      window.__chatDB.saveMessages(session.id, replies, startSeq).catch(function (err) {
+        debugWarn("[chaos] save cycle messages failed", err);
+      });
+      session.messageCount = Math.max(Number(session.messageCount) || 0, startSeq + replies.length);
+    }
+
+    totalReplies += replies.length;
+
+    const shouldContinue = replies.length >= 2 && responders.some((item) => item.impulse >= 72);
+    if (!shouldContinue) {
+      break;
+    }
+  }
+
+  if (!totalReplies) {
+    const chaosState = ensureChaosState(session);
+    chaosState.autoplayStreak = 0;
+    touchSession(session);
+    persistSessions();
+    setText(els.chatStatus, "这波没人接话");
+    ensureChaosSummary(session).catch(() => {});
+    return { replyCount: 0, shouldAutoplay: false, strongestImpulse: 0 };
+  }
+
+  const strongestImpulse = highestSelectedImpulse;
+  syncLoadedSessionMessageCount(session);
+  const chaosState = ensureChaosState(session);
+  const previousStreak = Number(chaosState.autoplayStreak) || 0;
+  const shouldAutoplay = previousStreak < CHAOS_AUTOPLAY_MAX_STREAK
+    && totalReplies > 0
+    && (totalReplies >= 2 || strongestImpulse >= 60);
+  chaosState.autoplayStreak = shouldAutoplay ? previousStreak + 1 : 0;
+  touchSession(session);
+  persistSessions();
+  renderMessages({ stickToBottom: true });
+  renderChatListMenu();
+  setText(els.chatStatus, `群聊刷出了 ${totalReplies} 条消息`);
+  ensureChaosSummary(session).catch(() => {});
+  return {
+    replyCount: totalReplies,
+    shouldAutoplay,
+    strongestImpulse,
+  };
+}
+
 async function runSessionTurn(session) {
   if (!session) {
     return;
   }
   await ensureHistoricalScopeNames(session);
+
+  if (session.mode === SESSION_MODE_CHAOS) {
+    try {
+      const chaosOutcome = await runChaosTurn(session);
+      if (chaosOutcome?.shouldAutoplay) {
+        scheduleChaosAutoplay(session);
+      } else {
+        cancelChaosAutoplay();
+      }
+    } catch (error) {
+      cancelChaosAutoplay();
+      if (error.name === "AbortError") {
+        session.messages.push({ role: "system", speaker: "系统", content: t("chat.stoppedHint"), createdAt: new Date().toISOString() });
+        touchSession(session);
+        persistSessions();
+        renderMessages();
+        renderChatListMenu();
+        setText(els.chatStatus, t("chat.stopped"));
+      } else {
+        console.error("[MOYU] Chaos turn failed", {
+          sessionId: session.id,
+          error: error.message,
+        });
+        session.messages.push({
+          role: "system",
+          speaker: "系统",
+          content: `本轮生成失败：${error.message}`,
+          createdAt: new Date().toISOString(),
+        });
+        touchSession(session);
+        persistSessions();
+        renderMessages();
+        renderChatListMenu();
+        setText(els.chatStatus, `生成失败：${error.message}`);
+      }
+    } finally {
+      state.abortController = null;
+      state.isSending = false;
+      clearInlineChatStatus();
+      els.sendBtn.disabled = false;
+      els.chatInput.disabled = false;
+      finishUserTopAnchor();
+      autoResizeChatInput();
+      updateComposerMode();
+      if (!window.matchMedia?.("(pointer: coarse)").matches) {
+        queueMicrotask(() => els.chatInput.focus());
+      }
+    }
+    return;
+  }
 
   // @mention direct routing — skip director, hand off to the named NPC
   if (session.mode === SESSION_MODE_WORK) {
@@ -1364,6 +1914,70 @@ async function ensureChatSummary(session, options = {}) {
   return true;
 }
 
+async function ensureChaosSummary(session) {
+  if (!session || session.mode !== SESSION_MODE_CHAOS) return false;
+  const npc = session.npcs?.[0];
+  if (!npc?.model) return false;
+
+  const visibleMessages = (session.messages || []).filter((m) =>
+    m && m.role !== "system" && m.content && !m.pending
+  );
+  const cutoffSeq = Number.isFinite(session?.chaosSummaryUntilSeq)
+    ? session.chaosSummaryUntilSeq
+    : -1;
+  const unsummarized = cutoffSeq >= 0
+    ? visibleMessages.filter((m) => !Number.isFinite(m.sequence) || m.sequence > cutoffSeq)
+    : visibleMessages;
+
+  if (unsummarized.length < CHAOS_AUTO_COMPRESS_THRESHOLD / 2 && session.chaosSummary) return false;
+
+  const configId = npc.configId || session.configId || "";
+  const config = resolveModelConfig(configId, npc.model, session.configId);
+  const currentSummary = session.chaosSummary || "";
+
+  const compressMessages = [
+    { role: "system", content: CHAOS_COMPRESS_PROMPT },
+  ];
+  if (currentSummary) {
+    compressMessages.push({ role: "system", content: `已有概况：\n${currentSummary}` });
+  }
+  if (unsummarized.length) {
+    const historyBlock = buildHistoryMessagesFromSlice(unsummarized, "待压缩对话");
+    compressMessages.push(...historyBlock);
+  }
+  compressMessages.push({ role: "user", content: "请基于已有概况和新增对话，输出一份更新的群聊概况。" });
+
+  debugInfo("[MOYU:compress]", "混沌模式摘要压缩调用", {
+    model: npc.model,
+    summaryTokens: estimateTokens(currentSummary),
+    newCount: unsummarized.length,
+  });
+
+  let payload;
+  try {
+    payload = await createChatCompletionPayload(config.host, config.key, npc.model, compressMessages, false, 0.4);
+  } catch (apiError) {
+    console.error("[MOYU:compress] 混沌模式压缩 API 调用失败", {
+      model: npc.model,
+      host: config.host,
+      message: apiError.message,
+    });
+    return false;
+  }
+
+  const nextSummary = (payload.content || "").trim();
+  if (!nextSummary) return false;
+
+  session.chaosSummary = nextSummary;
+  const lastMsg = visibleMessages[visibleMessages.length - 1];
+  if (lastMsg && Number.isFinite(lastMsg.sequence)) {
+    session.chaosSummaryUntilSeq = lastMsg.sequence;
+  }
+  touchSession(session);
+  persistSessions();
+  return true;
+}
+
 let _autoCompressPending = false;
 
 function setCompressionUiLocked(locked) {
@@ -1742,5 +2356,3 @@ async function callNpcGroup(session, group, npcInstructions) {
     )));
   }
 }
-
-

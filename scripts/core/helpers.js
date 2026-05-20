@@ -170,10 +170,6 @@ function normalizeAgentParamValue(key, value) {
     const num = Number.parseFloat(value);
     return Number.isFinite(num) ? Math.max(0, Math.min(2, Math.round(num * 10) / 10)) : undefined;
   }
-  if (key === "top_p") {
-    const num = Number.parseFloat(value);
-    return Number.isFinite(num) ? Math.max(0, Math.min(1, Math.round(num * 100) / 100)) : undefined;
-  }
   return value;
 }
 

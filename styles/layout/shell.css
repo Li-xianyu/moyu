@@ -121,10 +121,16 @@ button,
 
 .nav-main {
   margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .nav-bottom {
   margin-top: auto;
+  border-top: 1px solid #2a2a2a;
+  padding-top: 12px;
 }
 
 .nav-btn,
@@ -151,18 +157,20 @@ button,
   border-radius: 14px;
 }
 
+.nav-main .nav-btn {
+  justify-content: flex-start;
+  font-weight: 700;
+}
+
 .nav-btn:hover,
 .ghost-btn:hover {
-  background: #2a2d2e;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .nav-btn-create {
   justify-content: flex-start;
 }
 
-.nav-btn.nav-btn-create:hover {
-  background: transparent;
-}
 
 .nav-btn-icon {
   display: inline-flex;
@@ -184,6 +192,11 @@ button,
   height: 100%;
 }
 
+.nav-main .nav-btn .nav-icon-svg svg,
+.nav-text-toggle .nav-icon-svg svg {
+  stroke-width: 2.4;
+}
+
 .nav-btn.active {
   background: #37373d;
   color: #cccccc;
@@ -198,20 +211,29 @@ button,
 }
 
 .nav-btn-settings {
-  border-color: #333333;
-  background: #333333;
-  color: #cccccc;
+  background: transparent;
+  color: var(--muted);
   justify-content: flex-start;
+  font-weight: 400;
 }
 
 .nav-btn-settings:hover {
-  background: #2a2d2e;
-  border-color: #333333;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.nav-btn-settings.active {
+  background: transparent;
+  color: var(--muted);
 }
 
 .chat-list-control {
   position: relative;
   transition: margin-left 0.22s ease;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .chat-list-head {
@@ -228,8 +250,9 @@ button,
   padding: 8px 2px;
   border: 0;
   background: transparent;
-  color: var(--muted);
+  color: var(--text);
   cursor: pointer;
+  font-weight: 700;
 }
 
 .nav-text-toggle:hover {
@@ -324,7 +347,10 @@ button,
 .chat-list-menu {
   width: 100%;
   margin-top: 6px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   gap: 2px;
   padding-left: 2px;
 }
@@ -336,7 +362,9 @@ button,
 .chat-list-items {
   display: grid;
   gap: 6px;
-  max-height: min(60dvh, 420px);
+  align-content: start;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #424242 transparent;
@@ -361,10 +389,15 @@ button,
   text-align: left;
   cursor: pointer;
   overflow: visible;
+  font-weight: 400;
 }
 
 .chat-list-item.active {
   border-color: transparent;
+}
+
+.chat-list-item:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .chat-list-main {
@@ -379,6 +412,7 @@ button,
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text);
+  font-weight: 400;
 }
 
 .chat-list-rename-input {
@@ -512,7 +546,7 @@ button,
 
 
 .sidebar {
-  transition: transform 0.22s ease, opacity 0.22s ease, border-color 0.22s ease;
+  transition: transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), opacity 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), border-color 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
   transform-origin: left center;
   will-change: transform, opacity;
 }
@@ -598,10 +632,14 @@ button,
   border: 0;
   background: rgba(0, 0, 0, 0.38);
   backdrop-filter: blur(2px);
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .sidebar-backdrop.hidden {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .view-with-shell-offset {

@@ -14,6 +14,15 @@ function getComposerShellHeight() {
   return composerShell ? composerShell.getBoundingClientRect().height : 0;
 }
 
+function getModelProviderIcon(session, speakerName) {
+  if (!session || !speakerName) return null;
+  const allNpcs = getSceneNpcs(session);
+  const npc = allNpcs.find((n) => n.name === speakerName);
+  if (!npc?.model) return null;
+  const provider = detectModelProvider(npc.model);
+  return provider ? provider.icon : null;
+}
+
 function getTopFloatingChromeHeight() {
   const floatingButtons = [...document.querySelectorAll(".info-btn.floating")];
   if (!floatingButtons.length) return 0;
@@ -365,13 +374,23 @@ function updateComposerMode() {
   const composer = els.chatInput?.closest(".composer");
   const composerShell = els.chatInput?.closest(".composer-shell");
   const currentSession = getCurrentSession();
+  const isChaos = currentSession?.mode === SESSION_MODE_CHAOS;
 
-  // 输出中 → 暂停按钮优先于一切
+  // 混沌模式：隐藏状态栏、压缩和思考按钮
+  const chaosStatusBar = els.chatStatus?.closest(".composer-status-bar");
+  if (chaosStatusBar) chaosStatusBar.classList.toggle("hidden", isChaos);
+  if (els.compressMemoryBtn) els.compressMemoryBtn.classList.toggle("hidden", isChaos);
+  if (els.thinkingToggleBtn) els.thinkingToggleBtn.classList.toggle("hidden", isChaos);
+  if (isChaos && els.thinkingPopover) els.thinkingPopover.classList.add("hidden");
+
+  // 输出中 → 暂停按钮优先于一切（混沌模式除外，保持发送箭头）
   if (state.isSending) {
-    els.sendBtn.innerHTML = '<i data-lucide="square"></i>';
-    lucide.createIcons();
-    els.sendBtn.disabled = false;
-    els.sendBtn.classList.add("sending");
+    if (!isChaos) {
+      els.sendBtn.innerHTML = '<i data-lucide="square"></i>';
+      lucide.createIcons();
+      els.sendBtn.disabled = false;
+      els.sendBtn.classList.add("sending");
+    }
     els.chatInput.classList.remove("editing");
     if (composer) composer.classList.remove("editing");
     if (composerShell) composerShell.classList.remove("editing");
@@ -415,7 +434,7 @@ function updateComposerMode() {
     els.cancelEditBtn.classList.add("hidden");
   }
   if (els.compressMemoryBtn) {
-    els.compressMemoryBtn.disabled = state.isSending || !currentSession;
+    els.compressMemoryBtn.disabled = state.isSending || !currentSession || currentSession.mode === SESSION_MODE_CHAOS;
   }
   if (els.directorThinkingBtn) {
     els.directorThinkingBtn.disabled = state.isSending || !currentSession || !currentSession?.directorModel;
@@ -1144,13 +1163,22 @@ function refreshNarrationNode(wrapper, message) {
 function buildMessageBlock(message, sessionMode, enableMd) {
   const block = document.createElement("article");
   const isAgentPlainBlock = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
-  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
+  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${sessionMode === SESSION_MODE_CHAOS ? "chaos-mode" : ""} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
   if (message.id) block.dataset.messageId = message.id;
 
   if (message.role === "assistant" || message.role === "user") {
     const meta = document.createElement("div");
     meta.className = "message-meta";
-    meta.innerHTML = `\n        <strong>${escapeHtml(message.speaker)}</strong>\n        <span>${new Date(message.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span>\n      `;
+    let metaHtml = `\n        <strong>${escapeHtml(message.speaker)}</strong>`;
+    if (message.role === "assistant") {
+      const session = getCurrentSession();
+      const iconUrl = getModelProviderIcon(session, message.speaker);
+      if (iconUrl) {
+        metaHtml = `\n        <img class="model-provider-icon" src="${iconUrl}" alt="">${metaHtml}`;
+      }
+    }
+    metaHtml += `\n        <span>${new Date(message.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span>\n      `;
+    meta.innerHTML = metaHtml;
     block.appendChild(meta);
   }
 
@@ -1215,7 +1243,7 @@ function buildMessageBlock(message, sessionMode, enableMd) {
 function refreshMessageBlock(block, message, sessionMode, enableMd) {
   // 1. Update block-level className
   const isAgentPlainBlock = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
-  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
+  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${sessionMode === SESSION_MODE_CHAOS ? "chaos-mode" : ""} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
 
   // 2. Update bubble className + content
   const bubble = block.querySelector('.message');

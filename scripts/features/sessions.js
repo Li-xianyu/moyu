@@ -6,6 +6,9 @@ function renderSession() {
 
   // Welcome page: don't load session content
   if (state.showWelcomeHome) {
+    if (typeof window.__cancelChaosAutoplay === "function") {
+      window.__cancelChaosAutoplay();
+    }
     if (els.chatStage) els.chatStage.classList.add("empty-state");
     if (els.views.chat) els.views.chat.classList.add("empty-state");
     state.chatRenderActiveSessionId = null;
@@ -21,6 +24,9 @@ function renderSession() {
   }
 
   if (!session) {
+    if (typeof window.__cancelChaosAutoplay === "function") {
+      window.__cancelChaosAutoplay();
+    }
     state.chatRenderActiveSessionId = null;
     els.chatMeta.className = "chat-meta empty";
     els.chatMeta.textContent = t("chat.noActiveSession");
@@ -56,6 +62,14 @@ function renderSession() {
   autoResizeChatInput();
   renderMessages();
   scrollChatToBottom();
+  if (session.mode === SESSION_MODE_CHAOS) {
+    const hasAssistantMessages = (session.messages || []).some((m) => m && m.role === "assistant");
+    if (typeof window.__scheduleChaosAutoplay === "function") {
+      window.__scheduleChaosAutoplay(session, { delayMs: hasAssistantMessages ? 2800 : 1100 });
+    }
+  } else if (typeof window.__cancelChaosAutoplay === "function") {
+    window.__cancelChaosAutoplay();
+  }
 }
 
 function renderSessionLoadingShell(session) {
@@ -84,6 +98,10 @@ function renderSessionLoadingShell(session) {
 
 function trimInactiveSessionBuffer(session) {
   if (!session || !Array.isArray(session.messages) || !session.messages.length) {
+    return;
+  }
+  // 如果有正在流式传输或挂起的消息，跳过截断避免丢失
+  if (session.messages.some(function (m) { return m && (m.streaming || m.pending); })) {
     return;
   }
   const keepCount = typeof getChatInitialHydrateCount === "function"
@@ -271,6 +289,10 @@ function renderChatListMenu() {
       if (state.currentSessionId === session.id && !state.showWelcomeHome && els.views.chat?.classList.contains("active")) {
         return;
       }
+      // 切换会话前先中止正在进行的生成，避免流写入错乱
+      if (state.isSending && typeof stopGeneration === "function") {
+        stopGeneration();
+      }
       const previousSession = getCurrentSession();
       if (state.renameSessionId) {
         commitRenameIfNeeded();
@@ -372,8 +394,7 @@ function renderChatListMenu() {
     `;
     editBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
-      state.openChatMenuId = null;
-      state.deleteConfirmSessionId = null;
+      closeChatItemMenus();
       if (typeof window._loadScript === "function") {
         await Promise.all([
           window._loadScript("./scripts/features/create.js"),
@@ -397,6 +418,7 @@ function renderChatListMenu() {
     `;
     restartBtn.addEventListener("click", (event) => {
       event.stopPropagation();
+      closeChatItemMenus();
       restartSessionFromExisting(session.id);
     });
 
@@ -412,9 +434,7 @@ function renderChatListMenu() {
     renameBtn.addEventListener("click", (event) => {
       event.stopPropagation();
       state.renameSessionId = session.id;
-      state.openChatMenuId = null;
-      state.deleteConfirmSessionId = null;
-      renderChatListMenu();
+      closeChatItemMenus();
     });
 
     const deleteBtn = document.createElement("button");
@@ -460,8 +480,7 @@ function renderChatListMenu() {
     exportBtn.addEventListener("click", (event) => {
       event.stopPropagation();
       exportSingleSession(session.id);
-      state.openChatMenuId = null;
-      renderChatListMenu();
+      closeChatItemMenus();
     });
 
     menu.appendChild(exportBtn);
@@ -478,6 +497,17 @@ function renderChatListMenu() {
     els.chatListItems.appendChild(button);
   });
   lucide.createIcons();
+}
+
+function closeChatItemMenus(options = {}) {
+  state.openChatMenuId = null;
+  state.deleteConfirmSessionId = null;
+  if (options.clearRename) {
+    state.renameSessionId = null;
+  }
+  if (options.render !== false) {
+    renderChatListMenu();
+  }
 }
 
 function positionChatItemMenu(menu, anchorButton) {
@@ -545,10 +575,7 @@ function commitRenameIfNeeded() {
 async function deleteSession(sessionId) {
   const session = state.sessions.find((item) => item.id === sessionId);
   const title = session?.title || sessionId;
-  state.openChatMenuId = null;
-  state.deleteConfirmSessionId = null;
-  state.renameSessionId = null;
-  renderChatListMenu();
+  closeChatItemMenus({ clearRename: true });
 
   const task = startSessionTransferTask({
     title: "删除会话",
@@ -675,9 +702,7 @@ function restartSessionFromExisting(sessionId) {
   upsertSession(session);
   state.showWelcomeHome = false;
   state.currentSessionId = session.id;
-  state.openChatMenuId = null;
-  state.deleteConfirmSessionId = null;
-  state.renameSessionId = null;
+  closeChatItemMenus({ clearRename: true, render: false });
   persistSessions();
   renderSession();
   switchView("chat");
@@ -964,9 +989,13 @@ function buildArchiveSessionMeta(session) {
     directorSummary: session.directorSummary || "",
     chatSummary: session.chatSummary || "",
     compressedUntilMessageId: session.compressedUntilMessageId || "",
+    compressedUntilSequence: Number.isFinite(session.compressedUntilSequence) ? session.compressedUntilSequence : null,
+    compressionSegments: Array.isArray(session.compressionSegments) ? session.compressionSegments.map((s) => ({ ...s })) : [],
     suggestionGuide: session.suggestionGuide || "",
+    chaosState: session.chaosState ? JSON.parse(JSON.stringify(session.chaosState)) : null,
     host: session.host || "",
     key: session.key || "",
+    agentParams: session.agentParams ? JSON.parse(JSON.stringify(session.agentParams)) : {},
     messageCount: Number.isFinite(session.messageCount)
       ? session.messageCount
       : Array.isArray(session.messages)
@@ -998,8 +1027,10 @@ function createImportedSessionShell(raw) {
     compressedUntilSequence: Number.isFinite(raw.compressedUntilSequence) ? raw.compressedUntilSequence : null,
     compressionSegments: Array.isArray(raw.compressionSegments) ? raw.compressionSegments.map((segment) => ({ ...segment })) : [],
     suggestionGuide: raw.suggestionGuide || "",
+    chaosState: raw.chaosState ? JSON.parse(JSON.stringify(raw.chaosState)) : null,
     host: raw.host || "",
     key: raw.key || "",
+    agentParams: raw.agentParams ? JSON.parse(JSON.stringify(raw.agentParams)) : {},
     messages: [],
     messageCount: Number.isFinite(raw.messageCount)
       ? raw.messageCount
@@ -1541,13 +1572,19 @@ async function importSessionsFromFile(file) {
         model: raw.model || "",
         directorModel: raw.directorModel || raw.model || "",
         globalPrompt: raw.globalPrompt || "",
+        settingsOverrides: normalizeSessionOverrides(raw.settingsOverrides),
         npcs: Array.isArray(raw.npcs) ? raw.npcs.map((n) => ({ ...n })) : [],
         transientNpcs: [],
         directorMemory: normalizeDirectorMemory(raw.directorMemory),
         directorSummary: raw.directorSummary || "",
         chatSummary: raw.chatSummary || "",
         compressedUntilMessageId: raw.compressedUntilMessageId || "",
+        compressedUntilSequence: Number.isFinite(raw.compressedUntilSequence) ? raw.compressedUntilSequence : null,
+        compressionSegments: Array.isArray(raw.compressionSegments) ? raw.compressionSegments.map((s) => ({ ...s })) : [],
         suggestionGuide: raw.suggestionGuide || "",
+        host: raw.host || "",
+        key: raw.key || "",
+        agentParams: raw.agentParams ? JSON.parse(JSON.stringify(raw.agentParams)) : {},
         messages: Array.isArray(raw.messages) ? raw.messages.map((m) => ({ ...m })) : [],
         messageCount: Array.isArray(raw.messages) ? raw.messages.filter((m) => m?.role !== "system").length : 0,
         messagesHydrated: true,

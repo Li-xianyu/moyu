@@ -321,13 +321,16 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
 
   // ── 保存 AI 响应到 IndexedDB ──
   if (window.__chatDB && !targetMessage.streaming) {
-    const saveAssistant = window.__chatDB.appendMessage
-      ? window.__chatDB.appendMessage(session.id, targetMessage)
-      : window.__chatDB.saveMessage(session.id, targetMessage, getMessageSequenceInSession(session, targetMessage));
-    saveAssistant.catch(function (err) {
+    try {
+      if (window.__chatDB.appendMessage) {
+        await window.__chatDB.appendMessage(session.id, targetMessage);
+      } else {
+        await window.__chatDB.saveMessage(session.id, targetMessage, getMessageSequenceInSession(session, targetMessage));
+      }
+      await window.__chatDB.updateSessionMeta(session);
+    } catch (err) {
       debugWarn("[chat] save assistant message failed", err);
-    });
-    window.__chatDB.updateSessionMeta(session).catch(function () {});
+    }
   }
 }
 
@@ -498,12 +501,6 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
         ? getSessionAgentParam(session, speaker, "temperature")
         : undefined;
       body.temperature = agentTemp !== undefined ? agentTemp : getNpcResponseTemperature(session, model);
-      var agentTopP = typeof getSessionAgentParam === "function"
-        ? getSessionAgentParam(session, speaker, "top_p")
-        : undefined;
-      if (agentTopP !== undefined) {
-        body.top_p = agentTopP;
-      }
     }
     if (withUsage) {
       body.stream_options = { include_usage: true };
@@ -766,7 +763,6 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   persistSessions();
   renderMessages({ stickToBottom: true });
 }
-
 
 
 

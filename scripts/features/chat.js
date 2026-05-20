@@ -2,7 +2,8 @@
 
 function bindChat() {
   els.sendBtn.addEventListener("click", function onSendClick() {
-    if (state.isSending) {
+    const session = getCurrentSession();
+    if (state.isSending && session?.mode !== SESSION_MODE_CHAOS) {
       stopGeneration();
     } else {
       sendUserMessage();
@@ -232,11 +233,15 @@ function bindChat() {
 
 
 function stopGeneration() {
+  if (typeof window.__cancelChaosAutoplay === "function") {
+    window.__cancelChaosAutoplay();
+  }
   if (state.abortController) {
     state.abortController.abort();
     state.abortController = null;
   }
   state.isSending = false;
+  state._lastAbortAt = Date.now();
   clearInlineChatStatus();
   els.sendBtn.disabled = false;
   els.chatInput.disabled = false;
@@ -248,8 +253,14 @@ function stopGeneration() {
 
 async function sendUserMessage() {
   const session = getCurrentSession();
-  if (!session || state.isSending) {
+  if (!session) {
     return;
+  }
+  const isChaosSending = session.mode === SESSION_MODE_CHAOS && state.isSending;
+  if (!isChaosSending) {
+    if (state.isSending) return;
+    // 防止停止生成后快速重新提交导致消息重复
+    if (state._lastAbortAt && Date.now() - state._lastAbortAt < 400) return;
   }
 
   clearSuggestions();
@@ -260,15 +271,17 @@ async function sendUserMessage() {
     return;
   }
 
-  state.isSending = true;
-  if (els.thinkingPopover && !els.thinkingPopover.classList.contains("hidden")) {
-    els.thinkingPopover.classList.add("hidden");
-    els.thinkingPopover.classList.remove("visible");
-    els.thinkingToggleBtn?.classList.remove("active");
+  if (!isChaosSending) {
+    state.isSending = true;
+    if (els.thinkingPopover && !els.thinkingPopover.classList.contains("hidden")) {
+      els.thinkingPopover.classList.add("hidden");
+      els.thinkingPopover.classList.remove("visible");
+      els.thinkingToggleBtn?.classList.remove("active");
+    }
+    els.sendBtn.disabled = true;
+    els.chatInput.disabled = true;
+    updateComposerMode();
   }
-  els.sendBtn.disabled = true;
-  els.chatInput.disabled = true;
-  updateComposerMode();
 
   const editingUserMessageId = state.editingUserMessageId;
   if (editingUserMessageId) {
@@ -282,6 +295,9 @@ async function sendUserMessage() {
       content,
       createdAt: new Date().toISOString(),
     });
+    if (session.mode === SESSION_MODE_CHAOS && session.chaosState && typeof session.chaosState === "object") {
+      session.chaosState.autoplayStreak = 0;
+    }
   }
   syncLoadedSessionMessageCount(session);
 
@@ -331,6 +347,17 @@ async function sendUserMessage() {
     editingMessageId: state.editingUserMessageId,
     content,
   });
+
+  if (isChaosSending) {
+    // 混沌模式生成中：不抢跑，autoplay 自然会把用户消息带进下一轮
+    clearInlineChatStatus();
+    els.sendBtn.disabled = false;
+    els.chatInput.disabled = false;
+    finishUserTopAnchor();
+    autoResizeChatInput();
+    updateComposerMode();
+    return;
+  }
 
   state.abortController = new AbortController();
   await runSessionTurn(session);
@@ -445,6 +472,15 @@ function updateCompressMemoryButtonProgress(session) {
     return;
   }
 
+  if (session?.mode === SESSION_MODE_CHAOS) {
+    els.compressMemoryBtn.style.setProperty("--memory-compress-percent", "0");
+    els.compressMemoryBtn.style.setProperty("--memory-compress-progress", "#5aa7ff");
+    els.compressMemoryBtn.dataset.hasProgress = "false";
+    els.compressMemoryBtn.setAttribute("aria-label", t("chat.compressMemory"));
+    els.compressMemoryBtn.title = t("chat.compressMemory");
+    return;
+  }
+
   const isSingleAi = session?.mode === SESSION_MODE_WORK && !session.directorModel && session.npcs?.length === 1;
   const metrics = session
     ? (isSingleAi ? buildChatContextTokenMetrics(session) : buildDirectorContextTokenMetrics(session))
@@ -515,6 +551,13 @@ function renderCompressMemoryPopover() {
   }
 
   const session = getCurrentSession();
+  if (session?.mode === SESSION_MODE_CHAOS) {
+    updateCompressMemoryButtonProgress(session);
+    popover.innerHTML = "";
+    popover.classList.add("hidden");
+    els.compressMemoryBtn.classList.remove("info-open");
+    return;
+  }
   const hasSession = Boolean(session);
   updateCompressMemoryButtonProgress(session);
   popover.innerHTML = hasSession ? buildCompressMemoryPopoverMarkup(session) : "";
@@ -709,8 +752,6 @@ function shouldRenderThinkingForModel(modelName) {
   }
   return true;
 }
-
-
 
 
 

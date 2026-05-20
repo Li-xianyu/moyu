@@ -453,6 +453,8 @@
   max-width: 34ch;
   color: var(--muted);
   line-height: 1.7;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .chat-stage.empty-state {
@@ -570,6 +572,15 @@
   justify-content: flex-start;
 }
 
+.model-provider-icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+  margin-right: 4px;
+  flex-shrink: 0;
+  filter: brightness(0) invert(1);
+}
+
 .message-block.agent-plain-block {
   display: flex;
   flex-direction: column;
@@ -617,6 +628,15 @@
   font-size: 14px;
 }
 
+.message.agent {
+  justify-self: stretch;
+}
+
+.message-block.chaos-mode .message.agent {
+  width: fit-content;
+  justify-self: start;
+}
+
 .message.user {
   width: fit-content;
   background: #007acc;
@@ -628,9 +648,6 @@
   white-space: normal;
   word-break: normal;
   overflow-wrap: break-word;
-}
-.message.agent {
-  justify-self: stretch;
 }
 /* Work mode: agent messages without bubble (plain text like ChatGPT) */
 .message.agent.agent-plain {
@@ -2059,6 +2076,11 @@
   display: none;
 }
 
+/* ── 通用隐藏工具类 ── */
+.hidden {
+  display: none;
+}
+
 /* ----- Suggestion button & bar ----- */
 .suggest-btn {
   display: inline-flex;
@@ -2637,6 +2659,28 @@
   background: var(--panel);
   transition: border-color 0.2s, background 0.2s;
   user-select: none;
+}
+
+.mode-option-beta .mode-option-label {
+  padding-right: 62px;
+}
+
+.mode-option-badge {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 122, 204, 0.16);
+  color: #8bc5ff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .mode-option input[type="radio"]:checked + .mode-option-label {

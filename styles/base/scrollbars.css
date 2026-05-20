@@ -12,7 +12,8 @@
 .settings-model-panel::-webkit-scrollbar,
 .settings-page-panel::-webkit-scrollbar,
 .code-lines::-webkit-scrollbar,
-.pre-code-block code::-webkit-scrollbar {
+.pre-code-block code::-webkit-scrollbar,
+.chat-list-items::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
@@ -31,7 +32,8 @@
 .settings-model-panel::-webkit-scrollbar-track,
 .settings-page-panel::-webkit-scrollbar-track,
 .code-lines::-webkit-scrollbar-track,
-.pre-code-block code::-webkit-scrollbar-track {
+.pre-code-block code::-webkit-scrollbar-track,
+.chat-list-items::-webkit-scrollbar-track {
   background: transparent;
 }
 
@@ -49,7 +51,8 @@
 .settings-model-panel::-webkit-scrollbar-thumb,
 .settings-page-panel::-webkit-scrollbar-thumb,
 .code-lines::-webkit-scrollbar-thumb,
-.pre-code-block code::-webkit-scrollbar-thumb {
+.pre-code-block code::-webkit-scrollbar-thumb,
+.chat-list-items::-webkit-scrollbar-thumb {
   background: #424242;
   border-radius: 999px;
   border: 2px solid transparent;
@@ -70,7 +73,8 @@
 .settings-model-panel::-webkit-scrollbar-thumb:hover,
 .settings-page-panel::-webkit-scrollbar-thumb:hover,
 .code-lines::-webkit-scrollbar-thumb:hover,
-.pre-code-block code::-webkit-scrollbar-thumb:hover {
+.pre-code-block code::-webkit-scrollbar-thumb:hover,
+.chat-list-items::-webkit-scrollbar-thumb:hover {
   background: #424242;
   border: 2px solid transparent;
   background-clip: padding-box;

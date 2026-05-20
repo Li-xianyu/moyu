@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="dark">
   <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=2026.05.19.04">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.20.02";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.20.03";window.__moyuBootStart = performance.now();</script>
   <style>
     .loading-screen {
       position: fixed; inset: 0; z-index: 9999;
@@ -72,6 +72,7 @@
         "./styles/views/settings.css",
         "./styles/base/forms.css",
         "./styles/views/chat.css",
+        "./styles/views/roles.css",
         "./styles/base/responsive.css",
         "./styles/base/scrollbars.css",
         "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css",
@@ -168,6 +169,13 @@
           <span data-i18n="nav.create">创建聊天</span>
         </button>
 
+        <button class="nav-btn nav-btn-roles" data-view="roles">
+          <span class="nav-btn-icon" aria-hidden="true">
+            <i data-lucide="users" class="nav-icon-svg"></i>
+          </span>
+          <span data-i18n="nav.userRoleLibrary">角色设定</span>
+        </button>
+
         <div class="chat-list-control">
 
           <div class="chat-list-head">
@@ -192,7 +200,7 @@
               <button id="chatSearchBtn" class="toggle-action-btn" type="button" title="搜索会话">
                 <i data-lucide="search" class="nav-icon-svg"></i>
               </button>
-              <input id="chatImportInput" type="file" accept=".json,application/json" hidden>
+              <input id="chatImportInput" type="file" accept=".json,.ndjson,application/json,application/x-ndjson" hidden>
             </div>
           </div>
 
@@ -322,7 +330,7 @@
                     <div class="settings-field-row">
                       <button id="exportBackupBtn" class="secondary-btn" data-i18n="settings.exportBackup">导出设置备份</button>
                       <button id="importBackupBtn" class="secondary-btn" data-i18n="settings.importBackup">导入设置备份</button>
-                      <input id="importBackupInput" type="file" accept=".json,application/json" style="display: none">
+                      <input id="importBackupInput" type="file" accept=".json,.ndjson,application/json,application/x-ndjson" style="display: none">
                     </div>
                   </div>
                 </section>
@@ -441,7 +449,7 @@
                     <div class="settings-field-row">
                       <button id="exportSessionsBtn" class="secondary-btn" data-i18n="settings.exportSessionsTitle">导出全部会话</button>
                       <button id="importSessionsBtn" class="secondary-btn" data-i18n="settings.importSessionsTitle">导入会话</button>
-                      <input id="importSessionsInput" type="file" accept=".json,application/json" style="display:none">
+                      <input id="importSessionsInput" type="file" accept=".json,.ndjson,application/json,application/x-ndjson" style="display:none">
                     </div>
                   </div>
                 </section>
@@ -504,25 +512,80 @@
                       </section>
                     </div>
                   </div>
-
-                  <div id="settingsResizeHandle" class="settings-resize-handle" aria-hidden="true"></div>
-
-                  <section class="settings-work-models-panel settings-plain-section">
-                    <div class="sub-panel-head">
-                      <div>
-                        <h3 data-i18n="settings.workModelsTitle">工作模型</h3>
-                        <p class="hint-text" data-i18n="settings.workModelsHint">在右侧缓存模型区点击即可加入或移出工作模型。</p>
-                      </div>
-                      <div class="actions actions-compact">
-                        <button id="clearWorkModelsBtn" class="ghost-btn" type="button" data-i18n="settings.clearWorkModels">清空</button>
-                      </div>
-                    </div>
-                    <div id="workModelHint" class="hint-text" data-i18n="settings.workModelsEmpty">请先获取模型列表</div>
-                    <div id="workModelList" class="work-model-list"></div>
-                  </section>
                 </div>
+
+                <div id="settingsResizeHandle" class="settings-resize-handle" aria-hidden="true"></div>
+
+                <section class="settings-work-models-panel settings-plain-section">
+                  <div class="sub-panel-head">
+                    <div>
+                      <h3 data-i18n="settings.workModelsTitle">工作模型</h3>
+                      <p class="hint-text" data-i18n="settings.workModelsHint">在右侧缓存模型区点击即可加入或移出工作模型。</p>
+                    </div>
+                    <div class="actions actions-compact">
+                      <button id="clearWorkModelsBtn" class="ghost-btn" type="button" data-i18n="settings.clearWorkModels">清空</button>
+                    </div>
+                  </div>
+                  <div id="workModelHint" class="hint-text" data-i18n="settings.workModelsEmpty">请先获取模型列表</div>
+                  <div id="workModelList" class="work-model-list"></div>
+                </section>
               </div>
             </section>
+          </section>
+        </div>
+      </section>
+
+      <!-- ── 角色设定 ── -->
+      <section id="rolesView" class="view view-with-shell-offset">
+        <div class="settings-stage">
+          <section class="settings-list-panel">
+            <div class="settings-list-head">
+              <div class="settings-list-head-copy">
+                <h3 data-i18n="roleLibrary.title">角色设定</h3>
+                <p class="hint-text" data-i18n="roleLibrary.subtitle">管理你的角色身份设定，方便在创建会话时快速选用。</p>
+              </div>
+            </div>
+            <div class="settings-section-nav">
+              <button id="addRoleBtn" class="primary-btn" type="button">
+                <i data-lucide="plus" class="nav-icon-svg" aria-hidden="true"></i>
+                <span data-i18n="roleLibrary.addRole">新增角色</span>
+              </button>
+            </div>
+            <div id="roleList" class="role-library-list"></div>
+          </section>
+
+          <section class="settings-main-panel">
+            <div id="roleEditPanel" class="role-edit-panel hidden">
+              <div class="settings-page-grid">
+                <section class="settings-card">
+                  <div class="settings-card-head">
+                    <div>
+                      <h3 data-i18n="roleLibrary.editRole">编辑角色</h3>
+                    </div>
+                  </div>
+                  <div class="settings-card-body">
+                    <div class="settings-field-grid">
+                      <label class="field field-full">
+                        <span data-i18n="roleLibrary.roleName">角色名称</span>
+                        <input id="roleEditNameInput" type="text" data-i18n-placeholder="roleLibrary.roleNamePlaceholder" placeholder="例如：侦探 / 店主 / 军师">
+                      </label>
+                      <label class="field field-full">
+                        <span data-i18n="roleLibrary.roleDescription">角色描述</span>
+                        <textarea id="roleEditDescInput" rows="4" data-i18n-placeholder="roleLibrary.roleDescriptionPlaceholder" placeholder="描述你的角色身份、背景、性格、说话风格等。"></textarea>
+                      </label>
+                    </div>
+                    <div class="settings-actions-row">
+                      <button id="roleSaveBtn" class="primary-btn" data-i18n="roleLibrary.save">保存角色</button>
+                      <button id="roleCancelBtn" class="ghost-btn" data-i18n="roleLibrary.cancel">取消</button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <div id="roleEditEmptyState" class="role-edit-empty-state">
+              <div class="hint-text">选择左侧角色进行编辑，或点击"新增角色"创建新角色。</div>
+            </div>
           </section>
         </div>
       </section>
@@ -584,6 +647,14 @@
                     <small class="hint-text" data-i18n="create.modeStoryHint">面向剧情与角色互动，导演负责推进场景并调度 NPC</small>
                   </span>
                 </label>
+                <label class="mode-option mode-option-beta" data-mode-option="chaos">
+                  <input type="radio" name="sessionMode" value="chaos">
+                  <span class="mode-option-label">
+                    <span data-i18n="create.modeChaos">混沌模式</span>
+                    <span class="mode-option-badge" data-i18n="create.betaTag">Beta</span>
+                    <small class="hint-text" data-i18n="create.modeChaosHint">像社交软件群聊一样让多个 AI 自主接话、互喷、拱火和抢话</small>
+                  </span>
+                </label>
                 <label class="mode-option" data-mode-option="work">
                   <input type="radio" name="sessionMode" value="work">
                   <span class="mode-option-label">
@@ -602,6 +673,18 @@
               <label class="field">
                 <span data-i18n="create.globalPromptLabel">全局 Prompt</span>
                 <textarea id="globalPromptInput" rows="5" data-i18n-placeholder="create.globalPromptPlaceholder" placeholder="描述这个聊天是做什么的、世界观是什么、所有 AI 都应该知道什么。"></textarea>
+              </label>
+            </div>
+
+            <div id="userRoleField">
+              <label class="field">
+                <span data-i18n="create.userRoleLabel">你的角色</span>
+                <div class="user-role-input-group">
+                  <input id="userRoleInput" type="text" class="user-role-text-input" data-i18n-placeholder="create.userRolePlaceholder" placeholder="可选：你的身份、背景、说话风格">
+                  <select id="userRoleSelect" class="user-role-select" aria-label="从角色设定中选择">
+                    <option value="" data-i18n="create.userRoleSelect">从角色设定中选择...</option>
+                  </select>
+                </div>
               </label>
             </div>
 
@@ -741,19 +824,19 @@
                   </section>
                 </div>
               </div>
-            </div>
 
-            <div id="sessionEditAdvancedPanel" class="session-edit-panel">
-              <div class="session-advanced-grid">
-                <section class="settings-card">
-                  <div class="settings-card-head">
-                    <div>
-                      <h3 data-i18n="create.editNavAdvanced">高级设置</h3>
-                      <p class="hint-text" data-i18n="create.advancedSubtitle">单独调节每个 Agent 的生成参数，仅影响当前会话。</p>
+              <div id="sessionEditAdvancedPanel" class="session-edit-panel">
+                <div class="session-advanced-grid">
+                  <section class="settings-card">
+                    <div class="settings-card-head">
+                      <div>
+                        <h3 data-i18n="create.editNavAdvanced">高级设置</h3>
+                        <p class="hint-text" data-i18n="create.advancedSubtitle">单独调节每个 Agent 的生成参数，仅影响当前会话。</p>
+                      </div>
                     </div>
-                  </div>
-                  <div class="settings-card-body" id="sessionAdvancedAgentList"></div>
-                </section>
+                    <div class="settings-card-body" id="sessionAdvancedAgentList"></div>
+                  </section>
+                </div>
               </div>
             </div>
           </div>
@@ -969,6 +1052,7 @@
         "./scripts/features/chat-stream.js",
         "./scripts/features/chat-orchestrator.js",
         "./scripts/features/chat.js",
+        "./scripts/features/roles.js",
         "./scripts/features/custom-select.js",
         "./scripts/bootstrap.js"
       ];

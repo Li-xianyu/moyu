@@ -1,0 +1,150 @@
+/* ── User Role Library ── */
+
+#rolesView {
+  overflow: hidden;
+}
+
+.role-library-list {
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+  align-content: start;
+  padding: 4px 0;
+}
+
+.role-library-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #333333;
+  border-radius: 10px;
+  background: #1e1e1e;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.role-library-item:hover {
+  background: #2a2d2e;
+}
+.role-library-item.active {
+  border-color: rgba(127, 183, 255, 0.42);
+  background: rgba(127, 183, 255, 0.08);
+}
+.role-library-item:focus-visible {
+  outline: 2px solid rgba(127, 183, 255, 0.5);
+  outline-offset: 2px;
+}
+
+.role-library-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.role-library-item-name {
+  color: var(--text);
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-library-item-actions {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.role-library-item-edit-btn,
+.role-library-item-delete-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.role-library-item-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+.role-library-item-delete-btn:hover {
+  background: rgba(198, 40, 40, 0.16);
+  color: #f0b2ac;
+}
+.role-edit-icon,
+.role-delete-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.role-library-item-desc {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.role-edit-panel.hidden {
+  display: none;
+}
+
+.role-edit-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px 20px;
+  text-align: center;
+}
+.role-edit-empty-state.hidden {
+  display: none;
+}
+
+#addRoleBtn {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  justify-content: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: none;
+}
+
+/* ── User Role Input in Create/Edit Form ── */
+
+.user-role-input-group {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: start;
+}
+.user-role-text-input {
+  width: 100%;
+}
+.user-role-select {
+  min-width: 160px;
+}
+
+@media (max-width: 960px) {
+  .user-role-input-group {
+    grid-template-columns: 1fr;
+  }
+  .user-role-select {
+    width: 100%;
+  }
+}

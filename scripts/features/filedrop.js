@@ -75,10 +75,15 @@ function getDropContext() {
   return "auto";
 }
 
+function isFileDrag(event) {
+  return event.dataTransfer?.types && Array.from(event.dataTransfer.types).indexOf("Files") !== -1;
+}
+
 function bindFileDrop() {
   let dragCounter = 0;
 
   document.addEventListener("dragenter", (event) => {
+    if (!isFileDrag(event)) return;
     event.preventDefault();
     dragCounter++;
     if (dragCounter === 1) {
@@ -94,10 +99,12 @@ function bindFileDrop() {
   });
 
   document.addEventListener("dragover", (event) => {
+    if (!isFileDrag(event)) return;
     event.preventDefault();
   });
 
   document.addEventListener("dragleave", (event) => {
+    if (!isFileDrag(event)) return;
     event.preventDefault();
     dragCounter--;
     if (dragCounter <= 0) {
@@ -109,6 +116,7 @@ function bindFileDrop() {
   });
 
   document.addEventListener("drop", (event) => {
+    if (!isFileDrag(event)) return;
     event.preventDefault();
     dragCounter = 0;
     if (els.dropOverlay) {
@@ -119,11 +127,15 @@ function bindFileDrop() {
     if (!files?.length) return;
 
     const file = files[0];
-    if (!file.name.toLowerCase().endsWith(".json")) {
+    const name = file.name.toLowerCase();
+    if (!name.endsWith(".json") && !name.endsWith(".ndjson")) {
       setText(els.chatStatus, t("settings.importFailedParse"));
       return;
     }
 
     handleDroppedFile(file);
   });
+
+  // 阻止选中文本后拖拽触发页面行为
+  document.addEventListener("dragstart", (e) => e.preventDefault());
 }

@@ -66,11 +66,8 @@ function renderSessionAdvancedControls() {
   var agents = getSessionAgents(session);
   agents.forEach(function (agent) {
     var tempVal = getSessionAgentParam(session, agent.key, "temperature");
-    var topPVal = getSessionAgentParam(session, agent.key, "top_p");
     var defaultTemp = agent.key === "director" ? 0.5 : getNpcResponseTemperature(session, agent.model);
-    var defaultTopP = 1.0;
     var displayTemp = tempVal !== undefined && tempVal !== null ? tempVal : defaultTemp;
-    var displayTopP = topPVal !== undefined && topPVal !== null ? topPVal : defaultTopP;
 
     var row = document.createElement("div");
     row.className = "session-agent-param-row";
@@ -110,26 +107,7 @@ function renderSessionAdvancedControls() {
     tempField.appendChild(tempLabel);
     tempField.appendChild(tempInput);
 
-    // Top P field
-    var topPField = document.createElement("label");
-    topPField.className = "session-agent-param-field";
-    var topPLabel = document.createElement("span");
-    topPLabel.textContent = t("create.advancedTopPLabel");
-    var topPInput = document.createElement("input");
-    topPInput.type = "number";
-    topPInput.min = "0";
-    topPInput.max = "1";
-    topPInput.step = "0.05";
-    topPInput.className = "field";
-    topPInput.value = String(displayTopP);
-    topPInput.placeholder = t("create.overrideGlobalDefault", { value: String(defaultTopP) });
-    topPInput.dataset.agent = agent.key;
-    topPInput.dataset.param = "top_p";
-    topPField.appendChild(topPLabel);
-    topPField.appendChild(topPInput);
-
     controls.appendChild(tempField);
-    controls.appendChild(topPField);
 
     row.appendChild(header);
     row.appendChild(controls);
@@ -488,20 +466,34 @@ function bindCreateFlow() {
     }
 
     const isSingleNpc = payload.mode === SESSION_MODE_WORK && payload.npcs.length <= 1;
-    const directorConfig = isSingleNpc ? null : getConfigById(payload.directorConfigId);
-    if (!isSingleNpc && (!directorConfig?.host || !directorConfig?.key)) {
+    const chaosMode = isChaosMode(payload.mode);
+    const directorConfig = isSingleNpc || chaosMode ? null : getConfigById(payload.directorConfigId);
+    if (!isSingleNpc && !chaosMode && (!directorConfig?.host || !directorConfig?.key)) {
       setCreateStatus(t("create.statusDirectorUnavailable"), "error");
       return;
     }
 
     const npcConfig = isSingleNpc ? getConfigById(payload.npcs[0].configId) : null;
+    const primaryChaosConfig = chaosMode ? getConfigById(payload.npcs[0]?.configId || "") : null;
     const session = {
       id: `session-${Date.now()}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      configId: isSingleNpc ? (npcConfig?.id || "") : (directorConfig?.id || ""),
-      host: isSingleNpc ? (npcConfig?.host || "") : (directorConfig?.host || ""),
-      key: isSingleNpc ? (npcConfig?.key || "") : (directorConfig?.key || ""),
+      configId: isSingleNpc
+        ? (npcConfig?.id || "")
+        : chaosMode
+          ? (primaryChaosConfig?.id || activeConfig?.id || "")
+          : (directorConfig?.id || ""),
+      host: isSingleNpc
+        ? (npcConfig?.host || "")
+        : chaosMode
+          ? (primaryChaosConfig?.host || activeConfig?.host || "")
+          : (directorConfig?.host || ""),
+      key: isSingleNpc
+        ? (npcConfig?.key || "")
+        : chaosMode
+          ? (primaryChaosConfig?.key || activeConfig?.key || "")
+          : (directorConfig?.key || ""),
       title: t("chat.generatingTitle"),
       titleSource: "auto",
       globalPrompt: payload.globalPrompt,
@@ -517,12 +509,16 @@ function bindCreateFlow() {
       chatSummary: "",
       compressedUntilMessageId: "",
       suggestionGuide: "",
+      userRole: payload.userRole || "",
+      chaosState: null,
       messages: [
         {
           role: "system",
           speaker: t("chat.systemSpeaker"),
           uiType: "system-notice",
-          content: `${t("chat.systemNoticeCreated")}\n\n${t("chat.globalPromptLabel")}：\n${payload.globalPrompt}`,
+          content: payload.globalPrompt
+            ? `${t("chat.systemNoticeCreated")}\n\n${t("chat.globalPromptLabel")}：\n${payload.globalPrompt}`
+            : t("chat.systemNoticeCreated"),
           createdAt: new Date().toISOString(),
         },
       ],
@@ -539,11 +535,53 @@ function bindCreateFlow() {
     void generateSessionTitle(session);
     void generateSuggestionGuide(session);
   });
+
+  bindUserRoleSelect();
+}
+
+function refreshRoleSelectOptions() {
+  var select = els.userRoleSelect;
+  if (!select) return;
+  var currentVal = select.value;
+  select.innerHTML = "<option value=\"\">" + escapeHtml(t("create.userRoleSelect")) + "</option>";
+  state.userRoles.forEach(function (role) {
+    var opt = document.createElement("option");
+    opt.value = role.id;
+    opt.textContent = role.name;
+    select.appendChild(opt);
+  });
+  if (currentVal && state.userRoles.some(function (r) { return r.id === currentVal; })) {
+    select.value = currentVal;
+  }
+}
+
+var _userRoleSelectBound = false;
+
+function bindUserRoleSelect() {
+  var select = els.userRoleSelect;
+  var input = els.userRoleInput;
+  if (!select || !input) return;
+
+  refreshRoleSelectOptions();
+
+  if (!_userRoleSelectBound) {
+    _userRoleSelectBound = true;
+    select.addEventListener("change", function () {
+      var role = getRoleById(select.value);
+      if (role) {
+        input.value = role.description;
+      }
+    });
+  }
 }
 
 function getSelectedMode() {
   const radio = document.querySelector('input[name="sessionMode"]:checked');
   return radio ? radio.value : SESSION_MODE_STORY;
+}
+
+function isChaosMode(mode) {
+  return mode === SESSION_MODE_CHAOS;
 }
 
 function getModeMinNpcs() {
@@ -555,17 +593,23 @@ function updateSingleNpcVisibility() {
   const noDirectorHint = document.getElementById("noDirectorHint");
   const globalPromptField = document.getElementById("globalPromptField");
   const noGlobalPromptHint = document.getElementById("noGlobalPromptHint");
+  const userRoleField = document.getElementById("userRoleField");
   if (!directorField) return;
-  const isWorkModeSingleNpc = getSelectedMode() === SESSION_MODE_WORK && els.npcList.children.length <= 1;
-  directorField.hidden = isWorkModeSingleNpc;
+  const mode = getSelectedMode();
+  const isWorkModeSingleNpc = mode === SESSION_MODE_WORK && els.npcList.children.length <= 1;
+  const chaosMode = isChaosMode(mode);
+  directorField.hidden = chaosMode || isWorkModeSingleNpc;
   if (noDirectorHint) {
-    noDirectorHint.hidden = !isWorkModeSingleNpc;
+    noDirectorHint.hidden = true;
   }
   if (globalPromptField) {
     globalPromptField.hidden = isWorkModeSingleNpc;
   }
   if (noGlobalPromptHint) {
-    noGlobalPromptHint.hidden = !isWorkModeSingleNpc;
+    noGlobalPromptHint.hidden = true;
+  }
+  if (userRoleField) {
+    userRoleField.hidden = chaosMode;
   }
 }
 
@@ -913,8 +957,9 @@ function collectSessionDraft() {
 
   const minNpcs = mode === SESSION_MODE_WORK ? 1 : 2;
   const isWorkModeSingleNpc = mode === SESSION_MODE_WORK && npcCards.length <= 1;
+  const chaosMode = isChaosMode(mode);
 
-  if (!globalPrompt && !isWorkModeSingleNpc) {
+  if (!globalPrompt && !isWorkModeSingleNpc && !chaosMode) {
     return { ok: false, message: t("create.errorGlobalPrompt") };
   }
 
@@ -922,7 +967,7 @@ function collectSessionDraft() {
     return { ok: false, message: t("create.errorNpcCount", { entityType: getEntityTerm(mode), min: String(minNpcs), max: "5" }) };
   }
 
-  if (!isWorkModeSingleNpc && (!directorSelection.model || !directorSelection.configId)) {
+  if (!isWorkModeSingleNpc && !chaosMode && (!directorSelection.model || !directorSelection.configId)) {
     return { ok: false, message: t("create.errorDirector") };
   }
 
@@ -946,15 +991,22 @@ function collectSessionDraft() {
   return {
     ok: true,
     mode,
-    globalPrompt,
-    directorModel: directorSelection.model,
-    directorConfigId: directorSelection.configId,
+    globalPrompt: globalPrompt,
+    directorModel: chaosMode ? "" : directorSelection.model,
+    directorConfigId: chaosMode ? "" : directorSelection.configId,
     npcs,
+    userRole: chaosMode ? "" : els.userRoleInput.value.trim(),
   };
 }
 
 function openSessionEditor(sessionId) {
   clearUserMessageEdit();
+  if (typeof closeChatItemMenus === "function") {
+    closeChatItemMenus({ render: false });
+  } else {
+    state.openChatMenuId = null;
+    state.deleteConfirmSessionId = null;
+  }
   const session = state.sessions.find((item) => item.id === sessionId);
   if (!session) {
     return;
@@ -980,6 +1032,8 @@ function openSessionEditor(sessionId) {
     configId: resolveConfigIdForModel(npc.model, npc.configId || session.configId),
   }));
   els.globalPromptInput.value = session.globalPrompt || "";
+  els.userRoleInput.value = session.userRole || "";
+  if (typeof bindUserRoleSelect === "function") bindUserRoleSelect();
   const lockedMode = session.mode || SESSION_MODE_STORY;
   const modeRadio = document.querySelector(`input[name="sessionMode"][value="${lockedMode}"]`);
   if (modeRadio) {
@@ -1004,6 +1058,9 @@ function prepareCreateViewForNewSession(options = {}) {
   state.currentSessionEditSection = "details";
   state.createExitTarget = options.returnTarget === "chat" ? "chat" : "welcome";
   els.globalPromptInput.value = "";
+  els.userRoleInput.value = "";
+  if (els.userRoleSelect) els.userRoleSelect.value = "";
+  if (typeof bindUserRoleSelect === "function") bindUserRoleSelect();
   populateModelSelect(els.directorModelSelect, "");
   els.npcList.innerHTML = "";
   ensureMinimumNpcs();
@@ -1092,8 +1149,9 @@ function saveSessionEdits(payload, activeConfig) {
   }
 
   const isSingleNpc = payload.mode === SESSION_MODE_WORK && payload.npcs.length <= 1;
+  const chaosMode = isChaosMode(payload.mode);
 
-  if (!isSingleNpc) {
+  if (!isSingleNpc && !chaosMode) {
     const directorConfig = getConfigById(payload.directorConfigId);
     if (!directorConfig?.host || !directorConfig?.key) {
       setCreateStatus(t("create.statusDirectorUnavailable"), "error");
@@ -1107,9 +1165,16 @@ function saveSessionEdits(payload, activeConfig) {
   } else {
     session.directorModel = "";
     session.directorConfigId = "";
+    if (chaosMode) {
+      const primaryNpcConfig = getConfigById(payload.npcs[0]?.configId || "");
+      session.configId = primaryNpcConfig?.id || activeConfig?.id || session.configId || "";
+      session.host = primaryNpcConfig?.host || activeConfig?.host || session.host || "";
+      session.key = primaryNpcConfig?.key || activeConfig?.key || session.key || "";
+    }
   }
 
   session.globalPrompt = payload.globalPrompt;
+  session.userRole = payload.userRole || "";
   session.npcs = payload.npcs.map((npc) => ({ ...npc }));
   session.transientNpcs = (session.transientNpcs || []).filter((npc) => !session.npcs.some((baseNpc) => baseNpc.name === npc.name));
   // Clean up orphaned agentParams keys (NPCs renamed or removed)
@@ -1127,6 +1192,7 @@ function saveSessionEdits(payload, activeConfig) {
   session.chatSummary = "";
   session.compressedUntilMessageId = "";
   session.suggestionGuide = "";
+  session.chaosState = null;
   touchSession(session);
   persistSessions();
   state.currentSessionId = session.id;

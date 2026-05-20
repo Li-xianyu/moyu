@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   currentSessionId: "moyu-current-session-id",
   locale: "moyu-locale",
   sidebarCollapsed: "moyu-sidebar-collapsed",
+  userRoles: "moyu-user-roles",
 };
 
 const i18n = {
@@ -17,6 +18,7 @@ const i18n = {
     "nav.create": "创建聊天",
     "nav.chatList": "聊天列表",
     "nav.settings": "设置",
+    "nav.userRoleLibrary": "角色设定",
     "settings.sectionTitle": "设置分类",
     "settings.sectionHint": "先选择要调整的设置分组。",
     "settings.globalTab": "全局设置",
@@ -131,7 +133,6 @@ const i18n = {
     "create.overrideValueOff": "关闭",
     "create.advancedSubtitle": "单独调节每个 Agent 的生成参数，仅影响当前会话。",
     "create.advancedTemperatureLabel": "温度 (temperature)",
-    "create.advancedTopPLabel": "Top P",
     "create.saveBtn": "保存会话",
     "create.statusMaxNpc": "最多添加 5 个 ${entityType}",
     "create.statusNpcAdded": "已添加新的 ${entityType}",
@@ -156,6 +157,9 @@ const i18n = {
     "create.modeLabel": "会话模式",
     "create.modeStory": "创作模式",
     "create.modeStoryHint": "面向剧情与角色互动，导演负责推进场景并调度 NPC",
+    "create.modeChaos": "混沌模式",
+    "create.modeChaosHint": "像社交软件群聊一样让多个 AI 自主接话、互喷、拱火和抢话",
+    "create.betaTag": "Beta",
     "create.modeWork": "工作模式",
     "create.modeWorkHint": "面向协作分工，导演负责安排回答顺序和任务分配",
     "create.modeHint": "创建时选择会话模式；创建后永久锁定，无法切换。请谨慎选择！",
@@ -169,6 +173,23 @@ const i18n = {
     "create.noDirectorHint": "单 ${entityType} 模式无需导演调度，${entityType} 将直接回复。",
     "create.noGlobalPromptHint": "单 ${entityType} 模式将 ${entityType} Prompt 作为全部上下文，无需额外全局设定。",
     "create.submit": "创建会话",
+    "create.userRoleLabel": "你的角色",
+    "create.userRolePlaceholder": "可选：你的身份、背景、说话风格",
+    "create.userRoleSelect": "从角色设定中选择...",
+    "roleLibrary.title": "角色设定",
+    "roleLibrary.subtitle": "管理你的角色身份设定，方便在创建会话时快速选用。",
+    "roleLibrary.addRole": "新增角色",
+    "roleLibrary.roleName": "角色名称",
+    "roleLibrary.roleDescription": "角色描述",
+    "roleLibrary.roleNamePlaceholder": "例如：侦探 / 店主 / 军师",
+    "roleLibrary.roleDescriptionPlaceholder": "描述你的角色身份、背景、性格、说话风格等。",
+    "roleLibrary.empty": "还没有保存的角色，点击上方按钮新增。",
+    "roleLibrary.saved": "角色已保存",
+    "roleLibrary.deleted": "角色已删除",
+    "roleLibrary.confirmDelete": "确定要删除角色「${name}」吗？",
+    "roleLibrary.editRole": "编辑角色",
+    "roleLibrary.save": "保存角色",
+    "roleLibrary.cancel": "取消",
     "chat.inputPlaceholder": "输入你想说的话...",
     "chat.send": "发送",
     "chat.directorThinking": "导演思考",
@@ -310,6 +331,7 @@ const i18n = {
     "nav.create": "New Chat",
     "nav.chatList": "Chats",
     "nav.settings": "Settings",
+    "nav.userRoleLibrary": "Role Presets",
     "settings.sectionTitle": "Settings",
     "settings.sectionHint": "Choose a settings group to edit.",
     "settings.globalTab": "Global",
@@ -424,7 +446,6 @@ const i18n = {
     "create.overrideValueOff": "Off",
     "create.advancedSubtitle": "Tune generation parameters per agent for this session only.",
     "create.advancedTemperatureLabel": "Temperature",
-    "create.advancedTopPLabel": "Top P",
     "create.saveBtn": "Save Session",
     "create.statusMaxNpc": "Maximum 5 ${entityType}s",
     "create.statusNpcAdded": "New ${entityType} added",
@@ -449,6 +470,9 @@ const i18n = {
     "create.modeLabel": "Session Mode",
     "create.modeStory": "Story Mode",
     "create.modeStoryHint": "For scenes and character interaction, with the director steering the scene and scheduling NPCs",
+    "create.modeChaos": "Chaos Mode",
+    "create.modeChaosHint": "A messy social-group-chat mode where multiple AIs jump in, heckle, pile on, and talk over each other",
+    "create.betaTag": "Beta",
     "create.modeWork": "Work Mode",
     "create.modeWorkHint": "For collaboration and task flow, with the director assigning order and responsibilities",
     "create.modeHint": "Choose the session mode at creation; it is permanently locked afterward and cannot be changed. Choose wisely!",
@@ -462,6 +486,23 @@ const i18n = {
     "create.noDirectorHint": "Single ${entityType} mode does not need a director; the ${entityType} will reply directly.",
     "create.noGlobalPromptHint": "Single ${entityType} mode uses the ${entityType} Prompt as full context; no additional global settings needed.",
     "create.submit": "Create Session",
+    "create.userRoleLabel": "Your Role",
+    "create.userRolePlaceholder": "Optional: identity, background, speaking style",
+    "create.userRoleSelect": "Select from library...",
+    "roleLibrary.title": "Role Presets",
+    "roleLibrary.subtitle": "Manage your role presets for quick selection when creating sessions.",
+    "roleLibrary.addRole": "Add Role",
+    "roleLibrary.roleName": "Role Name",
+    "roleLibrary.roleDescription": "Role Description",
+    "roleLibrary.roleNamePlaceholder": "e.g. Detective / Shopkeeper / Strategist",
+    "roleLibrary.roleDescriptionPlaceholder": "Describe your identity, background, personality, speaking style, etc.",
+    "roleLibrary.empty": "No saved roles yet. Click the button above to add one.",
+    "roleLibrary.saved": "Role saved",
+    "roleLibrary.deleted": "Role deleted",
+    "roleLibrary.confirmDelete": "Are you sure you want to delete \"${name}\"?",
+    "roleLibrary.editRole": "Edit Role",
+    "roleLibrary.save": "Save Role",
+    "roleLibrary.cancel": "Cancel",
     "chat.inputPlaceholder": "Type what you want to say...",
     "chat.send": "Send",
     "chat.directorThinking": "Director Thinking",
@@ -679,4 +720,37 @@ function getDirectorSystemPrompt(session) {
 }
 
 const SESSION_MODE_STORY = "story";
+const SESSION_MODE_CHAOS = "chaos";
 const SESSION_MODE_WORK = "work";
+
+const MODEL_ICON_CDN =
+  "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.90.0/icons/";
+
+const MODEL_PROVIDERS = [
+  { id: "openai", match: /gpt|openai|o1|o3|o4/i, icon: `${MODEL_ICON_CDN}openai.svg` },
+  { id: "claude", match: /claude|anthropic/i, icon: `${MODEL_ICON_CDN}claude-color.svg` },
+  { id: "gemini", match: /gemini|google/i, icon: `${MODEL_ICON_CDN}gemini-color.svg` },
+  { id: "grok", match: /grok|xai/i, icon: `${MODEL_ICON_CDN}grok.svg` },
+  { id: "groq", match: /groq/i, icon: `${MODEL_ICON_CDN}groq.svg` },
+  { id: "deepseek", match: /deepseek/i, icon: `${MODEL_ICON_CDN}deepseek-color.svg` },
+  { id: "qwen", match: /qwen|qwq|tongyi|dashscope/i, icon: `${MODEL_ICON_CDN}qwen-color.svg` },
+  { id: "kimi", match: /kimi|moonshot/i, icon: `${MODEL_ICON_CDN}kimi-color.svg` },
+  { id: "doubao", match: /doubao|volc|ark/i, icon: `${MODEL_ICON_CDN}doubao-color.svg` },
+  { id: "zhipu", match: /zhipu|glm|chatglm/i, icon: `${MODEL_ICON_CDN}zhipu-color.svg` },
+  { id: "hunyuan", match: /hunyuan|tencent/i, icon: `${MODEL_ICON_CDN}hunyuan-color.svg` },
+  { id: "baidu", match: /ernie|wenxin|baidu/i, icon: `${MODEL_ICON_CDN}baidu-color.svg` },
+  { id: "minimax", match: /minimax|abab/i, icon: `${MODEL_ICON_CDN}minimax-color.svg` },
+  { id: "yi", match: /yi|01-ai/i, icon: `${MODEL_ICON_CDN}yi-color.svg` },
+  { id: "meta", match: /llama|meta/i, icon: `${MODEL_ICON_CDN}meta-color.svg` },
+  { id: "mistral", match: /mistral|mixtral/i, icon: `${MODEL_ICON_CDN}mistral-color.svg` },
+  { id: "cohere", match: /cohere/i, icon: `${MODEL_ICON_CDN}cohere-color.svg` },
+  { id: "perplexity", match: /perplexity|sonar/i, icon: `${MODEL_ICON_CDN}perplexity-color.svg` },
+  { id: "ollama", match: /ollama/i, icon: `${MODEL_ICON_CDN}ollama.svg` },
+  { id: "huggingface", match: /huggingface|hf/i, icon: `${MODEL_ICON_CDN}huggingface-color.svg` },
+  { id: "openrouter", match: /openrouter/i, icon: `${MODEL_ICON_CDN}openrouter.svg` },
+];
+
+function detectModelProvider(modelName) {
+  if (!modelName || typeof modelName !== "string") return null;
+  return MODEL_PROVIDERS.find((p) => p.match.test(modelName)) || null;
+}

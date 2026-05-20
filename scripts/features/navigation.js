@@ -163,6 +163,9 @@ function bindNav() {
         await _loadScript("./scripts/features/create.js");
         await _loadScript("./scripts/features/settings.js");
         initSettingsView();
+      } else if (view === "roles") {
+        await _loadScript("./scripts/features/roles.js");
+        initRolesView();
       }
       // Push history right before switching — no async gap between push and switch
       if (fromEntry) history.pushState(fromEntry, "");
@@ -172,6 +175,8 @@ function bindNav() {
 
   applySidebarState();
 }
+
+bindMobileSwipeGesture();
 
 let _settingsInited = false;
 let _createInited = false;
@@ -189,6 +194,10 @@ function initSettingsView() {
 
 function initCreateView() {
   if (_createInited) return;
+  if (typeof bindCreateFlow !== "function") {
+    _createInited = false;
+    return;
+  }
   _createInited = true;
   bindCreateFlow();
 }
@@ -219,6 +228,124 @@ function applySidebarState() {
   }
 }
 
+function bindMobileSwipeGesture() {
+  if (!("ontouchstart" in window)) return;
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let isDragging = false;
+  let wasOpen = false;
+  let sbWidth = 0;
+  const SENSITIVITY = 1.4;
+  const SNAP_THRESHOLD = 0.35;
+
+  function getSb() { return els.sidebar || document.querySelector(".sidebar"); }
+  function getBd() { return els.sidebarBackdrop || document.querySelector(".sidebar-backdrop"); }
+
+  document.addEventListener("touchstart", (e) => {
+    if (!isMobileViewport()) return;
+    const target = e.target;
+    if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") return;
+
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    wasOpen = state.mobileSidebarOpen;
+    isDragging = false;
+    sbWidth = 0;
+  }, { passive: true });
+
+  document.addEventListener("touchmove", (e) => {
+    if (!isMobileViewport() || touchStartX === 0) return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = Math.abs(t.clientY - touchStartY);
+    if (dy > Math.abs(dx) * 1.8) return;
+    if (Math.abs(dx) < 10) return;
+
+    if (!isDragging) {
+      isDragging = true;
+      const sb = getSb();
+      sbWidth = sb ? sb.getBoundingClientRect().width : 260;
+      if (sb) sb.style.transition = "none";
+      const bd = getBd();
+      if (bd) bd.style.transition = "none";
+    }
+
+    // 跟手阶段统一灵敏度，展开/收起对称
+    let rawProgress = (dx / sbWidth) * SENSITIVITY;
+    if (wasOpen) rawProgress = 1 + (dx / sbWidth) * SENSITIVITY;
+
+    // Rubber band resistance past edges
+    let progress;
+    if (rawProgress < 0) progress = rawProgress * 0.5;
+    else if (rawProgress > 1) progress = 1 + (rawProgress - 1) * 0.5;
+    else progress = rawProgress;
+
+    // Visual: never let sidebar go past its bounds
+    const visualProgress = Math.max(0, Math.min(1, progress));
+
+    const sb = getSb();
+    if (sb) {
+      sb.style.transform = `translateX(${-100 * (1 - visualProgress)}%)`;
+      sb.style.opacity = visualProgress;
+    }
+    const bd = getBd();
+    if (bd) {
+      if (wasOpen) {
+        // 侧栏本来就是展开的 → 遮罩全程保持不动
+        // 不设 opacity——CSS 已有 background: rgba(0,0,0,0.38)，
+        // 再设 opacity:0.38 会让黑色再乘一层导致变淡
+        bd.style.display = "block";
+        bd.style.opacity = "1";
+      } else {
+        // 侧栏关闭中拖开 → 遮罩随进度淡入
+        bd.style.display = visualProgress > 0.01 ? "block" : "none";
+        bd.style.opacity = 0.38 * visualProgress;
+      }
+    }
+
+    e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener("touchend", () => {
+    if (!isMobileViewport() || !isDragging) return;
+    isDragging = false;
+
+    const sb = getSb();
+    let progress = 0;
+    if (sb) {
+      const m = sb.style.transform.match(/translateX\(([-\d.]+)%\)/);
+      if (m) progress = 1 + parseFloat(m[1]) / 100;
+    }
+
+    // 展开/收起使用对称触发距离：wasOpen时阈值上移至0.65，两边触发距离一致
+    const openThreshold = wasOpen ? 0.65 : SNAP_THRESHOLD;
+    const willOpen = progress > openThreshold;
+    state.mobileSidebarOpen = willOpen;
+
+    // 松手过渡：展开→iOS经典缓出  收起→干脆利落无顿挫
+    if (sb) {
+      if (willOpen) {
+        sb.style.transition = "transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1), opacity 0.35s cubic-bezier(0.25, 0.1, 0.25, 1)";
+      } else {
+        sb.style.transition = "transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1)";
+      }
+    }
+    const bd = getBd();
+    if (bd) {
+      bd.style.transition = willOpen
+        ? "opacity 0.35s cubic-bezier(0.25, 0.1, 0.25, 1)"
+        : "opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1)";
+    }
+    applySidebarState();
+    if (sb) { sb.style.transform = ""; sb.style.opacity = ""; }
+    if (bd) { bd.style.opacity = ""; bd.style.display = ""; }
+
+    touchStartX = 0;
+    touchStartY = 0;
+  }, { passive: true });
+}
+
 function bindInfoPopover() {
   els.infoToggleBtn.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -239,7 +366,8 @@ function bindChatList() {
     event.stopPropagation();
     const willOpen = els.chatListMenu.classList.contains("hidden");
     els.chatListMenu.classList.toggle("hidden", !willOpen);
-    els.chatListArrowIcon.classList.toggle("expanded", willOpen);
+    const arrow = document.getElementById("chatListArrowIcon");
+    if (arrow) arrow.classList.toggle("expanded", willOpen);
   });
 
   els.chatListMenu.addEventListener("click", (event) => {
@@ -284,7 +412,7 @@ function bindChatList() {
       // auto-expand chat list so the search input is visible
       if (els.chatListMenu.classList.contains("hidden")) {
         els.chatListMenu.classList.remove("hidden");
-        els.chatListArrowIcon.classList.add("expanded");
+        document.getElementById("chatListArrowIcon")?.classList.add("expanded");
       }
     } else {
       state.chatSearchQuery = "";
@@ -308,24 +436,58 @@ function bindSettingsResize() {
     return;
   }
 
+  const getResizeShell = () => els.settingsResizeHandle.parentElement;
+  let activeRect = null;
+  let pendingTopHeight = null;
+  let rafId = 0;
+
+  const applyPendingHeight = () => {
+    rafId = 0;
+    const shell = getResizeShell();
+    if (!shell || pendingTopHeight === null) {
+      return;
+    }
+    shell.style.gridTemplateRows = `${pendingTopHeight}px 10px minmax(180px, 1fr)`;
+  };
+
   const onPointerMove = (event) => {
-    const rect = els.settingsResizableLayout.getBoundingClientRect();
-    const rawTop = event.clientY - rect.top;
+    if (!activeRect) {
+      return;
+    }
+    const rawTop = event.clientY - activeRect.top;
     const handleHeight = 10;
     const minTop = 160;
     const minBottom = 180;
-    const maxTop = rect.height - minBottom - handleHeight;
-    const topHeight = Math.max(minTop, Math.min(maxTop, rawTop));
-    els.settingsResizableLayout.style.gridTemplateRows = `${topHeight}px ${handleHeight}px minmax(${minBottom}px, 1fr)`;
+    const maxTop = activeRect.height - minBottom - handleHeight;
+    pendingTopHeight = Math.max(minTop, Math.min(maxTop, rawTop));
+    if (!rafId) {
+      rafId = requestAnimationFrame(applyPendingHeight);
+    }
   };
 
   const stopResize = () => {
+    activeRect = null;
+    pendingTopHeight = null;
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
     window.removeEventListener("pointermove", onPointerMove);
     window.removeEventListener("pointerup", stopResize);
   };
 
   els.settingsResizeHandle.addEventListener("pointerdown", (event) => {
     event.preventDefault();
+    const shell = getResizeShell();
+    if (!shell) {
+      return;
+    }
+    activeRect = shell.getBoundingClientRect();
+    if (typeof els.settingsResizeHandle.setPointerCapture === "function") {
+      try {
+        els.settingsResizeHandle.setPointerCapture(event.pointerId);
+      } catch (_) {}
+    }
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", stopResize);
   });

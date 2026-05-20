@@ -33,6 +33,7 @@ const state = {
   chatRenderWindows: {},
   chatRenderActiveSessionId: null,
   chatHistoryLoadPending: false,
+  userRoles: loadJson(STORAGE_KEYS.userRoles, []),
 };
 
 const els = {
@@ -43,6 +44,7 @@ const els = {
     settings: document.getElementById("settingsView"),
     create: document.getElementById("createView"),
     chat: document.getElementById("chatView"),
+    roles: document.getElementById("rolesView"),
   },
   globalSettingsTabBtn: document.getElementById("globalSettingsTabBtn"),
   assistantSettingsTabBtn: document.getElementById("assistantSettingsTabBtn"),
@@ -142,6 +144,19 @@ const els = {
   importBackupBtn: document.getElementById("importBackupBtn"),
   importBackupInput: document.getElementById("importBackupInput"),
   clearAllDataBtn: document.getElementById("clearAllDataBtn"),
+  // User role library
+  rolesView: document.getElementById("rolesView"),
+  addRoleBtn: document.getElementById("addRoleBtn"),
+  roleList: document.getElementById("roleList"),
+  roleEditPanel: document.getElementById("roleEditPanel"),
+  roleEditNameInput: document.getElementById("roleEditNameInput"),
+  roleEditDescInput: document.getElementById("roleEditDescInput"),
+  roleSaveBtn: document.getElementById("roleSaveBtn"),
+  roleCancelBtn: document.getElementById("roleCancelBtn"),
+  roleEditEmptyState: document.getElementById("roleEditEmptyState"),
+  // User role in create/edit session
+  userRoleInput: document.getElementById("userRoleInput"),
+  userRoleSelect: document.getElementById("userRoleSelect"),
 };
 
 function normalizeDirectorMemory(memory) {
@@ -214,6 +229,7 @@ function migrateLegacySessions() {
     directorSummary: typeof session.directorSummary === "string" ? session.directorSummary : "",
     compressedUntilMessageId: session.compressedUntilMessageId || "",
     suggestionGuide: session.suggestionGuide || "",
+    userRole: session.userRole || "",
     messageCount: Number.isFinite(session.messageCount)
       ? session.messageCount
       : Array.isArray(session.messages)
@@ -229,6 +245,10 @@ function migrateLegacySessions() {
   if (!state.currentSessionId && state.sessions.length) {
     state.currentSessionId = state.sessions[0].id;
   }
+}
+
+function persistUserRoles() {
+  localStorage.setItem(STORAGE_KEYS.userRoles, JSON.stringify(state.userRoles));
 }
 
 function t(key, params = {}) {

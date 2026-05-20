@@ -387,8 +387,10 @@ function renderSavedConfigs() {
   state.settings.configs.forEach((config) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `settings-config-item ${config.id === state.settings.activeConfigId ? "active" : ""}`.trim();
+    const isActive = config.id === state.settings.activeConfigId;
+    button.className = `settings-config-item ${isActive ? "active" : ""}`.trim();
     const isDeleteConfirm = state.deleteConfirmConfigId === config.id;
+    const workModelCount = Array.isArray(config.workModels) ? config.workModels.length : 0;
     button.innerHTML = `
       <div class="settings-config-top">
         <strong class="settings-config-name">${escapeHtml(getConfigLabel(config))}</strong>
@@ -397,6 +399,9 @@ function renderSavedConfigs() {
         </button>
       </div>
       <span class="settings-config-host">${escapeHtml(config.host || (state.locale === "en-US" ? "Host not set" : "未填写 Host"))}</span>
+      <div class="settings-config-meta">
+        <span class="settings-config-count">${escapeHtml(state.locale === "en-US" ? `${workModelCount} models` : `${workModelCount} 个模型`)}</span>
+      </div>
     `;
     button.addEventListener("click", () => {
       state.settings.activeConfigId = config.id;
@@ -475,9 +480,10 @@ function renderModelCache() {
 
   const time = new Date(cache.fetchedAt).toLocaleString("zh-CN");
   const filteredModels = cache.models.filter((model) => model.toLowerCase().includes(search));
+  const selectedCount = cache.models.filter((model) => selected.has(model)).length;
   els.modelCacheInfo.textContent = state.locale === "en-US"
-    ? `Cached at ${time}, ${cache.models.length} models total, showing ${filteredModels.length}`
-    : `缓存时间：${time}，共 ${cache.models.length} 个模型，当前显示 ${filteredModels.length} 个`;
+    ? `Cached at ${time}, selected ${selectedCount}/${cache.models.length}, showing ${filteredModels.length}`
+    : `缓存时间：${time}，已选 ${selectedCount}/${cache.models.length}，当前显示 ${filteredModels.length} 个`;
 
   if (!filteredModels.length) {
     els.modelList.innerHTML = `<li class="hint-text">${escapeHtml(state.locale === "en-US" ? "No matching models" : "没有匹配到模型")}</li>`;
@@ -509,40 +515,55 @@ function renderModelCache() {
 }
 
 function renderWorkModels() {
-  const activeConfig = getActiveConfig();
-  const models = getActiveConfigModels();
   els.workModelList.innerHTML = "";
+  const configs = Array.isArray(state.settings.configs) ? state.settings.configs : [];
+  const groupedConfigs = configs
+    .map((config) => {
+      const cachedModels = config.host && config.key
+        ? (state.modelCache[getConfigCacheKey(config.host, config.key)]?.models || [])
+        : [];
+      const selectedModels = (config.workModels || []).filter((model) => !cachedModels.length || cachedModels.includes(model));
+      return {
+        config,
+        selectedModels,
+      };
+    })
+    .filter((entry) => entry.selectedModels.length);
 
-  if (!activeConfig) {
-    els.workModelHint.textContent = state.locale === "en-US" ? "Add an API profile first" : "请先新增一个接口";
+  els.workModelHint.textContent = groupedConfigs.length
+    ? (state.locale === "en-US" ? "Showing all enabled work models grouped by API profile." : "按接口分组显示所有正在启用的工作模型。")
+    : (state.locale === "en-US" ? "No work models enabled yet. Click models in the cached models panel to add them." : "还没有启用工作模型，请在缓存模型区点击添加。");
+
+  if (!groupedConfigs.length) {
+    els.workModelList.innerHTML = `<div class="hint-text">${escapeHtml(els.workModelHint.textContent)}</div>`;
     return;
   }
 
-  if (!models.length) {
-    els.workModelHint.textContent = state.locale === "en-US" ? "Fetch models for the current API profile first" : "请先为当前接口获取模型列表";
-    return;
-  }
+  groupedConfigs.forEach(({ config, selectedModels }) => {
+    const group = document.createElement("section");
+    group.className = "work-model-group";
 
-  const selectedModels = (activeConfig.workModels || []).filter((model) => models.includes(model));
-  els.workModelHint.textContent = "";
+    group.innerHTML = `
+      <div class="work-model-group-label">${escapeHtml(getConfigLabel(config))}</div>
+      <div class="work-model-group-list"></div>
+    `;
 
-  if (!selectedModels.length) {
-    els.workModelList.innerHTML = `<div class="hint-text">${escapeHtml(state.locale === "en-US" ? "No work models selected yet. Click models in the cached models panel to add them." : "还没有选择工作模型，请在右侧缓存模型区点击添加。")}</div>`;
-    return;
-  }
-
-  selectedModels.forEach((model) => {
-    const item = document.createElement("div");
-    item.className = "work-model-item";
-    item.innerHTML = `<span class="work-model-name">${escapeHtml(model)}</span>`;
-    item.addEventListener("click", () => {
-      activeConfig.workModels = selectedModels.filter((name) => name !== model);
-      persistSettings();
-      renderModelCache();
-      renderWorkModels();
-      refreshModelSelectors();
+    const list = group.querySelector(".work-model-group-list");
+    selectedModels.forEach((model) => {
+      const item = document.createElement("div");
+      item.className = "work-model-item";
+      item.innerHTML = `<span class="work-model-name">${escapeHtml(model)}</span>`;
+      item.addEventListener("click", () => {
+        config.workModels = (config.workModels || []).filter((name) => name !== model);
+        persistSettings();
+        renderModelCache();
+        renderWorkModels();
+        refreshModelSelectors();
+      });
+      list.appendChild(item);
     });
-    els.workModelList.appendChild(item);
+
+    els.workModelList.appendChild(group);
   });
 }
 

@@ -489,18 +489,12 @@
       var npcTemp = session && session.agentParams && npc && npc.name
         ? (session.agentParams[npc.name] && session.agentParams[npc.name].temperature)
         : undefined;
-      var npcTopP = session && session.agentParams && npc && npc.name
-        ? (session.agentParams[npc.name] && session.agentParams[npc.name].top_p)
-        : undefined;
       var requestBody = {
         model: npcModel,
         messages: followUpMsgs,
         stream: false,
         temperature: npcTemp !== undefined ? npcTemp : 0.5,
       };
-      if (npcTopP !== undefined) {
-        requestBody.top_p = npcTopP;
-      }
 
       var thinkingExtra = null;
       try {
@@ -694,18 +688,12 @@
     var npcTemp2 = session && session.agentParams && npc && npc.name
       ? (session.agentParams[npc.name] && session.agentParams[npc.name].temperature)
       : undefined;
-    var npcTopP2 = session && session.agentParams && npc && npc.name
-      ? (session.agentParams[npc.name] && session.agentParams[npc.name].top_p)
-      : undefined;
     var requestBody = {
       model: npcModel,
       messages: followUpMsgs,
       stream: false,
       temperature: npcTemp2 !== undefined ? npcTemp2 : 0.5,
     };
-    if (npcTopP2 !== undefined) {
-      requestBody.top_p = npcTopP2;
-    }
     var thinkingExtra = window.buildModelThinkingExtra ? window.buildModelThinkingExtra(npcModel) : {};
     if (thinkingExtra && thinkingExtra.thinking) requestBody.thinking = thinkingExtra.thinking;
 
