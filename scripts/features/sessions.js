@@ -59,6 +59,7 @@ function renderSession() {
     els.editSessionBtn.disabled = false;
   }
   updateComposerMode();
+  warmChatRuntime();
   autoResizeChatInput();
   renderMessages();
   scrollChatToBottom();
@@ -66,6 +67,14 @@ function renderSession() {
     const hasAssistantMessages = (session.messages || []).some((m) => m && m.role === "assistant");
     if (typeof window.__scheduleChaosAutoplay === "function") {
       window.__scheduleChaosAutoplay(session, { delayMs: hasAssistantMessages ? 2800 : 1100 });
+    } else {
+      ensureChatRuntimeLoaded()
+        .then(() => {
+          if (getCurrentSession()?.id === session.id && typeof window.__scheduleChaosAutoplay === "function") {
+            window.__scheduleChaosAutoplay(session, { delayMs: hasAssistantMessages ? 2800 : 1100 });
+          }
+        })
+        .catch((error) => debugWarn("[chat-runtime] preload failed", error));
     }
   } else if (typeof window.__cancelChaosAutoplay === "function") {
     window.__cancelChaosAutoplay();

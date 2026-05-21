@@ -49,6 +49,7 @@ function scheduleCompressPopoverHide() {
 
 function bindChat() {
   els.sendBtn.addEventListener("click", function onSendClick() {
+    warmChatRuntime();
     const session = getCurrentSession();
     if (state.isSending && session?.mode !== SESSION_MODE_CHAOS) {
       stopGeneration();
@@ -221,9 +222,11 @@ function bindChat() {
     selection.addRange(range);
   });
   els.chatInput.addEventListener("input", normalizeChatInputWhitespace);
+  els.chatInput.addEventListener("input", warmChatRuntime, { once: true });
   els.chatInput.addEventListener("input", clearSuggestions);
   els.chatInput.addEventListener("input", handleMentionInput);
   els.chatInput.addEventListener("focus", () => {
+    warmChatRuntime();
     shouldKeepBottomOnKeyboard = isChatNearBottom();
     if (shouldKeepBottomOnKeyboard) {
       settleChatBottomAfterViewportShift();
@@ -446,6 +449,20 @@ async function sendUserMessage() {
   }
 
   state.abortController = new AbortController();
+  try {
+    await ensureChatRuntimeLoaded();
+  } catch (error) {
+    console.error("[chat-runtime] load failed", error);
+    state.isSending = false;
+    state.abortController = null;
+    els.sendBtn.disabled = false;
+    els.chatInput.disabled = false;
+    els.chatInput.value = content;
+    autoResizeChatInput();
+    updateComposerMode();
+    setText(els.chatStatus, "聊天运行模块加载失败，请刷新后重试");
+    return;
+  }
   await runSessionTurn(session);
 }
 
@@ -748,7 +765,12 @@ function renderCompressMemoryPopover() {
       });
       event.preventDefault();
       event.stopPropagation();
-      void triggerManualDirectorCompression();
+      void ensureChatRuntimeLoaded()
+        .then(() => triggerManualDirectorCompression())
+        .catch((error) => {
+          console.error("[chat-runtime] load failed", error);
+          setText(els.chatStatus, "聊天运行模块加载失败，请刷新后重试");
+        });
     };
     debugLog("compress", t("debug.msg.popoverActionBound"), {
       disabled: actionBtn.disabled,
@@ -862,9 +884,6 @@ function shouldRenderThinkingForModel(modelName) {
   }
   return true;
 }
-
-
-
 
 
 

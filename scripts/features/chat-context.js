@@ -1321,6 +1321,100 @@ function buildDirectorContextTokenMetrics(session) {
   };
 }
 
+function buildChatContextTokenMetrics(session) {
+  if (!session) return null;
+  const visibleMessages = getVisibleHistoryMessages(session);
+  const cutoffIndex = session?.compressedUntilMessageId
+    ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
+    : -1;
+  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
+    ? session.compressedUntilSequence
+    : Math.max(-1, ...(typeof getCompressionSegments === "function" ? getCompressionSegments(session, "chat").map((segment) => Number(segment.endSeq) || -1) : []));
+  const activeMessages = session?.chatSummary
+    ? (cutoffIndex >= 0
+      ? visibleMessages.slice(cutoffIndex + 1)
+      : (cutoffSeq >= 0
+        ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+        : visibleMessages))
+    : visibleMessages;
+  const summaryTokens = estimateTokens(session?.chatSummary || "");
+  const segmentTokens = estimateChatMessagesTokens(
+    typeof buildCompressionSegmentsSystemMessages === "function"
+      ? buildCompressionSegmentsSystemMessages(session, "chat")
+      : []
+  );
+  const totalTokens = estimateChatMessagesTokens(
+    activeMessages.map((m) => ({ role: m.role || "user", content: m.content || "" }))
+  ) + summaryTokens + segmentTokens;
+  return {
+    contextCurrent: totalTokens,
+    contextThreshold: getSessionSetting(session, "compressThreshold"),
+    recentCount: activeMessages.length,
+  };
+}
+
+function formatTokenCount(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return "—";
+  }
+  return Math.round(numeric).toLocaleString("zh-CN");
+}
+
+function getSessionStoredTokenEstimateState(session) {
+  const totalMessageCount = getSessionMessageCount(session);
+  if (!session) {
+    return { label: "—", ready: false };
+  }
+  if (session.totalTokenEstimatePending) {
+    return { label: "计算中...", ready: false };
+  }
+  if (
+    Number.isFinite(session.totalTokenEstimate) &&
+    Number.isFinite(session.totalTokenEstimateMessageCount) &&
+    session.totalTokenEstimateMessageCount === totalMessageCount
+  ) {
+    return { label: formatTokenCount(session.totalTokenEstimate), ready: true };
+  }
+  return { label: "待计算", ready: false };
+}
+
+async function ensureSessionStoredTokenEstimate(session) {
+  if (!session || !window.__chatDB?.estimateSessionTokens) {
+    return null;
+  }
+  const totalMessageCount = getSessionMessageCount(session);
+  if (
+    Number.isFinite(session.totalTokenEstimate) &&
+    Number.isFinite(session.totalTokenEstimateMessageCount) &&
+    session.totalTokenEstimateMessageCount === totalMessageCount
+  ) {
+    return session.totalTokenEstimate;
+  }
+  if (session.totalTokenEstimatePending) {
+    return null;
+  }
+
+  session.totalTokenEstimatePending = true;
+  try {
+    const estimated = await window.__chatDB.estimateSessionTokens(session.id);
+    session.totalTokenEstimate = estimated;
+    session.totalTokenEstimateMessageCount = totalMessageCount;
+    return estimated;
+  } catch (error) {
+    debugWarn("[session] token estimate failed", error);
+    return null;
+  } finally {
+    session.totalTokenEstimatePending = false;
+    if (getCurrentSession()?.id === session.id) {
+      renderCompressMemoryPopover();
+      if (typeof refreshSessionMetaPanel === "function") {
+        refreshSessionMetaPanel();
+      }
+    }
+  }
+}
+
 function renderStoryContent(text) {
   if (!text) return "";
   let html = text.replace(/\n/g, "<br>");

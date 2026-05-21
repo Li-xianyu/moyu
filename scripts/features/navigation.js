@@ -1,6 +1,13 @@
 "use strict";
 
 const _scriptState = {};
+const CHAT_RUNTIME_SCRIPTS = [
+  "./scripts/features/chat-retrieval.js",
+  "./scripts/features/chat-stream.js",
+  "./scripts/features/chat-orchestrator.js",
+];
+
+let _chatRuntimePromise = null;
 
 function _loadScript(src) {
   if (_scriptState[src] === "loaded") return Promise.resolve();
@@ -21,6 +28,32 @@ function _loadScript(src) {
     s.onerror = () => { _scriptState[src] = "error"; reject(new Error("Script load failed: " + src)); };
     document.body.appendChild(s);
   });
+}
+
+function ensureChatRuntimeLoaded() {
+  if (_chatRuntimePromise) {
+    return _chatRuntimePromise;
+  }
+  _chatRuntimePromise = CHAT_RUNTIME_SCRIPTS.reduce(
+    (chain, src) => chain.then(() => _loadScript(src)),
+    Promise.resolve()
+  ).catch((error) => {
+    _chatRuntimePromise = null;
+    throw error;
+  });
+  return _chatRuntimePromise;
+}
+
+function warmChatRuntime() {
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(() => {
+      ensureChatRuntimeLoaded().catch((error) => debugWarn("[chat-runtime] preload failed", error));
+    }, { timeout: 1500 });
+    return;
+  }
+  setTimeout(() => {
+    ensureChatRuntimeLoaded().catch((error) => debugWarn("[chat-runtime] preload failed", error));
+  }, 120);
 }
 
 function pushViewHistory() {
