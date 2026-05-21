@@ -252,8 +252,9 @@ async function init() {
   if (loadingEl) {
     var tw = window.__moyuTypewriter;
     function fadeOut() {
+      document.body.classList.remove('booting');
       loadingEl.classList.add('loading-screen--fade-out');
-      setTimeout(function() { loadingEl.style.display = 'none'; }, 400);
+      setTimeout(function() { loadingEl.setAttribute('aria-hidden', 'true'); }, 400);
     }
     if (tw && tw.cycleCount < 1) {
       tw.onCycle = fadeOut;
