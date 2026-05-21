@@ -2575,6 +2575,10 @@ html[data-theme="light"] .message.agent .story-thought {
   flex-shrink: 0;
 }
 
+.session-edit-footer.hidden {
+  display: none !important;
+}
+
 .session-edit-sidebar-head {
   display: grid;
   gap: 8px;
