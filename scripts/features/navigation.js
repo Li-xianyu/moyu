@@ -24,22 +24,7 @@ function _loadScript(src) {
 }
 
 function pushViewHistory() {
-  const activeView = getCurrentActiveView();
-  if (!activeView) return;
-
-  const entry = { view: activeView, mobileSidebarOpen: state.mobileSidebarOpen };
-  if (activeView === "chat") {
-    if (state.showWelcomeHome) {
-      entry.welcome = true;
-    } else {
-      entry.sessionId = state.currentSessionId || "";
-    }
-  } else if (activeView === "create") {
-    entry.sessionId = state.currentSessionId || "";
-    entry.editingId = state.editingSessionId || "";
-  }
-
-  history.pushState(entry, "");
+  syncAppHistoryState({ forceReplace: true });
 }
 
 function captureViewEntry() {
@@ -54,6 +39,83 @@ function captureViewEntry() {
     entry.editingId = state.editingSessionId || "";
   }
   return entry;
+}
+
+function createRootHistoryEntry() {
+  return {
+    moyuApp: true,
+    moyuAppLayer: 0,
+    view: "chat",
+    welcome: true,
+    mobileSidebarOpen: false
+  };
+}
+
+function getAppHistoryLayer(entry) {
+  if (!entry || typeof entry !== "object") return 0;
+  if ((entry.view === "chat" || entry.view === "welcome") && (entry.welcome || !entry.sessionId)) {
+    return 0;
+  }
+  return 1;
+}
+
+function buildAppHistoryEntry() {
+  const entry = captureViewEntry() || createRootHistoryEntry();
+  entry.moyuApp = true;
+  entry.moyuAppLayer = getAppHistoryLayer(entry);
+  if (entry.moyuAppLayer === 0) {
+    entry.view = "chat";
+    entry.welcome = true;
+    entry.sessionId = "";
+    entry.mobileSidebarOpen = false;
+  }
+  return entry;
+}
+
+let _restoringAppHistory = false;
+let _navigatingBackToRoot = false;
+
+function syncAppHistoryState(options = {}) {
+  if (_restoringAppHistory || !window.history?.replaceState) return;
+
+  const entry = buildAppHistoryEntry();
+  const current = history.state;
+  const currentIsApp = Boolean(current?.moyuApp);
+  const currentLayer = currentIsApp ? Number(current.moyuAppLayer || getAppHistoryLayer(current)) : null;
+
+  if (!currentIsApp) {
+    if (entry.moyuAppLayer === 1 && window.history?.pushState) {
+      history.replaceState(createRootHistoryEntry(), "");
+      history.pushState(entry, "");
+    } else {
+      history.replaceState(entry, "");
+    }
+    return;
+  }
+
+  if (options.forceReplace || currentLayer === entry.moyuAppLayer) {
+    history.replaceState(entry, "");
+    return;
+  }
+
+  if (currentLayer === 0 && entry.moyuAppLayer === 1 && window.history?.pushState) {
+    history.pushState(entry, "");
+    return;
+  }
+
+  if (currentLayer === 1 && entry.moyuAppLayer === 0 && !_navigatingBackToRoot) {
+    _navigatingBackToRoot = true;
+    history.back();
+    window.setTimeout(() => {
+      _navigatingBackToRoot = false;
+      if (history.state?.moyuAppLayer !== 0) {
+        history.replaceState(entry, "");
+      }
+    }, 180);
+    return;
+  }
+
+  history.replaceState(entry, "");
 }
 
 function getCurrentActiveView() {
@@ -102,12 +164,23 @@ async function restoreViewFromHistory(entry) {
     await _loadScript("./scripts/features/settings.js");
     initSettingsView();
     switchView("settings");
+  } else if (entry.view === "roles") {
+    await _loadScript("./scripts/features/roles.js");
+    initRolesView();
+    switchView("roles");
   }
 }
 
-window.addEventListener("popstate", (e) => {
-  if (e.state?.view) {
-    restoreViewFromHistory(e.state);
+window.addEventListener("popstate", async (e) => {
+  if (e.state?.view || e.state?.moyuApp) {
+    _restoringAppHistory = true;
+    try {
+      await restoreViewFromHistory(e.state);
+    } finally {
+      _restoringAppHistory = false;
+      _navigatingBackToRoot = false;
+      syncAppHistoryState({ forceReplace: true });
+    }
   }
 });
 
@@ -153,7 +226,6 @@ function bindNav() {
   els.navButtons.forEach((button) => {
     button.addEventListener("click", async () => {
       const view = button.dataset.view;
-      const fromEntry = captureViewEntry();
       if (view === "create") {
         await _loadScript("./scripts/features/create.js");
         initCreateView();
@@ -167,8 +239,6 @@ function bindNav() {
         await _loadScript("./scripts/features/roles.js");
         initRolesView();
       }
-      // Push history right before switching — no async gap between push and switch
-      if (fromEntry) history.pushState(fromEntry, "");
       switchView(view);
     });
   });
@@ -1056,6 +1126,8 @@ function switchView(viewName) {
     state.mobileSidebarOpen = false;
     applySidebarState();
   }
+
+  syncAppHistoryState();
 }
 
 function mountSessionEditButton() {
@@ -1074,11 +1146,9 @@ function mountSessionEditButton() {
     }
     const session = getCurrentSession();
     if (session) {
-      const fromEntry = captureViewEntry();
       await _loadScript("./scripts/features/create.js");
       await _loadScript("./scripts/features/settings.js");
       initCreateView();
-      if (fromEntry) history.pushState(fromEntry, "");
       openSessionEditor(session.id);
     }
   });

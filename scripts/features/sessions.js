@@ -297,7 +297,6 @@ function renderChatListMenu() {
       if (state.renameSessionId) {
         commitRenameIfNeeded();
       }
-      pushViewHistory();
       clearUserMessageEdit();
       state.showWelcomeHome = false;
       state.currentSessionId = session.id;
@@ -305,6 +304,9 @@ function renderChatListMenu() {
         switchView("chat");
       }
       renderChatListMenu();
+      if (typeof syncAppHistoryState === "function") {
+        syncAppHistoryState();
+      }
       setTimeout(() => {
         if (state.currentSessionId !== session.id || state.showWelcomeHome) {
           return;
