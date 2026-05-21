@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.21.33";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.21.35";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -61,26 +61,41 @@
       color: var(--loading-text, #cccccc);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       white-space: nowrap;
-      display: inline-flex;
-      align-items: center;
-      gap: 3px;
+      display: block;
+      position: relative;
       min-height: 1.25em;
       width: 10.5ch;
-      justify-content: center;
+      --tw-gap: 3px;
+      --tw-full-width: 10ch;
+      --tw-reveal-right: 10ch;
+      --tw-text-x: 0px;
+      --tw-cursor-x: 0px;
     }
     #typewriterText {
-      display: inline;
+      display: inline-block;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: var(--tw-full-width);
+      overflow: hidden;
+      clip-path: inset(0 var(--tw-reveal-right) 0 0);
       white-space: nowrap;
       text-align: left;
+      transform: translate3d(var(--tw-text-x), -50%, 0);
+      will-change: clip-path, transform;
     }
     .typewriter-cursor {
       display: inline-block;
+      position: absolute;
+      left: 50%;
+      top: 50%;
       width: 0.5ch;
       text-align: center;
-      flex: 0 0 0.5ch;
       animation: blink 1s step-end infinite;
       font-weight: 200;
       opacity: 0.7;
+      transform: translate3d(var(--tw-cursor-x), -50%, 0);
+      will-change: transform;
     }
     @keyframes blink {
       0%, 100% { opacity: 1; }
@@ -154,13 +169,47 @@
   if (!el) return;
   el.setAttribute("aria-label", phrase);
   var host = el.parentElement;
+  var cursor = host ? host.querySelector('.typewriter-cursor') : null;
+  var metrics = [];
+  var fullWidth = 0;
+  var gap = 3;
+  var cursorWidth = 0;
   var charPos = 0, deleting = false;
   var writeSpd = 100, delSpd = 50, pauseWrite = 1800, pauseDel = 400;
   window.__moyuTypewriter = { cycleCount: 0 };
+  function measureText() {
+    if (!host) return;
+    var measure = document.createElement('span');
+    measure.setAttribute('aria-hidden', 'true');
+    measure.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;pointer-events:none;left:0;top:0;';
+    host.appendChild(measure);
+    metrics = [0];
+    for (var i = 1; i <= phrase.length; i++) {
+      measure.textContent = phrase.substring(0, i);
+      metrics[i] = measure.getBoundingClientRect().width;
+    }
+    fullWidth = metrics[phrase.length] || 0;
+    host.removeChild(measure);
+    cursorWidth = cursor ? cursor.getBoundingClientRect().width : 0;
+    var computed = window.getComputedStyle(host);
+    var parsedGap = parseFloat(computed.getPropertyValue('--tw-gap'));
+    gap = Number.isFinite(parsedGap) ? parsedGap : 3;
+    host.style.setProperty('--tw-full-width', Math.ceil(fullWidth) + 'px');
+    updateTypewriterFrame(0);
+  }
+  function updateTypewriterFrame(pos) {
+    var visibleWidth = metrics[pos] || 0;
+    var revealRight = Math.max(0, fullWidth - visibleWidth);
+    host.style.setProperty('--tw-reveal-right', revealRight.toFixed(2) + 'px');
+    host.style.setProperty('--tw-text-x', (-(visibleWidth + gap + cursorWidth) / 2).toFixed(2) + 'px');
+    host.style.setProperty('--tw-cursor-x', ((visibleWidth + gap - cursorWidth) / 2).toFixed(2) + 'px');
+  }
+  el.textContent = phrase;
+  measureText();
   function tick() {
     if (!deleting) {
       charPos++;
-      el.textContent = phrase.substring(0, charPos);
+      updateTypewriterFrame(charPos);
       if (charPos >= phrase.length) {
         deleting = true;
         setTimeout(tick, pauseWrite);
@@ -168,7 +217,7 @@
       }
     } else {
       charPos--;
-      el.textContent = phrase.substring(0, charPos);
+      updateTypewriterFrame(charPos);
       if (charPos <= 0) {
         deleting = false;
         window.__moyuTypewriter.cycleCount++;
