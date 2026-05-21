@@ -1,6 +1,7 @@
 "use strict";
 
 let compressPopoverHideTimer = null;
+let lastPointerDownInChatMessages = false;
 
 function isCompressionUiLocked() {
   return Boolean(document.querySelector(".app-shell")?.classList.contains("compress-lock"));
@@ -193,6 +194,31 @@ function bindChat() {
       event.preventDefault();
       sendUserMessage();
     }
+  });
+  document.addEventListener("pointerdown", (event) => {
+    lastPointerDownInChatMessages = Boolean(event.target.closest("#chatMessages"));
+  }, { capture: true });
+  document.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "a") {
+      return;
+    }
+    const active = document.activeElement;
+    if (active?.closest?.("input, textarea, select, [contenteditable='true']")) {
+      return;
+    }
+    const selection = window.getSelection();
+    const anchorInMessages = Boolean(selection?.anchorNode && els.chatMessages?.contains(selection.anchorNode));
+    if (!lastPointerDownInChatMessages && !anchorInMessages) {
+      return;
+    }
+    if (!els.views.chat?.classList.contains("active") || !els.chatMessages?.childElementCount) {
+      return;
+    }
+    event.preventDefault();
+    const range = document.createRange();
+    range.selectNodeContents(els.chatMessages);
+    selection.removeAllRanges();
+    selection.addRange(range);
   });
   els.chatInput.addEventListener("input", normalizeChatInputWhitespace);
   els.chatInput.addEventListener("input", clearSuggestions);
@@ -836,7 +862,6 @@ function shouldRenderThinkingForModel(modelName) {
   }
   return true;
 }
-
 
 
 

@@ -14,10 +14,36 @@
 /* Keep chrome elements unselectable */
 .message-tools,
 .message-tools *,
+.message-meta,
+.message-meta *,
 .message-token-label,
 .message-token-bar,
-.thinking-label {
+.thinking-label,
+.composer-shell,
+.composer-shell *,
+.chat-info-popover,
+.chat-info-popover *,
+.info-btn.floating,
+.suggestion-bar,
+.suggestion-bar *,
+.thinking-popover,
+.thinking-popover *,
+.memory-compress-popover,
+.memory-compress-popover * {
   user-select: none;
+  -webkit-user-select: none;
+}
+
+.chat-messages,
+.message,
+.narration {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+#chatInput {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .info-btn {
