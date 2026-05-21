@@ -1171,10 +1171,10 @@ function buildMessageBlock(message, sessionMode, enableMd) {
     const meta = document.createElement("div");
     meta.className = "message-meta";
     let metaHtml = `\n        <strong>${escapeHtml(message.speaker)}</strong>`;
-    if (message.role === "assistant" && sessionMode === SESSION_MODE_WORK) {
+    if (message.role === "assistant") {
       const session = getCurrentSession();
       const iconUrl = getModelProviderIcon(session, message.speaker);
-      if (iconUrl) {
+      if (iconUrl && getSessionSetting(session, "showModelProviderIcon") !== false) {
         metaHtml = `\n        <img class="model-provider-icon" src="${iconUrl}" alt="">${metaHtml}`;
       }
     }

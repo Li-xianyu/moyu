@@ -85,8 +85,13 @@ const SESSION_SETTING_DEFAULTS = Object.freeze({
   directorDispatchOnly: false,
   markdownRender: true,
   showLineNumbers: false,
+  showModelProviderIcon: null,
   modelThinking: "disabled",
 });
+
+function getDefaultModelProviderIconVisibility(session) {
+  return (session?.mode || SESSION_MODE_STORY) === SESSION_MODE_WORK;
+}
 
 function normalizeSessionSettingValue(key, value) {
   switch (key) {
@@ -98,6 +103,7 @@ function normalizeSessionSettingValue(key, value) {
     case "directorDispatchOnly":
     case "markdownRender":
     case "showLineNumbers":
+    case "showModelProviderIcon":
       return Boolean(value);
     case "modelThinking":
       return value === "enabled" ? "enabled" : "disabled";
@@ -137,6 +143,9 @@ function getSessionSetting(sessionOrKey, maybeKey) {
   const overrides = normalizeSessionOverrides(session?.settingsOverrides);
   if (Object.prototype.hasOwnProperty.call(overrides, key)) {
     return overrides[key];
+  }
+  if (key === "showModelProviderIcon") {
+    return getDefaultModelProviderIconVisibility(session);
   }
   return getGlobalSessionSetting(key);
 }

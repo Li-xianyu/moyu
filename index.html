@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.21.05";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.21.06";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -860,6 +860,21 @@
                         <div class="session-override-footer">
                           <span class="session-override-source" data-session-override-source="showLineNumbers"></span>
                           <button class="session-override-reset-btn" data-session-override-reset="showLineNumbers" type="button" data-i18n="create.overrideReset">跟随全局</button>
+                        </div>
+                      </div>
+
+                      <div class="session-override-block">
+                        <label class="settings-toggle-row" for="sessionOverrideShowModelProviderIconToggle">
+                          <div class="settings-toggle-copy">
+                            <span data-i18n="create.overridesModelIconLabel">模型 Logo</span>
+                            <small class="hint-text" data-i18n="create.overridesModelIconHint">控制当前会话里 AI 名字左侧是否显示模型提供商 Logo。</small>
+                          </div>
+                          <input id="sessionOverrideShowModelProviderIconToggle" data-session-setting="showModelProviderIcon" class="settings-toggle-input" type="checkbox">
+                          <span class="settings-toggle-ui" aria-hidden="true"></span>
+                        </label>
+                        <div class="session-override-footer">
+                          <span class="session-override-source" data-session-override-source="showModelProviderIcon"></span>
+                          <button class="session-override-reset-btn" data-session-override-reset="showModelProviderIcon" type="button" data-i18n="create.overrideReset">跟随默认</button>
                         </div>
                       </div>
                     </div>

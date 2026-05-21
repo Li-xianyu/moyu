@@ -586,11 +586,6 @@
   filter: brightness(0) saturate(100%);
 }
 
-.message-block.story-mode .model-provider-icon,
-.message-block.chaos-mode .model-provider-icon {
-  display: none;
-}
-
 .message-block.agent-plain-block {
   display: flex;
   flex-direction: column;

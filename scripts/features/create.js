@@ -157,6 +157,7 @@ const SESSION_OVERRIDE_KEYS = [
   "showTokenDisplay",
   "markdownRender",
   "showLineNumbers",
+  "showModelProviderIcon",
 ];
 
 function getEditingSessionTarget() {
@@ -204,7 +205,10 @@ function renderSessionOverrideControls() {
 
     if (source) {
       const stateText = hasOverride ? t("create.overrideCustomized") : t("create.overrideUsingGlobal");
-      const globalText = t("create.overrideGlobalDefault", { value: formatSessionOverrideValue(key, globalValue) });
+      const globalDefaultValue = key === "showModelProviderIcon" && session
+        ? getDefaultModelProviderIconVisibility(session)
+        : globalValue;
+      const globalText = t("create.overrideGlobalDefault", { value: formatSessionOverrideValue(key, globalDefaultValue) });
       source.textContent = `${stateText} | ${globalText}`;
     }
 
@@ -230,7 +234,7 @@ function commitSessionOverrideChange(key, nextValue, options = {}) {
   persistSessions();
   renderSessionOverrideControls();
   if (state.currentSessionId === session.id) {
-    if (key === "showTokenDisplay" || key === "markdownRender" || key === "showLineNumbers") {
+    if (key === "showTokenDisplay" || key === "markdownRender" || key === "showLineNumbers" || key === "showModelProviderIcon") {
       if (typeof renderMessages === "function") {
         renderMessages({ keepWindow: true });
       }
