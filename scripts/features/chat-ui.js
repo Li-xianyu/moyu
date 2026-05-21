@@ -1163,14 +1163,15 @@ function refreshNarrationNode(wrapper, message) {
 function buildMessageBlock(message, sessionMode, enableMd) {
   const block = document.createElement("article");
   const isAgentPlainBlock = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
-  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${sessionMode === SESSION_MODE_CHAOS ? "chaos-mode" : ""} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
+  const modeClass = sessionMode === SESSION_MODE_WORK ? "work-mode" : sessionMode === SESSION_MODE_CHAOS ? "chaos-mode" : "story-mode";
+  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${modeClass} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
   if (message.id) block.dataset.messageId = message.id;
 
   if (message.role === "assistant" || message.role === "user") {
     const meta = document.createElement("div");
     meta.className = "message-meta";
     let metaHtml = `\n        <strong>${escapeHtml(message.speaker)}</strong>`;
-    if (message.role === "assistant") {
+    if (message.role === "assistant" && sessionMode === SESSION_MODE_WORK) {
       const session = getCurrentSession();
       const iconUrl = getModelProviderIcon(session, message.speaker);
       if (iconUrl) {
@@ -1243,7 +1244,8 @@ function buildMessageBlock(message, sessionMode, enableMd) {
 function refreshMessageBlock(block, message, sessionMode, enableMd) {
   // 1. Update block-level className
   const isAgentPlainBlock = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
-  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${sessionMode === SESSION_MODE_CHAOS ? "chaos-mode" : ""} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
+  const modeClass = sessionMode === SESSION_MODE_WORK ? "work-mode" : sessionMode === SESSION_MODE_CHAOS ? "chaos-mode" : "story-mode";
+  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${modeClass} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
 
   // 2. Update bubble className + content
   const bubble = block.querySelector('.message');

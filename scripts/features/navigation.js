@@ -73,7 +73,6 @@ function buildAppHistoryEntry() {
 }
 
 let _restoringAppHistory = false;
-let _navigatingBackToRoot = false;
 
 function syncAppHistoryState(options = {}) {
   if (_restoringAppHistory || !window.history?.replaceState) return;
@@ -100,18 +99,6 @@ function syncAppHistoryState(options = {}) {
 
   if (currentLayer === 0 && entry.moyuAppLayer === 1 && window.history?.pushState) {
     history.pushState(entry, "");
-    return;
-  }
-
-  if (currentLayer === 1 && entry.moyuAppLayer === 0 && !_navigatingBackToRoot) {
-    _navigatingBackToRoot = true;
-    history.back();
-    window.setTimeout(() => {
-      _navigatingBackToRoot = false;
-      if (history.state?.moyuAppLayer !== 0) {
-        history.replaceState(entry, "");
-      }
-    }, 180);
     return;
   }
 
@@ -173,12 +160,12 @@ async function restoreViewFromHistory(entry) {
 
 window.addEventListener("popstate", async (e) => {
   if (e.state?.view || e.state?.moyuApp) {
+    const entry = e.state?.moyuApp ? e.state : createRootHistoryEntry();
     _restoringAppHistory = true;
     try {
-      await restoreViewFromHistory(e.state);
+      await restoreViewFromHistory(entry);
     } finally {
       _restoringAppHistory = false;
-      _navigatingBackToRoot = false;
       syncAppHistoryState({ forceReplace: true });
     }
   }

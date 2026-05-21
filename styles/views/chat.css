@@ -586,6 +586,11 @@
   filter: brightness(0) saturate(100%);
 }
 
+.message-block.story-mode .model-provider-icon,
+.message-block.chaos-mode .model-provider-icon {
+  display: none;
+}
+
 .message-block.agent-plain-block {
   display: flex;
   flex-direction: column;
@@ -1142,6 +1147,29 @@ html[data-theme="light"] .message tr:nth-child(even) td {
 
 html[data-theme="light"] .message hr {
   border-top-color: #d7e0ea;
+}
+
+html[data-theme="light"] .message.agent:not(.agent-plain) {
+  background: #ffffff;
+  border-color: #dfe6ee;
+  color: #1f2933;
+  box-shadow: 0 8px 22px rgba(31, 41, 51, 0.05);
+}
+
+html[data-theme="light"] .message-block.chaos-mode .message.agent:not(.agent-plain),
+html[data-theme="light"] .message-block.story-mode .message.agent:not(.agent-plain) {
+  background: #fffdf8;
+  border-color: #eadfcd;
+  color: #2d2418;
+}
+
+html[data-theme="light"] .message.agent .story-dialogue {
+  color: #8a5a00;
+}
+
+html[data-theme="light"] .message.agent .story-thought {
+  background: rgba(138, 90, 0, 0.08);
+  color: #6b6258;
 }
 
 .narration {
