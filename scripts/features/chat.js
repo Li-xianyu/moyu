@@ -15,7 +15,7 @@ function scheduleCompressPopoverHide() {
     compressPopoverHideTimer = null;
     if (!state.openCompressMemoryInfo) {
       hideCompressPopover();
-      const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
+      const popover = getCompressMemoryPopover();
       if (popover) {
         popover.style.setProperty("--memory-compress-popover-shift-x", "0px");
         popover.style.setProperty("--memory-compress-popover-shift-y", "0px");
@@ -37,6 +37,9 @@ function bindChat() {
   if (els.compressMemoryBtn) {
     ensureCompressMemoryPopover();
     els.compressMemoryBtn.addEventListener("click", (event) => {
+      if (!event.target.closest(".memory-compress-ring")) {
+        return;
+      }
       debugLog("compress", t("debug.msg.toolbarIconClick"), {
         disabled: Boolean(els.compressMemoryBtn?.disabled),
         openBefore: state.openCompressMemoryInfo,
@@ -395,6 +398,12 @@ function isMobileTokenToggleMode() {
   return window.matchMedia("(hover: none), (pointer: coarse)").matches;
 }
 
+function getCompressMemoryPopover() {
+  return els.compressMemoryBtn?.parentElement?.querySelector(".memory-compress-popover")
+    || els.composerFooter?.querySelector(".memory-compress-popover")
+    || null;
+}
+
 function ensureCompressMemoryPopover() {
   if (!els.compressMemoryBtn || !els.composerFooter) {
     debugLog("compress", t("debug.msg.popoverMountSkipped"), {
@@ -403,12 +412,15 @@ function ensureCompressMemoryPopover() {
     });
     return null;
   }
-  let popover = els.composerFooter.querySelector(".memory-compress-popover");
+  const mount = els.compressMemoryBtn.parentElement || els.composerFooter;
+  let popover = getCompressMemoryPopover();
   if (!popover) {
     popover = document.createElement("div");
     popover.className = "memory-compress-popover hidden";
     debugLog("compress", t("debug.msg.popoverMounted"));
-    els.compressMemoryBtn.appendChild(popover);
+  }
+  if (popover.parentElement !== mount) {
+    mount.appendChild(popover);
   }
   if (!popover.dataset.hoverBound) {
     popover.dataset.hoverBound = "true";
@@ -551,7 +563,7 @@ function updateCompressMemoryButtonProgress(session) {
 
 function showCompressPopover() {
   clearCompressPopoverHideTimer();
-  const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
+  const popover = getCompressMemoryPopover();
   if (!popover || popover.classList.contains("hidden")) return;
   popover.style.setProperty("transition", "opacity 0.18s ease");
   adjustCompressPopoverBoundary();
@@ -564,7 +576,7 @@ function showCompressPopover() {
 
 function hideCompressPopover() {
   clearCompressPopoverHideTimer();
-  const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
+  const popover = getCompressMemoryPopover();
   if (!popover) return;
   popover.classList.remove("visible");
   popover.removeEventListener("touchmove", preventPopoverScrollEscape);
@@ -691,7 +703,7 @@ function renderCompressMemoryPopover() {
 }
 
 function adjustCompressPopoverBoundary() {
-  const popover = els.compressMemoryBtn?.querySelector(".memory-compress-popover");
+  const popover = getCompressMemoryPopover();
   if (!popover || popover.classList.contains("hidden")) return;
   popover.classList.remove("is-positioned");
   popover.style.setProperty("--memory-compress-popover-shift-x", "0px");
@@ -794,7 +806,6 @@ function shouldRenderThinkingForModel(modelName) {
   }
   return true;
 }
-
 
 
 
