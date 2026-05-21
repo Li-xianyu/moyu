@@ -479,6 +479,10 @@ function getNpcGroupDebugLabel(groups) {
   return hasParallelGroup ? "NPC 并行分组" : "NPC 串行顺序";
 }
 
+function normalizeUserMessageDisplayText(value) {
+  return String(value || "").replace(/\n{3,}/g, "\n\n");
+}
+
 function buildBubbleContent(message) {
   const session = getCurrentSession();
   const sessionMode = session?.mode || SESSION_MODE_STORY;
@@ -501,14 +505,17 @@ function buildBubbleContent(message) {
     return html;
   }
   const enableMd = message.role === "assistant" && sessionMode === SESSION_MODE_WORK && getSessionSetting(getCurrentSession(), "markdownRender") !== false;
+  const content = message.role === "user"
+    ? normalizeUserMessageDisplayText(message.content)
+    : message.content;
   if (enableMd) {
-    html += renderMarkdownContent(escapeHtml(message.content));
+    html += renderMarkdownContent(escapeHtml(content));
   } else if (message.role === "assistant" && sessionMode === SESSION_MODE_WORK) {
-    html += renderWorkPlainTextContent(escapeHtml(message.content));
+    html += renderWorkPlainTextContent(escapeHtml(content));
   } else if (sessionMode === SESSION_MODE_STORY) {
-    html += renderStoryContent(escapeHtml(message.content));
+    html += renderStoryContent(escapeHtml(content));
   } else {
-    html += escapeHtml(message.content).replace(/\n/g, "<br>");
+    html += escapeHtml(content).replace(/\n/g, "<br>");
   }
   return html;
 }
