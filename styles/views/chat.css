@@ -1153,18 +1153,26 @@ html[data-theme="light"] .message.agent:not(.agent-plain) {
 
 html[data-theme="light"] .message-block.chaos-mode .message.agent:not(.agent-plain),
 html[data-theme="light"] .message-block.story-mode .message.agent:not(.agent-plain) {
-  background: #fffdf8;
-  border-color: #eadfcd;
-  color: #2d2418;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.96)),
+    #ffffff;
+  border-color: rgba(192, 205, 222, 0.82);
+  color: #24303d;
+  box-shadow:
+    0 10px 24px rgba(29, 45, 68, 0.055),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  line-height: 1.58;
 }
 
 html[data-theme="light"] .message.agent .story-dialogue {
-  color: #8a5a00;
+  color: #375f8a;
+  font-weight: 520;
 }
 
 html[data-theme="light"] .message.agent .story-thought {
-  background: rgba(138, 90, 0, 0.08);
-  color: #6b6258;
+  background: rgba(61, 93, 128, 0.07);
+  color: #5f6c79;
+  border-radius: 5px;
 }
 
 .narration {
