@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.21.26";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.21.25";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -106,7 +106,7 @@
         "./styles/layout/shell.css",
         "./styles/views/settings.css",
         "./styles/base/forms.css",
-        "./styles/views/chat-critical.css",
+        "./styles/views/chat.css",
         "./styles/views/roles.css",
         "./styles/base/responsive.css",
         "./styles/base/scrollbars.css",
@@ -120,22 +120,6 @@
         link.href = hrefs[i] + "?v=" + v;
         document.head.appendChild(link);
       }
-      var loaded = new Set(hrefs);
-      window.__moyuLoadStylesheet = function(href) {
-        if (loaded.has(href)) return Promise.resolve();
-        loaded.add(href);
-        return new Promise(function(resolve, reject) {
-          var link = document.createElement("link");
-          link.rel = "stylesheet";
-          link.href = href + "?v=" + v;
-          link.onload = resolve;
-          link.onerror = reject;
-          document.head.appendChild(link);
-        });
-      };
-      window.__moyuEnsureChatCss = function() {
-        return window.__moyuLoadStylesheet("./styles/views/chat.css");
-      };
     })();
   </script>
 </head>

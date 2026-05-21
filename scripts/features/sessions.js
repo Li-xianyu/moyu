@@ -47,7 +47,6 @@ function renderSession() {
   }
 
   els.chatMeta.className = "chat-meta";
-  window.__moyuEnsureChatCss?.();
   els.chatMeta.innerHTML = renderChatMetaMarkup(session);
   bindChatMetaExpanders();
 

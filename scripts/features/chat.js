@@ -49,7 +49,6 @@ function scheduleCompressPopoverHide() {
 
 function bindChat() {
   els.sendBtn.addEventListener("click", function onSendClick() {
-    window.__moyuEnsureChatCss?.();
     warmChatRuntime();
     const session = getCurrentSession();
     if (state.isSending && session?.mode !== SESSION_MODE_CHAOS) {
@@ -223,12 +222,10 @@ function bindChat() {
     selection.addRange(range);
   });
   els.chatInput.addEventListener("input", normalizeChatInputWhitespace);
-  els.chatInput.addEventListener("input", () => window.__moyuEnsureChatCss?.(), { once: true });
   els.chatInput.addEventListener("input", warmChatRuntime, { once: true });
   els.chatInput.addEventListener("input", clearSuggestions);
   els.chatInput.addEventListener("input", handleMentionInput);
   els.chatInput.addEventListener("focus", () => {
-    window.__moyuEnsureChatCss?.();
     warmChatRuntime();
     shouldKeepBottomOnKeyboard = isChatNearBottom();
     if (shouldKeepBottomOnKeyboard) {
@@ -452,7 +449,6 @@ async function sendUserMessage() {
   }
 
   state.abortController = new AbortController();
-  await window.__moyuEnsureChatCss?.();
   try {
     await ensureChatRuntimeLoaded();
   } catch (error) {
@@ -888,6 +884,7 @@ function shouldRenderThinkingForModel(modelName) {
   }
   return true;
 }
+
 
 
 
