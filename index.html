@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.21.37";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.21.39";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -174,9 +174,18 @@
   var fullWidth = 0;
   var gap = 3;
   var cursorWidth = 0;
-  var charPos = 0, deleting = false;
+  var charPos = 0, deleting = false, stopped = false, timer = 0;
   var writeSpd = 100, delSpd = 50, pauseWrite = 1800, pauseDel = 400;
-  window.__moyuTypewriter = { cycleCount: 0 };
+  window.__moyuTypewriter = {
+    cycleCount: 0,
+    stop: function() {
+      stopped = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = 0;
+      }
+    }
+  };
   function measureText() {
     if (!host) return;
     var measure = document.createElement('span');
@@ -206,13 +215,18 @@
   }
   el.textContent = phrase;
   measureText();
+  function schedule(delay) {
+    if (stopped) return;
+    timer = setTimeout(tick, delay);
+  }
   function tick() {
+    if (stopped) return;
     if (!deleting) {
       charPos++;
       updateTypewriterFrame(charPos);
       if (charPos >= phrase.length) {
         deleting = true;
-        setTimeout(tick, pauseWrite);
+        schedule(pauseWrite);
         return;
       }
     } else {
@@ -224,11 +238,11 @@
         if (window.__moyuTypewriter.onCycle) {
           window.__moyuTypewriter.onCycle();
         }
-        setTimeout(tick, pauseDel);
+        schedule(pauseDel);
         return;
       }
     }
-    setTimeout(tick, deleting ? delSpd : writeSpd);
+    schedule(deleting ? delSpd : writeSpd);
   }
   tick();
 })();
