@@ -1298,9 +1298,9 @@ function renderMarkdownContent(text) {
     );
   }
 
-  let html = fragments.join("\n");
+  let html = fragments.join("");
   // Wrap consecutive <li> in <ul>
-  html = html.replace(/((?:<li>.*?<\/li>(?:\n|$))+)/g, "<ul>$1</ul>");
+  html = html.replace(/((?:<li>.*?<\/li>)+)/g, "<ul>$1</ul>");
   return html;
 }
 

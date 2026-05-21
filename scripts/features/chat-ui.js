@@ -503,12 +503,24 @@ function buildBubbleContent(message) {
   const enableMd = message.role === "assistant" && sessionMode === SESSION_MODE_WORK && getSessionSetting(getCurrentSession(), "markdownRender") !== false;
   if (enableMd) {
     html += renderMarkdownContent(escapeHtml(message.content));
+  } else if (message.role === "assistant" && sessionMode === SESSION_MODE_WORK) {
+    html += renderWorkPlainTextContent(escapeHtml(message.content));
   } else if (sessionMode === SESSION_MODE_STORY) {
     html += renderStoryContent(escapeHtml(message.content));
   } else {
     html += escapeHtml(message.content).replace(/\n/g, "<br>");
   }
   return html;
+}
+
+function renderWorkPlainTextContent(text) {
+  if (!text) return "";
+  return text
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => `<p>${part.replace(/\n/g, "<br>")}</p>`)
+    .join("");
 }
 
 function shouldSuppressRetrievalMarkerContent(message) {
