@@ -947,6 +947,10 @@ function bindInfoPopover() {
   });
 
   els.chatInfoPopover.addEventListener("click", (event) => {
+    if (event.target === els.chatInfoPopover) {
+      els.chatInfoPopover.classList.add("hidden");
+      return;
+    }
     event.stopPropagation();
   });
 

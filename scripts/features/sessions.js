@@ -132,7 +132,7 @@ function buildSessionStatsMarkup(session) {
     : { label: "—" };
 
   return `
-    <section class="chat-meta-section compact">
+    <section class="chat-meta-section chat-meta-stats-section compact">
       <div class="chat-meta-label">会话统计</div>
       <dl class="chat-meta-stats">
         <div class="chat-meta-stat">
@@ -148,21 +148,44 @@ function buildSessionStatsMarkup(session) {
   `.trim();
 }
 
+function getChatMetaModelIcon(model) {
+  const provider = typeof detectModelProvider === "function" ? detectModelProvider(model || "") : null;
+  return provider ? provider.icon : "";
+}
+
 function renderChatMetaMarkup(session) {
   const entityType = getEntityTerm(session.mode || SESSION_MODE_STORY);
-  const npcCards = (session.npcs || []).map((npc) => `
-    <div class="chat-meta-npc-item">
-      <div class="chat-meta-npc-head">
-        <div class="chat-meta-npc-name">${escapeHtml(npc.name || t("npc.unnamed", { entityType }))}</div>
-        <div class="chat-meta-npc-model">${escapeHtml(npc.model || t("npc.noModel"))}</div>
+  const aiConfigs = [
+    ...(session.directorModel ? [{
+      name: t("create.directorLabel"),
+      model: session.directorModel,
+      prompt: "",
+    }] : []),
+    ...(session.npcs || []).map((npc) => ({
+      name: npc.name || t("npc.unnamed", { entityType }),
+      model: npc.model || t("npc.noModel"),
+      prompt: npc.prompt || "",
+    })),
+  ];
+  const aiConfigCards = aiConfigs.map((item) => {
+    const iconUrl = getChatMetaModelIcon(item.model);
+    return `
+    <div class="chat-meta-ai-item">
+      <div class="chat-meta-ai-head">
+        <div class="chat-meta-model-avatar">${iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="">` : `<span>AI</span>`}</div>
+        <div class="chat-meta-ai-copy">
+          <div class="chat-meta-ai-name">${escapeHtml(item.name)}</div>
+          <div class="chat-meta-ai-model">${escapeHtml(item.model || t("npc.noModel"))}</div>
+        </div>
       </div>
-      ${npc.prompt ? renderCollapsibleMetaText(npc.prompt, {
-        className: "chat-meta-npc-prompt",
+      ${item.prompt ? renderCollapsibleMetaText(item.prompt, {
+        className: "chat-meta-ai-prompt",
         collapsedLines: 4,
         kind: "npc-prompt",
       }) : ""}
     </div>
-  `).join("");
+  `;
+  }).join("");
 
   return `
     <section class="chat-meta-section">
@@ -173,14 +196,10 @@ function renderChatMetaMarkup(session) {
         kind: "global-prompt",
       })}
     </section>
-    ${session.directorModel ? `<section class="chat-meta-section compact">
-      <div class="chat-meta-label">${escapeHtml(t("create.directorLabel"))}</div>
-      <div class="chat-meta-chip">${escapeHtml(session.directorModel)}</div>
-    </section>` : ""}
     ${buildSessionStatsMarkup(session)}
     <section class="chat-meta-section">
-      <div class="chat-meta-label">${escapeHtml(t("create.npcTitle", { entityType }))}</div>
-      <div class="chat-meta-npc-list">${npcCards || `<div class="chat-meta-empty">${escapeHtml(t("chat.noNpcs"))}</div>`}</div>
+      <div class="chat-meta-label">AI 配置</div>
+      <div class="chat-meta-ai-list">${aiConfigCards || `<div class="chat-meta-empty">${escapeHtml(t("chat.noNpcs"))}</div>`}</div>
     </section>
   `;
 }

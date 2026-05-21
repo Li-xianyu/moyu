@@ -300,14 +300,13 @@
   }
 
   .chat-info-popover {
-    top: 36px;
-    left: 8px;
-    right: 8px;
+    inset: 0;
+    padding: 48px 8px 0;
   }
 
   .chat-info-card {
-    width: 100%;
-    max-height: min(52dvh, 380px);
+    width: min(100%, 320px);
+    max-height: min(66dvh, 460px);
     overflow: auto;
     border-radius: 16px;
   }
