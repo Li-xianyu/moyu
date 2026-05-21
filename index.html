@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.21.20";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.21.21";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -1013,11 +1013,11 @@
     </article>
   </template>
 
-  <script src="./vendor/highlight.js/11.9.0/highlight.min.js"></script>
   <script>
-    // Load ALL highlight.js language modules from CDN for full language support
-    (function() {
+    window.__moyuSetupHighlight = function() {
       if (typeof hljs === 'undefined') return;
+      if (hljs.__moyuDynamicLanguages) return;
+      hljs.__moyuDynamicLanguages = true;
 
       var base = './vendor/highlight.js/11.9.0/languages/';
       var loadingLangs = {};
@@ -1056,43 +1056,14 @@
           hljs.highlightElement(el);
         });
       };
-
-      var all = ["1c","abnf","accesslog","actionscript","ada","angelscript","apache","applescript","arcade","arduino","armasm","asciidoc","aspectj","autohotkey","autoit","avrasm","awk","axapta","bash","basic","bnf","brainfuck","c","cal","capnproto","ceylon","clean","clojure","clojure-repl","cmake","coffeescript","coq","cos","cpp","crmsh","crystal","csharp","csp","css","d","dart","delphi","diff","django","dns","dockerfile","dos","dsconfig","dts","dust","ebnf","elixir","elm","erb","erlang","erlang-repl","excel","fix","flix","fortran","fsharp","gams","gauss","gcode","gherkin","glsl","gml","go","golo","gradle","graphql","groovy","haml","handlebars","haskell","haxe","hsp","http","hy","inform7","ini","irpf90","isbl","java","javascript","jboss-cli","json","julia","julia-repl","kotlin","lasso","latex","ldif","leaf","less","lisp","livecodeserver","livescript","llvm","lsl","lua","makefile","markdown","mathematica","matlab","maxima","mel","mercury","mipsasm","mizar","mojolicious","monkey","moonscript","n1ql","nestedtext","nginx","nim","nix","node-repl","nsis","objectivec","ocaml","openscad","oxygene","parser3","perl","pf","pgsql","php","php-template","plaintext","pony","powershell","processing","profile","prolog","properties","protobuf","puppet","purebasic","python","python-repl","q","qml","r","reasonml","rib","roboconf","routeros","rsl","ruby","ruleslanguage","rust","sas","scala","scheme","scilab","scss","shell","smali","smalltalk","sml","sqf","sql","stan","stata","step21","stylus","subunit","swift","taggerscript","tap","tcl","thrift","tp","twig","typescript","vala","vbnet","vbscript","vbscript-html","verilog","vhdl","vim","wasm","wren","x86asm","xl","xml","xquery","yaml","zephir"];
-      // Pre-mark all bulk languages so the dynamic wrapper doesn't re-request them
-      all.forEach(function(lang) { loadingLangs[lang] = true; });
-      // Only load languages not already in the core bundle (skip duplicates)
-      var missing = all.filter(function(lang) { return !hljs.getLanguage(lang); });
-      // Load in batches to avoid overwhelming the browser
-      var batchSize = 20;
-      function loadBatch(start) {
-        var end = Math.min(start + batchSize, missing.length);
-        for (var i = start; i < end; i++) {
-          var s = document.createElement('script');
-          s.src = base + missing[i] + '.min.js';
-          s.async = true;
-          document.head.appendChild(s);
-        }
-        if (end < missing.length) {
-          setTimeout(function() { loadBatch(end); }, 50);
-        }
-      }
-      loadBatch(0);
-    })();
+    };
   </script>
-  <script src="./vendor/js-beautify/1.15.1/beautify.min.js"></script>
-  <script src="./vendor/js-beautify/1.15.1/beautify-css.min.js"></script>
-  <script src="./vendor/js-beautify/1.15.1/beautify-html.min.js"></script>
-  <script src="./vendor/prettier/3.5.3/plugins/html.js"></script>
-  <script src="./vendor/prettier/3.5.3/plugins/postcss.js"></script>
-  <script src="./vendor/prettier/3.5.3/plugins/markdown.js"></script>
-  <script src="./vendor/prettier/3.5.3/plugins/graphql.js"></script>
-  <script src="./vendor/prettier/3.5.3/plugins/yaml.js"></script>
-  <script src="./vendor/lucide/0.468.0/lucide.min.js"></script>
-  <script>lucide.createIcons();</script>
   <script>
     (function() {
       var v = window.APP_VERSION;
       var srcs = [
+        "./vendor/lucide/0.468.0/lucide.min.js",
+        "./vendor/highlight.js/11.9.0/highlight.min.js",
         "./scripts/core/constants.js",
         "./scripts/core/helpers.js",
         "./scripts/core/state.js",
@@ -1118,7 +1089,15 @@
         var s = document.createElement("script");
         s.src = srcs[i] + "?v=" + v;
         s.async = false;
-        s.onload = function() { load(i + 1); };
+        s.onload = function() {
+          if (srcs[i].indexOf("/highlight.js/") !== -1 && typeof window.__moyuSetupHighlight === "function") {
+            window.__moyuSetupHighlight();
+          }
+          if (srcs[i].indexOf("/lucide/") !== -1 && window.lucide && lucide.createIcons) {
+            lucide.createIcons();
+          }
+          load(i + 1);
+        };
         s.onerror = function() { load(i + 1); };
         document.body.appendChild(s);
       })(0);
