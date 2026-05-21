@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.21.23";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.21.24";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -79,10 +79,6 @@
       font-weight: 200;
       opacity: 0.7;
     }
-    body.booting .app-shell,
-    body.booting #toastContainer {
-      visibility: hidden;
-    }
     @keyframes blink {
       0%, 100% { opacity: 1; }
       50% { opacity: 0; }
@@ -127,7 +123,7 @@
     })();
   </script>
 </head>
-<body class="booting">
+<body>
   <svg width="0" height="0" aria-hidden="true" focusable="false" class="moyu-logo-defs">
     <defs>
       <symbol id="moyuFishIcon" viewBox="0 0 200 120">
