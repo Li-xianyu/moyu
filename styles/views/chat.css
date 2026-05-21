@@ -1294,8 +1294,25 @@ html[data-theme="light"] .message.agent .story-thought {
 
 .thinking-section[open] .thinking-content {
   height: auto;
+  max-height: min(42vh, 520px);
+  overflow-y: auto;
   opacity: 1;
   padding: 0 0 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.38) transparent;
+}
+
+.thinking-section[open] .thinking-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.thinking-section[open] .thinking-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thinking-section[open] .thinking-content::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.34);
+  border-radius: 999px;
 }
 
 html[data-theme="light"] .thinking-section {
@@ -1316,6 +1333,12 @@ html[data-theme="light"] .thinking-section .thinking-label {
 html[data-theme="light"] .thinking-content {
   color: #1f2937;
   opacity: 1;
+}
+
+@media (max-width: 640px) {
+  .thinking-section[open] .thinking-content {
+    max-height: min(34vh, 360px);
+  }
 }
 
 .tool-trace-section {
