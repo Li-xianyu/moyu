@@ -1,10 +1,4 @@
-﻿const DIRECTOR_RECENT_HISTORY_LIMIT = 8;
-const DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT = 4;
-const DIRECTOR_MEMORY_TARGET_MIN = 260;
-const DIRECTOR_MEMORY_TARGET_MAX = 1800;
-const CHAT_MANUAL_RECOMPRESS_RECENT_LIMIT = 30;
-
-function buildChatHistory(session) {
+﻿function buildChatHistory(session) {
   return buildHistoryMessagesFromSlice(getVisibleHistoryMessages(session), "HISTORY");
 }
 
