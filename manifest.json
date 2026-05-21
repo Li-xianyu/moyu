@@ -3,11 +3,11 @@
   "short_name": "MOYU",
   "description": "一个聪明的 AI 聊天工具",
   "start_url": "./",
-  "display_override": ["fullscreen", "standalone"],
-  "display": "fullscreen",
+  "display_override": ["standalone"],
+  "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#1e1e1e",
-  "theme_color": "#1e1e1e",
+  "background_color": "#f3f3f3",
+  "theme_color": "#f3f3f3",
   "icons": [
     {
       "src": "./favicon.svg",
