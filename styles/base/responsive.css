@@ -630,6 +630,12 @@
     opacity: 0;
     pointer-events: none;
     border-radius: 0 12px 12px 0;
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+  }
+
+  .sidebar * {
+    touch-action: pan-y;
   }
 
   .app-shell.sidebar-drawer-open .sidebar {

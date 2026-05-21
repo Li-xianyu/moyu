@@ -3,6 +3,7 @@
    这个文件放在最后加载，所以这里使用 !important 压过前面的 responsive.css/chat.css。 */
 :root {
   --moyu-app-height: 100dvh;
+  --moyu-top-guard: env(safe-area-inset-top, 0px);
   --moyu-bottom-guard: 0px;
 }
 
@@ -44,6 +45,16 @@ body::after {
   .main {
     overflow-y: auto !important;
   }
+
+  .sidebar {
+    padding-top: calc(14px + var(--moyu-top-guard, 0px)) !important;
+  }
+
+  .shell-toggle-btn,
+  .info-btn.floating {
+    margin-top: var(--moyu-top-guard, 0px) !important;
+  }
+
   .view.active:not(#chatView),
   #createView {
     height: 100% !important;
@@ -158,7 +169,7 @@ body::after {
     height: auto !important;
     min-height: 0 !important;
     box-sizing: border-box !important;
-    padding: 16px max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)) !important;
+    padding: calc(16px + var(--moyu-top-guard, 0px)) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)) !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch !important;

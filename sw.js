@@ -1,5 +1,5 @@
-// 改 APP_VERSION 时同步 +1，强制清旧缓存
-const SW_VERSION = "1";
+// Bump together with APP_VERSION to force old caches out.
+const SW_VERSION = "5";
 const CACHE_NAME = "moyu-v" + SW_VERSION;
 
 function cacheable(req, res) {
@@ -19,7 +19,7 @@ async function tryCache(req, res) {
   try {
     const c = await caches.open(CACHE_NAME);
     await c.put(req, res.clone());
-  } catch (_) { /* clone 失败静默跳过（流式/锁定的 Response）*/ }
+  } catch (_) {}
 }
 
 async function networkFirst(req) {
@@ -57,18 +57,15 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
 
-  // 导航（HTML）→ 网络优先
   if (e.request.mode === "navigate") {
     e.respondWith(networkFirst(e.request));
     return;
   }
 
-  // 同源静态资源（JS/CSS/fonts/images）→ 缓存优先
   if (url.origin === self.location.origin) {
     e.respondWith(cacheFirst(e.request));
     return;
   }
 
-  // CDN 第三方库 → 网络优先
   e.respondWith(networkFirst(e.request));
 });

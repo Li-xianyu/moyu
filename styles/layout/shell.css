@@ -551,6 +551,12 @@ button,
   will-change: transform, opacity;
 }
 
+@media (max-width: 960px) {
+  .sidebar {
+    box-shadow: -32px 0 0 0 var(--sidebar);
+  }
+}
+
 .app-shell.sidebar-collapsed {
   grid-template-columns: 280px 1fr;
 }
@@ -670,6 +676,12 @@ button,
 
   .app-shell.sidebar-swiping .shell-toggle-btn {
     display: none;
+  }
+
+  .app-shell.sidebar-swiping .sidebar,
+  .app-shell.sidebar-swiping .chat-list-items {
+    overflow-y: hidden;
+    overscroll-behavior: none;
   }
 }
 
