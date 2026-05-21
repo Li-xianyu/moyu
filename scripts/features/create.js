@@ -238,6 +238,9 @@ function commitSessionOverrideChange(key, nextValue, options = {}) {
       if (typeof renderMessages === "function") {
         renderMessages({ keepWindow: true });
       }
+      if (key === "showModelProviderIcon" && typeof syncModelProviderIconVisibility === "function") {
+        syncModelProviderIconVisibility(session);
+      }
     }
     if (key === "modelThinking") {
       if (els.modelThinkingBtn) {

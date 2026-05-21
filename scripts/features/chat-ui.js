@@ -1253,6 +1253,34 @@ function buildMessageBlock(message, sessionMode, enableMd) {
   return block;
 }
 
+function syncMessageModelProviderIcon(block, message, session = getCurrentSession()) {
+  if (!block || message?.role !== "assistant") return;
+  const meta = block.querySelector('.message-meta');
+  if (!meta) return;
+  const iconUrl = getModelProviderIcon(session, message.speaker);
+  const showIcon = iconUrl && getSessionSetting(session, "showModelProviderIcon") !== false;
+  const existingIcon = meta.querySelector('.model-provider-icon');
+  if (showIcon && !existingIcon) {
+    const img = document.createElement('img');
+    img.className = 'model-provider-icon';
+    img.src = iconUrl;
+    img.alt = '';
+    meta.prepend(img);
+  } else if (!showIcon && existingIcon) {
+    existingIcon.remove();
+  } else if (showIcon && existingIcon && existingIcon.getAttribute("src") !== iconUrl) {
+    existingIcon.setAttribute("src", iconUrl);
+  }
+}
+
+function syncModelProviderIconVisibility(session = getCurrentSession()) {
+  if (!session || !els.chatMessages) return;
+  const messagesById = new Map((session.messages || []).filter(Boolean).map((message) => [message.id, message]));
+  els.chatMessages.querySelectorAll(".message-block.agent[data-message-id]").forEach((block) => {
+    syncMessageModelProviderIcon(block, messagesById.get(block.dataset.messageId), session);
+  });
+}
+
 function refreshMessageBlock(block, message, sessionMode, enableMd) {
   // 1. Update block-level className
   const isAgentPlainBlock = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
@@ -1283,9 +1311,12 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
     }
   }
 
+  // 3. Update model-provider-icon in message-meta
+  syncMessageModelProviderIcon(block, message);
+
   bindInlineMetaToggles(block, message);
 
-  // 3. Build tools section if it doesn't exist yet (pending → done transition)
+  // 4. Build tools section if it doesn't exist yet (pending → done transition)
   const existingTools = block.querySelector('.message-tools');
   if (message.id && !message.pending) {
     if (!existingTools) {
