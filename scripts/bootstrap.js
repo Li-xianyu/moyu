@@ -137,7 +137,7 @@ function loadErudaScript() {
 
   window.__moyuErudaLoadingPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/eruda";
+    script.src = "./vendor/eruda/3/eruda.min.js";
     script.async = true;
     script.onload = () => {
       debugInfo("[MOYU] Eruda script loaded");

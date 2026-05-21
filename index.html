@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.21.19";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.21.20";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -99,8 +99,8 @@
       var v = window.APP_VERSION;
       var theme = (document.documentElement.getAttribute("data-theme") || "dark");
       var hljsTheme = theme === "light"
-        ? "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css"
-        : "https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css";
+        ? "./vendor/highlight.js/11.9.0/styles/atom-one-light.min.css"
+        : "./vendor/highlight.js/11.9.0/styles/atom-one-dark.min.css";
       var hrefs = [
         "./styles/base/variables.css",
         "./styles/layout/shell.css",
@@ -1013,13 +1013,13 @@
     </article>
   </template>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="./vendor/highlight.js/11.9.0/highlight.min.js"></script>
   <script>
     // Load ALL highlight.js language modules from CDN for full language support
     (function() {
       if (typeof hljs === 'undefined') return;
 
-      var base = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/';
+      var base = './vendor/highlight.js/11.9.0/languages/';
       var loadingLangs = {};
 
       // Wrap highlightElement to auto-load missing languages on-demand.
@@ -1079,15 +1079,15 @@
       loadBatch(0);
     })();
   </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-css.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.15.1/beautify-html.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/html.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/postcss.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/markdown.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/graphql.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/prettier@3.5.3/plugins/yaml.js"></script>
-  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <script src="./vendor/js-beautify/1.15.1/beautify.min.js"></script>
+  <script src="./vendor/js-beautify/1.15.1/beautify-css.min.js"></script>
+  <script src="./vendor/js-beautify/1.15.1/beautify-html.min.js"></script>
+  <script src="./vendor/prettier/3.5.3/plugins/html.js"></script>
+  <script src="./vendor/prettier/3.5.3/plugins/postcss.js"></script>
+  <script src="./vendor/prettier/3.5.3/plugins/markdown.js"></script>
+  <script src="./vendor/prettier/3.5.3/plugins/graphql.js"></script>
+  <script src="./vendor/prettier/3.5.3/plugins/yaml.js"></script>
+  <script src="./vendor/lucide/0.468.0/lucide.min.js"></script>
   <script>lucide.createIcons();</script>
   <script>
     (function() {

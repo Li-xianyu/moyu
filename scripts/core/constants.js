@@ -743,7 +743,7 @@ const SESSION_MODE_CHAOS = "chaos";
 const SESSION_MODE_WORK = "work";
 
 const MODEL_ICON_CDN =
-  "https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.90.0/icons/";
+  "./vendor/lobehub-icons/1.90.0/icons/";
 
 const MODEL_PROVIDERS = [
   { id: "openai", match: /gpt|openai|o1|o3|o4/i, icon: `${MODEL_ICON_CDN}openai.svg` },
