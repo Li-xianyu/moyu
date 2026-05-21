@@ -1282,18 +1282,18 @@ html[data-theme="light"] .message.agent .story-thought {
 }
 
 .thinking-content {
-  max-height: 0;
   opacity: 0;
+  height: 0;
   overflow: hidden;
   padding: 0;
   color: #c8ccd3;
   line-height: 1.65;
-  transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
-  will-change: max-height, opacity;
+  transition: opacity 0.2s ease, padding 0.2s ease;
+  will-change: opacity;
 }
 
 .thinking-section[open] .thinking-content {
-  max-height: 380px;
+  height: auto;
   opacity: 1;
   padding: 0 0 8px;
 }
