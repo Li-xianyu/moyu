@@ -487,6 +487,14 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     () => renderMessages({ stickToBottom: true }),
     () => updateStreamingBubble(targetMessage)
   );
+  const revealInitialStream = () => {
+    targetMessage.pending = false;
+    targetMessage.streaming = true;
+    streamBatch.revealWithInitial(initialBuffer, initialThinkingBuffer);
+    streamRevealed = true;
+    initialBuffer = "";
+    initialThinkingBuffer = "";
+  };
 
   const shouldTrackUsage = getSessionSetting(session, "showTokenDisplay") !== false;
 
@@ -625,18 +633,18 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
           if (delta) {
             if (!streamRevealed) {
               initialBuffer += delta;
-              if (initialBuffer.length >= INITIAL_REVEAL_THRESHOLD) {
-                targetMessage.pending = false;
-                targetMessage.streaming = true;
-                streamBatch.revealWithInitial(initialBuffer, initialThinkingBuffer);
-                streamRevealed = true;
-                initialThinkingBuffer = "";
+              if (initialBuffer.length >= INITIAL_REVEAL_THRESHOLD || initialThinkingBuffer) {
+                revealInitialStream();
               }
             } else {
               streamBatch.queue(delta, visibleThinkingDelta, streamRevealed);
             }
-          } else if (visibleThinkingDelta && streamRevealed) {
-            streamBatch.queue("", visibleThinkingDelta, streamRevealed);
+          } else if (visibleThinkingDelta) {
+            if (!streamRevealed) {
+              revealInitialStream();
+            } else {
+              streamBatch.queue("", visibleThinkingDelta, streamRevealed);
+            }
           }
         } catch {
           // Ignore incompatible keepalive chunks.
@@ -647,11 +655,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
 
   // Flush any buffered content that didn't reach the threshold
   if (!streamRevealed && (initialBuffer || initialThinkingBuffer)) {
-    targetMessage.pending = false;
-    targetMessage.streaming = true;
-    streamBatch.revealWithInitial(initialBuffer, initialThinkingBuffer);
-    streamRevealed = true;
-    initialThinkingBuffer = "";
+    revealInitialStream();
   }
   streamBatch.flushFinal();
   targetMessage.streaming = false;
@@ -677,6 +681,14 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
         () => renderMessages({ stickToBottom: true }),
         () => updateStreamingBubble(targetMessage)
       );
+      const revealRetryStream = () => {
+        targetMessage.pending = false;
+        targetMessage.streaming = true;
+        retryBatch.revealWithInitial(retryInitialBuffer, retryInitialThinkingBuffer);
+        retryRevealed = true;
+        retryInitialBuffer = "";
+        retryInitialThinkingBuffer = "";
+      };
       const retryReader = retryResponse.body.getReader();
       const retryDecoder = new TextDecoder("utf-8");
       let retryBuffer = "";
@@ -711,30 +723,26 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
               if (delta) {
                 if (!retryRevealed) {
                   retryInitialBuffer += delta;
-                  if (retryInitialBuffer.length >= INITIAL_REVEAL_THRESHOLD) {
-                    targetMessage.pending = false;
-                    targetMessage.streaming = true;
-                    retryBatch.revealWithInitial(retryInitialBuffer, retryInitialThinkingBuffer);
-                    retryRevealed = true;
-                    retryInitialThinkingBuffer = "";
+                  if (retryInitialBuffer.length >= INITIAL_REVEAL_THRESHOLD || retryInitialThinkingBuffer) {
+                    revealRetryStream();
                   }
                 } else {
                   retryBatch.queue(delta, visibleThinkingDelta, retryRevealed);
                 }
-              } else if (visibleThinkingDelta && retryRevealed) {
-                retryBatch.queue("", visibleThinkingDelta, retryRevealed);
+              } else if (visibleThinkingDelta) {
+                if (!retryRevealed) {
+                  revealRetryStream();
+                } else {
+                  retryBatch.queue("", visibleThinkingDelta, retryRevealed);
+                }
               }
             } catch {}
           }
         }
       }
 
-      if (!retryRevealed && retryInitialBuffer) {
-        targetMessage.pending = false;
-        targetMessage.streaming = true;
-        retryBatch.revealWithInitial(retryInitialBuffer, retryInitialThinkingBuffer);
-        retryRevealed = true;
-        retryInitialThinkingBuffer = "";
+      if (!retryRevealed && (retryInitialBuffer || retryInitialThinkingBuffer)) {
+        revealRetryStream();
       }
       retryBatch.flushFinal();
     }
@@ -763,7 +771,6 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   persistSessions();
   renderMessages({ stickToBottom: true });
 }
-
 
 
 

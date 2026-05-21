@@ -14,8 +14,6 @@
 /* Keep chrome elements unselectable */
 .message-tools,
 .message-tools *,
-.message-meta,
-.message-meta *,
 .message-token-label,
 .message-token-bar,
 .thinking-label,
@@ -36,6 +34,8 @@
 
 .chat-messages,
 .message,
+.message-meta,
+.message-meta *,
 .narration {
   user-select: text;
   -webkit-user-select: text;
@@ -1296,6 +1296,27 @@ html[data-theme="light"] .message.agent .story-thought {
   max-height: 380px;
   opacity: 1;
   padding: 0 10px 10px;
+}
+
+html[data-theme="light"] .thinking-section {
+  background: #f8fafc;
+  border-color: #d8e2ee;
+  border-left-color: rgba(27, 120, 238, 0.38);
+  color: #24303d;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+html[data-theme="light"] .thinking-section > summary {
+  color: #475569;
+}
+
+html[data-theme="light"] .thinking-section .thinking-label {
+  color: #0f5fb8;
+}
+
+html[data-theme="light"] .thinking-content {
+  color: #1f2937;
+  opacity: 1;
 }
 
 .tool-trace-section {
