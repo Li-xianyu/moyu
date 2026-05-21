@@ -2,6 +2,27 @@
 
 let compressPopoverHideTimer = null;
 
+function isCompressionUiLocked() {
+  return Boolean(document.querySelector(".app-shell")?.classList.contains("compress-lock"));
+}
+
+function normalizeUserInputText(value) {
+  return String(value || "").replace(/\n{3,}/g, "\n\n");
+}
+
+function normalizeChatInputWhitespace() {
+  if (!els.chatInput) return;
+  const before = els.chatInput.value;
+  const after = normalizeUserInputText(before);
+  if (before === after) return;
+  const start = els.chatInput.selectionStart ?? after.length;
+  const end = els.chatInput.selectionEnd ?? after.length;
+  const removedBeforeStart = before.slice(0, start).length - normalizeUserInputText(before.slice(0, start)).length;
+  const removedBeforeEnd = before.slice(0, end).length - normalizeUserInputText(before.slice(0, end)).length;
+  els.chatInput.value = after;
+  els.chatInput.setSelectionRange(Math.max(0, start - removedBeforeStart), Math.max(0, end - removedBeforeEnd));
+}
+
 function clearCompressPopoverHideTimer() {
   if (compressPopoverHideTimer) {
     clearTimeout(compressPopoverHideTimer);
@@ -37,6 +58,9 @@ function bindChat() {
   if (els.compressMemoryBtn) {
     ensureCompressMemoryPopover();
     els.compressMemoryBtn.addEventListener("click", (event) => {
+      if (isCompressionUiLocked()) {
+        return;
+      }
       if (!event.target.closest(".memory-compress-ring")) {
         return;
       }
@@ -50,6 +74,9 @@ function bindChat() {
       toggleCompressPopover();
     });
     els.compressMemoryBtn.addEventListener("pointerenter", () => {
+      if (isCompressionUiLocked()) {
+        return;
+      }
       clearCompressPopoverHideTimer();
       showCompressPopover();
     });
@@ -167,6 +194,7 @@ function bindChat() {
       sendUserMessage();
     }
   });
+  els.chatInput.addEventListener("input", normalizeChatInputWhitespace);
   els.chatInput.addEventListener("input", clearSuggestions);
   els.chatInput.addEventListener("input", handleMentionInput);
   els.chatInput.addEventListener("focus", () => {
@@ -296,7 +324,8 @@ async function sendUserMessage() {
 
   clearSuggestions();
 
-  const content = els.chatInput.value.trim();
+  normalizeChatInputWhitespace();
+  const content = normalizeUserInputText(els.chatInput.value).trim();
   if (!content) {
     setText(els.chatStatus, "请先输入内容");
     return;
@@ -562,6 +591,7 @@ function updateCompressMemoryButtonProgress(session) {
 }
 
 function showCompressPopover() {
+  if (isCompressionUiLocked()) return;
   clearCompressPopoverHideTimer();
   const popover = getCompressMemoryPopover();
   if (!popover || popover.classList.contains("hidden")) return;
@@ -806,7 +836,6 @@ function shouldRenderThinkingForModel(modelName) {
   }
   return true;
 }
-
 
 
 

@@ -1983,6 +1983,15 @@ let _autoCompressPending = false;
 function setCompressionUiLocked(locked) {
   const shell = document.querySelector(".app-shell");
   if (shell) shell.classList.toggle("compress-lock", Boolean(locked));
+  if (locked) {
+    state.openCompressMemoryInfo = false;
+    if (typeof hideCompressPopover === "function") {
+      hideCompressPopover();
+    }
+    if (els.compressMemoryBtn) {
+      els.compressMemoryBtn.classList.remove("info-open");
+    }
+  }
 }
 
 function normalizeCompressionSegmentSummary(summary) {
