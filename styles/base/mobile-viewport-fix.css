@@ -77,10 +77,10 @@ body::after {
     flex: 1 1 auto !important;
   }
 
-  .chat-messages {
+  #chatView .chat-messages {
     flex: 1 0 auto !important;
     min-height: 0 !important;
-    padding-bottom: 6px !important;
+    padding-bottom: 6px;
   }
 
   .composer-shell {

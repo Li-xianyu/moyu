@@ -888,8 +888,6 @@ function shouldRenderThinkingForModel(modelName) {
 
 // 移动端会话底部超拖弹性效果
 // 对标侧栏手势的 rubber-band 阻尼和释放动画曲线
-// 策略：不做 preventDefault 跟浏览器抢滚动；只在触底后检测手指超拖位移，
-// 把 damped 值写入 .chat-messages 的 padding-bottom，让底部露出空白。
 function initChatOverscroll() {
   if (!isMobileViewport()) return;
 
@@ -902,7 +900,7 @@ function initChatOverscroll() {
   var messagesEl = null;
   var overscrolling = false;
   var anchorY = 0;
-  var prevY = 0;
+  var basePad = 0;
 
   function el() {
     if (!messagesEl) messagesEl = document.querySelector("#chatView .chat-messages");
@@ -920,13 +918,15 @@ function initChatOverscroll() {
     return !!(cv && cv.classList.contains("active"));
   }
 
-  main.addEventListener("touchstart", function (e) {
+  main.addEventListener("touchstart", function () {
     if (!chatActive()) return;
     overscrolling = false;
     anchorY = 0;
-    prevY = e.touches[0].clientY;
     var m = el();
-    if (m) m.style.transition = "none";
+    if (m) {
+      basePad = parseFloat(getComputedStyle(m).paddingBottom) || 0;
+      m.style.transition = "none";
+    }
   }, { passive: true });
 
   main.addEventListener("touchmove", function (e) {
@@ -939,32 +939,26 @@ function initChatOverscroll() {
 
     if (!atBottom) {
       anchorY = 0;
-      prevY = touchY;
       return;
     }
 
-    // 触底瞬间记下锚点
     if (!anchorY) {
       anchorY = touchY;
-      prevY = touchY;
       return;
     }
 
-    var dragPast = anchorY - touchY; // >0 = 手指继续上滑，进入超拖
+    var dragPast = anchorY - touchY;
     if (dragPast < 0) {
-      // 手指下滑，重置锚点
       anchorY = touchY;
       if (overscrolling) {
         overscrolling = false;
-        m.style.paddingBottom = "0";
+        m.style.removeProperty("padding-bottom");
       }
-      prevY = touchY;
       return;
     }
 
     overscrolling = true;
     m.style.paddingBottom = damp(dragPast) + "px";
-    prevY = touchY;
   }, { passive: false });
 
   function release() {
@@ -976,13 +970,13 @@ function initChatOverscroll() {
     if (!m) return;
 
     var px = parseFloat(m.style.paddingBottom) || 0;
-    if (px <= 0) return;
+    if (px <= basePad) return;
 
     m.style.transition = "padding-bottom 0.22s " + RELEASE_EASING;
-    m.style.paddingBottom = "0";
+    m.style.paddingBottom = basePad + "px";
     m.addEventListener("transitionend", function () {
       m.style.transition = "";
-      m.style.paddingBottom = "";
+      m.style.removeProperty("padding-bottom");
     }, { once: true });
   }
 

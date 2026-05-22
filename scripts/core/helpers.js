@@ -8,21 +8,8 @@ function wait(ms) {
 
 function copyToClipboard(text, onSuccess) {
   if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(onSuccess, fallback);
+    navigator.clipboard.writeText(text).then(onSuccess, () => onSuccess());
   } else {
-    fallback();
-  }
-  function fallback() {
-    try {
-      var ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-    } catch (e) { /* ignored */ }
     onSuccess();
   }
 }

@@ -700,22 +700,7 @@ function initSidebarGestureDebugTools() {
       }
     } catch (error) {}
 
-    try {
-      const textarea = document.createElement("textarea");
-      textarea.value = value;
-      textarea.setAttribute("readonly", "true");
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      textarea.style.pointerEvents = "none";
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      const ok = document.execCommand("copy");
-      textarea.remove();
-      return ok;
-    } catch (error) {
-      return false;
-    }
+    return false;
   }
 
   function pushSession(session) {
