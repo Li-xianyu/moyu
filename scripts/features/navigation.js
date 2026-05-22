@@ -962,6 +962,16 @@ function bindMobileSwipeGesture() {
     }
     return block.scrollWidth > block.clientWidth + 2;
   }
+  function isLocalHorizontalGestureArea(target) {
+    if (!(target instanceof Element)) return false;
+    const area = target.closest([
+      ".settings-section-nav",
+      ".settings-config-list",
+      ".session-edit-tabs"
+    ].join(", "));
+    if (!area) return false;
+    return true;
+  }
   function getRubberBandOffset(distancePx) {
     const safe = Math.max(0, Number(distancePx) || 0);
     if (!safe) return 0;
@@ -1007,6 +1017,16 @@ function bindMobileSwipeGesture() {
       getDebugTools()?.cancelSession({
         t: Number(performance.now().toFixed(2)),
         reason: "code-block-horizontal-scroll"
+      });
+      return;
+    }
+
+    if (isLocalHorizontalGestureArea(target)) {
+      gestureBlocked = true;
+      touchStartX = 0;
+      getDebugTools()?.cancelSession({
+        t: Number(performance.now().toFixed(2)),
+        reason: "local-horizontal-scroll-area"
       });
       return;
     }

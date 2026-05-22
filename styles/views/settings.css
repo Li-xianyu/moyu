@@ -922,6 +922,8 @@ html[data-theme="light"] .settings-danger-btn:hover {
     flex-wrap: nowrap;
     padding: 0 0 8px;
     scrollbar-width: none;
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
   }
 
   #settingsView .settings-section-nav::-webkit-scrollbar {
@@ -1023,6 +1025,7 @@ html[data-theme="light"] .settings-danger-btn:hover {
     overflow-y: hidden;
     scroll-snap-type: x proximity;
     scrollbar-width: none;
+    touch-action: pan-x pan-y;
     -webkit-overflow-scrolling: touch;
   }
 

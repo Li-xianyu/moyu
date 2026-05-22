@@ -173,7 +173,7 @@ body::after {
     overflow-y: auto !important;
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-y !important;
+    touch-action: pan-x pan-y !important;
     overscroll-behavior-y: contain !important;
   }
 
@@ -185,7 +185,7 @@ body::after {
     overflow-y: auto !important;
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch !important;
-    touch-action: pan-y !important;
+    touch-action: pan-x pan-y !important;
     overscroll-behavior-y: contain !important;
     padding-bottom: 32px !important;
   }
@@ -253,6 +253,7 @@ body::after {
     overflow-x: auto !important;
     overflow-y: hidden !important;
     -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x pan-y !important;
   }
 
   #settingsView .settings-config-item {

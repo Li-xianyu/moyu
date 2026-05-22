@@ -3174,6 +3174,8 @@ html[data-theme="light"] .thinking-content {
     scrollbar-width: none;
     margin-bottom: 16px;
     padding-bottom: 10px;
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
   }
   #createView.create-view-editing .session-edit-tabs::-webkit-scrollbar {
     display: none;
