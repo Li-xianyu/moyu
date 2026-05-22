@@ -1,5 +1,49 @@
 "use strict";
 
+function resetUserMessageEditStateIfNeeded() {
+  if (typeof clearUserMessageEdit === "function") {
+    clearUserMessageEdit();
+    return;
+  }
+  state.editingUserMessageId = null;
+  state.openUserMessageToolsId = null;
+  if (els.chatInput) {
+    els.chatInput.value = "";
+  }
+}
+
+async function ensureChatFeatureForCreateTransition() {
+  if (typeof window.ensureChatFeatureLoaded === "function") {
+    await window.ensureChatFeatureLoaded();
+  }
+}
+
+function queueSessionTitleGeneration(session) {
+  if (!session || session.titleSource === "manual") {
+    return;
+  }
+  if (typeof ensureChatRuntimeLoaded === "function") {
+    void ensureChatRuntimeLoaded()
+      .then(() => {
+        if (typeof generateSessionTitle === "function") {
+          return generateSessionTitle(session);
+        }
+        return null;
+      })
+      .catch((error) => debugWarn("[chat-runtime] title generation preload failed", error));
+    return;
+  }
+  if (typeof generateSessionTitle === "function") {
+    void generateSessionTitle(session);
+  }
+}
+
+function queueSuggestionGuideGeneration(session) {
+  if (typeof generateSuggestionGuide === "function") {
+    void generateSuggestionGuide(session);
+  }
+}
+
 function updateEntityTerms() {
   const mode = getSelectedMode();
   const term = getEntityTerm(mode);
@@ -413,8 +457,9 @@ function bindCreateEditNavigation() {
       });
     });
 
-  els.cancelEditBtn?.addEventListener("click", () => {
+  els.cancelEditBtn?.addEventListener("click", async () => {
     if (state.editingSessionId) {
+      await ensureChatFeatureForCreateTransition();
       state.editingSessionId = null;
       state.currentSessionEditSection = "details";
       updateCreateViewMode();
@@ -425,6 +470,9 @@ function bindCreateEditNavigation() {
 
     state.currentSessionEditSection = "details";
     state.showWelcomeHome = state.createExitTarget !== "chat";
+    if (!state.showWelcomeHome) {
+      await ensureChatFeatureForCreateTransition();
+    }
     renderSession();
     switchView("chat");
   });
@@ -454,7 +502,7 @@ function bindCreateFlow() {
     setCreateStatus(t("create.statusNpcAdded", { entityType: getEntityTerm(getSelectedMode()) }), "success");
   });
 
-  els.createChatBtn.addEventListener("click", () => {
+  els.createChatBtn.addEventListener("click", async () => {
     const payload = collectSessionDraft();
     if (!payload.ok) {
       setCreateStatus(payload.message, "error");
@@ -468,7 +516,7 @@ function bindCreateFlow() {
     }
 
     if (state.editingSessionId) {
-      saveSessionEdits(payload, activeConfig);
+      await saveSessionEdits(payload, activeConfig);
       return;
     }
 
@@ -535,12 +583,20 @@ function bindCreateFlow() {
     state.showWelcomeHome = false;
     state.currentSessionId = session.id;
     persistSessions();
+    try {
+      await ensureChatFeatureForCreateTransition();
+    } catch (error) {
+      debugWarn("[chat-feature] create transition failed", error);
+      setCreateStatus("聊天模块加载失败，请刷新后重试", "error");
+      return;
+    }
+    persistSessions();
     renderSession();
     switchView("chat");
     setCreateStatus(t("create.statusCreated"), "success");
     setText(els.chatStatus, t("chat.readyAfterCreate"));
-    void generateSessionTitle(session);
-    void generateSuggestionGuide(session);
+    queueSessionTitleGeneration(session);
+    queueSuggestionGuideGeneration(session);
   });
 
   bindUserRoleSelect();
@@ -1007,7 +1063,7 @@ function collectSessionDraft() {
 }
 
 function openSessionEditor(sessionId) {
-  clearUserMessageEdit();
+  resetUserMessageEditStateIfNeeded();
   if (typeof closeChatItemMenus === "function") {
     closeChatItemMenus({ render: false });
   } else {
@@ -1060,7 +1116,7 @@ function openSessionEditor(sessionId) {
 }
 
 function prepareCreateViewForNewSession(options = {}) {
-  clearUserMessageEdit();
+  resetUserMessageEditStateIfNeeded();
   state.editingSessionId = null;
   state.currentSessionEditSection = "details";
   state.createExitTarget = options.returnTarget === "chat" ? "chat" : "welcome";
@@ -1146,7 +1202,7 @@ function updateCreateViewMode() {
   syncCreateEditNavigation();
 }
 
-function saveSessionEdits(payload, activeConfig) {
+async function saveSessionEdits(payload, activeConfig) {
   const session = state.sessions.find((item) => item.id === state.editingSessionId);
   if (!session) {
     state.editingSessionId = null;
@@ -1206,6 +1262,14 @@ function saveSessionEdits(payload, activeConfig) {
   state.showWelcomeHome = false;
   state.editingSessionId = null;
   updateCreateViewMode();
+  try {
+    await ensureChatFeatureForCreateTransition();
+  } catch (error) {
+    debugWarn("[chat-feature] edit transition failed", error);
+    setCreateStatus("聊天模块加载失败，请刷新后重试", "error");
+    return;
+  }
+  persistSessions();
   renderSession();
   switchView("chat");
   setCreateStatus(t("create.statusSaved"), "success");

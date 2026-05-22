@@ -1,14 +1,38 @@
 "use strict";
 
 const _scriptState = {};
+const CHAT_DB_SCRIPT = "./scripts/features/chat-db.js";
+const CHAT_FEATURE_SCRIPTS = [
+  "./scripts/features/chat-prompts.js",
+  "./scripts/features/chat-context.js",
+  "./scripts/features/chat-api.js",
+  CHAT_DB_SCRIPT,
+  "./scripts/features/chat-ui.js",
+  "./scripts/features/chat-edit.js",
+  "./scripts/features/chat.js",
+  "./scripts/features/filedrop.js",
+];
 const CHAT_RUNTIME_SCRIPTS = [
   "./scripts/features/chat-retrieval.js",
   "./scripts/features/chat-stream.js",
   "./scripts/features/chat-orchestrator.js",
 ];
+const CREATE_RUNTIME_SCRIPTS = [
+  "./scripts/features/custom-select.js",
+  "./scripts/features/create.js",
+];
+const SETTINGS_RUNTIME_SCRIPTS = [
+  "./scripts/features/custom-select.js",
+  "./scripts/features/create.js",
+  "./scripts/features/settings.js",
+];
 
+let _chatDbPromise = null;
+let _chatFeaturePromise = null;
 let _chatRuntimePromise = null;
+let _createRuntimePromise = null;
 let _settingsRuntimePromise = null;
+let _chatFeatureBound = false;
 
 function _loadScript(src) {
   if (_scriptState[src] === "loaded") return Promise.resolve();
@@ -31,18 +55,81 @@ function _loadScript(src) {
   });
 }
 
-function ensureChatRuntimeLoaded() {
-  if (_chatRuntimePromise) {
-    return _chatRuntimePromise;
+function _loadScriptsInOrder(srcs) {
+  return srcs.reduce(
+    (chain, src) => chain.then(() => _loadScript(src)),
+    Promise.resolve()
+  );
+}
+
+function bindChatFeatureOnce() {
+  if (_chatFeatureBound || typeof bindChat !== "function") {
+    return;
+  }
+  _chatFeatureBound = true;
+  bindChat();
+  mountSessionEditButton();
+  mountComposerCancelButton();
+  if (typeof bindFileDrop === "function") {
+    bindFileDrop();
+  }
+}
+
+function ensureChatDbLoaded() {
+  if (_chatDbPromise) {
+    return _chatDbPromise;
+  }
+  _chatDbPromise = _loadScript(CHAT_DB_SCRIPT).catch((error) => {
+    _chatDbPromise = null;
+    throw error;
+  });
+  return _chatDbPromise;
+}
+
+function ensureChatFeatureLoaded() {
+  if (_chatFeaturePromise) {
+    return _chatFeaturePromise;
   }
   const chatStylesReady = typeof window.__moyuChatStylesReady === "function"
     ? window.__moyuChatStylesReady()
     : Promise.resolve();
-  const chatScriptsReady = CHAT_RUNTIME_SCRIPTS.reduce(
-    (chain, src) => chain.then(() => _loadScript(src)),
-    Promise.resolve()
-  );
-  _chatRuntimePromise = Promise.all([chatStylesReady, chatScriptsReady]).catch((error) => {
+  _chatFeaturePromise = Promise.all([
+    chatStylesReady,
+    _loadScriptsInOrder(CHAT_FEATURE_SCRIPTS),
+  ]).then(() => {
+    bindChatFeatureOnce();
+  }).catch((error) => {
+    _chatFeaturePromise = null;
+    _chatFeatureBound = false;
+    throw error;
+  });
+  return _chatFeaturePromise;
+}
+
+function warmChatFeature(options = {}) {
+  const preload = () => {
+    ensureChatFeatureLoaded().catch((error) => debugWarn("[chat-feature] preload failed", error));
+  };
+  if (options.immediate) {
+    preload();
+    return;
+  }
+  const delay = Number.isFinite(options.delay) ? Math.max(0, options.delay) : 900;
+  const schedule = () => window.setTimeout(preload, delay);
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(schedule, { timeout: delay + 900 });
+    return;
+  }
+  schedule();
+}
+
+function ensureChatRuntimeLoaded() {
+  if (_chatRuntimePromise) {
+    return _chatRuntimePromise;
+  }
+  _chatRuntimePromise = ensureChatFeatureLoaded()
+    .then(() => _loadScriptsInOrder(CHAT_RUNTIME_SCRIPTS))
+    .catch((error) => {
     _chatRuntimePromise = null;
     throw error;
   });
@@ -70,13 +157,29 @@ function ensureSettingsRuntimeLoaded() {
     : Promise.resolve();
   _settingsRuntimePromise = Promise.all([
     settingsStylesReady,
-    _loadScript("./scripts/features/create.js"),
-    _loadScript("./scripts/features/settings.js"),
+    _loadScriptsInOrder(SETTINGS_RUNTIME_SCRIPTS),
   ]).catch((error) => {
     _settingsRuntimePromise = null;
     throw error;
   });
   return _settingsRuntimePromise;
+}
+
+function ensureCreateRuntimeLoaded() {
+  if (_createRuntimePromise) {
+    return _createRuntimePromise;
+  }
+  const createStylesReady = typeof window.__moyuCreateStylesReady === "function"
+    ? window.__moyuCreateStylesReady()
+    : Promise.resolve();
+  _createRuntimePromise = Promise.all([
+    createStylesReady,
+    _loadScriptsInOrder(CREATE_RUNTIME_SCRIPTS),
+  ]).catch((error) => {
+    _createRuntimePromise = null;
+    throw error;
+  });
+  return _createRuntimePromise;
 }
 
 function ensureDeferredStylesLoaded() {
@@ -214,6 +317,7 @@ async function restoreViewFromHistory(entry) {
       state.showWelcomeHome = true;
       state.currentSessionId = "";
     } else {
+      await ensureChatFeatureLoaded();
       state.showWelcomeHome = false;
       state.currentSessionId = entry.sessionId || "";
     }
@@ -237,8 +341,7 @@ async function restoreViewFromHistory(entry) {
       initSettingsView();
       openSessionEditor(entry.editingId);
     } else {
-      await ensureCreateStylesLoaded();
-      await _loadScript("./scripts/features/create.js");
+      await ensureCreateRuntimeLoaded();
       initCreateView();
       prepareCreateViewForNewSession({ returnTarget: "chat" });
       switchView("create");
@@ -275,7 +378,8 @@ function bindNav() {
         state.mobileSidebarOpen = !state.mobileSidebarOpen;
         if (state.mobileSidebarOpen) {
           warmSettingsRuntime({ immediate: true });
-          if (typeof window.__moyuChatStylesReady === "function") window.__moyuChatStylesReady();
+          if (typeof window.__moyuWarmSessionMetas === "function") window.__moyuWarmSessionMetas({ immediate: true });
+          warmChatFeature({ delay: 250 });
         }
       } else {
         state.sidebarCollapsed = !(state.sidebarCollapsed === null ? false : state.sidebarCollapsed);
@@ -315,8 +419,7 @@ function bindNav() {
     button.addEventListener("click", async () => {
       const view = button.dataset.view;
       if (view === "create") {
-        await ensureCreateStylesLoaded();
-        await _loadScript("./scripts/features/create.js");
+        await ensureCreateRuntimeLoaded();
         initCreateView();
         const returnTarget = state.showWelcomeHome ? "welcome" : "chat";
         prepareCreateViewForNewSession({ returnTarget });
@@ -367,7 +470,11 @@ function initCreateView() {
 }
 
 window._loadScript = _loadScript;
+window.ensureChatDbLoaded = ensureChatDbLoaded;
+window.ensureChatFeatureLoaded = ensureChatFeatureLoaded;
 window.ensureSettingsRuntimeLoaded = ensureSettingsRuntimeLoaded;
+window.ensureCreateRuntimeLoaded = ensureCreateRuntimeLoaded;
+window.warmChatFeature = warmChatFeature;
 window.warmSettingsRuntime = warmSettingsRuntime;
 
 function isMobileViewport() {
@@ -1072,6 +1179,9 @@ function bindChatList() {
   els.chatListToggleBtn.addEventListener("click", (event) => {
     event.stopPropagation();
     const willOpen = els.chatListMenu.classList.contains("hidden");
+    if (willOpen && typeof window.__moyuWarmSessionMetas === "function") {
+      window.__moyuWarmSessionMetas({ immediate: true });
+    }
     els.chatListMenu.classList.toggle("hidden", !willOpen);
     const arrow = document.getElementById("chatListArrowIcon");
     if (arrow) arrow.classList.toggle("expanded", willOpen);
@@ -1088,15 +1198,21 @@ function bindChatList() {
     renderChatListMenu();
   });
 
-  els.chatExportBtn.addEventListener("click", (event) => {
+  els.chatExportBtn.addEventListener("click", async (event) => {
     event.stopPropagation();
+    if (typeof window.__moyuWarmSessionMetas === "function") {
+      await window.__moyuWarmSessionMetas({ immediate: true });
+    } else {
+      await ensureChatDbLoaded();
+    }
     if (typeof exportAllSessions === "function") {
       exportAllSessions();
     }
   });
 
-  els.chatImportBtn.addEventListener("click", (event) => {
+  els.chatImportBtn.addEventListener("click", async (event) => {
     event.stopPropagation();
+    await ensureChatDbLoaded().catch((error) => debugWarn("[chat-db] preload failed", error));
     els.chatImportInput.click();
   });
 
@@ -1114,6 +1230,9 @@ function bindChatList() {
     els.chatSearchInput.hidden = !isHidden;
     els.chatSearchBtn.classList.toggle("active", isHidden);
     if (isHidden) {
+      if (typeof window.__moyuWarmSessionMetas === "function") {
+        window.__moyuWarmSessionMetas({ immediate: true });
+      }
       els.chatSearchInput.value = state.chatSearchQuery || "";
       els.chatSearchInput.focus();
       // auto-expand chat list so the search input is visible

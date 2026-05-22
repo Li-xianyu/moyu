@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.22.02";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.22.03";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -304,9 +304,11 @@
       }
       window.__moyuCriticalStylesReady = loadStyleList(criticalHrefs, true);
       window.__moyuChatStylesReady = function() { return loadStyleList(chatHrefs, false); };
-      window.__moyuCreateStylesReady = function() { return loadStyleList(formHrefs, false); };
-      window.__moyuSettingsStylesReady = function() {
+      window.__moyuCreateStylesReady = function() {
         return Promise.all([loadStyleList(formHrefs, false), loadStyleList(settingsHrefs, false)]);
+      };
+      window.__moyuSettingsStylesReady = function() {
+        return window.__moyuCreateStylesReady();
       };
       window.__moyuRolesStylesReady = function() {
         return Promise.all([loadStyleList(formHrefs, false), loadStyleList(rolesHrefs, false)]);
@@ -1352,15 +1354,6 @@
         "./scripts/core/state.js",
         "./scripts/features/navigation.js",
         "./scripts/features/sessions.js",
-        "./scripts/features/filedrop.js",
-        "./scripts/features/chat-prompts.js",
-        "./scripts/features/chat-context.js",
-        "./scripts/features/chat-api.js",
-        "./scripts/features/chat-db.js",
-        "./scripts/features/chat-ui.js",
-        "./scripts/features/chat-edit.js",
-        "./scripts/features/chat.js",
-        "./scripts/features/custom-select.js",
         "./scripts/bootstrap.js"
       ];
       (function load(i) {

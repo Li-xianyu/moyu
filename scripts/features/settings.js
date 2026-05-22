@@ -1,3 +1,12 @@
+async function ensureSessionStoreForSettings() {
+  if (typeof window.__moyuWarmSessionMetas === "function") {
+    await window.__moyuWarmSessionMetas({ immediate: true });
+  } else if (typeof window.ensureChatDbLoaded === "function") {
+    await window.ensureChatDbLoaded();
+  }
+  return Boolean(window.__chatDB);
+}
+
 function bindSettings() {
   els.globalSettingsTabBtn.addEventListener("click", () => {
     switchSettingsSection("global");
@@ -63,16 +72,19 @@ function bindSettings() {
     }
   });
 
-  els.exportSessionsBtn.addEventListener("click", () => {
+  els.exportSessionsBtn.addEventListener("click", async () => {
+    await ensureSessionStoreForSettings();
     exportAllSessions();
   });
 
-  els.importSessionsBtn.addEventListener("click", () => {
+  els.importSessionsBtn.addEventListener("click", async () => {
+    await ensureSessionStoreForSettings();
     els.importSessionsInput.click();
   });
 
-  els.importSessionsInput.addEventListener("change", () => {
+  els.importSessionsInput.addEventListener("change", async () => {
     if (els.importSessionsInput.files?.[0]) {
+      await ensureSessionStoreForSettings();
       importSessionsFromFile(els.importSessionsInput.files[0]);
       els.importSessionsInput.value = "";
     }
@@ -677,7 +689,8 @@ function importSettingsBackup(event) {
   event.target.value = "";
 }
 
-function clearAllData() {
+async function clearAllData() {
+  await ensureSessionStoreForSettings();
   if (window.__chatDB?.clearAll) {
     if (!confirm(t("settings.clearAllDataConfirm"))) return;
     if (!confirm(t("settings.clearAllDataConfirm2"))) return;

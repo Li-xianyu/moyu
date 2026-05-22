@@ -1,5 +1,25 @@
 ﻿"use strict";
 
+function isChatFeatureReadyForRender() {
+  return typeof updateComposerMode === "function"
+    && typeof autoResizeChatInput === "function"
+    && typeof renderMessages === "function"
+    && typeof scrollChatToBottom === "function";
+}
+
+function requestChatFeatureForRender(reason = "render") {
+  if (typeof window.ensureChatFeatureLoaded !== "function") {
+    return;
+  }
+  window.ensureChatFeatureLoaded()
+    .then(() => {
+      if (!state.showWelcomeHome) {
+        renderSession();
+      }
+    })
+    .catch((error) => debugWarn(`[chat-feature] ${reason} failed`, error));
+}
+
 function renderSession() {
   var session = getCurrentSession();
   renderChatListMenu();
@@ -40,9 +60,14 @@ function renderSession() {
     }
     els.chatMessages.innerHTML = "";
     setText(els.chatStatus, t("chat.readyAfterCreate"));
-    autoResizeChatInput();
+    if (typeof autoResizeChatInput === "function") autoResizeChatInput();
     if (typeof clearSuggestions === "function") clearSuggestions();
     if (typeof updateSuggestBtn === "function") updateSuggestBtn();
+    return;
+  }
+
+  if (!isChatFeatureReadyForRender()) {
+    requestChatFeatureForRender("render session");
     return;
   }
 
@@ -100,8 +125,8 @@ function renderSessionLoadingShell(session) {
     els.editSessionBtn.disabled = false;
   }
   els.chatMessages.replaceChildren();
-  updateComposerMode();
-  autoResizeChatInput();
+  if (typeof updateComposerMode === "function") updateComposerMode();
+  if (typeof autoResizeChatInput === "function") autoResizeChatInput();
   setText(els.chatStatus, "正在加载会话...");
 }
 
@@ -325,12 +350,12 @@ function renderChatListMenu() {
       if (state.renameSessionId) {
         commitRenameIfNeeded();
       }
+      if (typeof window.ensureChatFeatureLoaded === "function") {
+        await window.ensureChatFeatureLoaded();
+      }
       clearUserMessageEdit();
       state.showWelcomeHome = false;
       state.currentSessionId = session.id;
-      if (typeof window.__moyuChatStylesReady === "function") {
-        await window.__moyuChatStylesReady();
-      }
       if (!(els.views.chat?.classList.contains("active"))) {
         switchView("chat");
       }
@@ -436,6 +461,7 @@ function renderChatListMenu() {
         await window.ensureSettingsRuntimeLoaded();
       } else if (typeof window._loadScript === "function") {
         await Promise.all([
+          window._loadScript("./scripts/features/custom-select.js"),
           window._loadScript("./scripts/features/create.js"),
           window._loadScript("./scripts/features/settings.js"),
         ]);
@@ -702,8 +728,18 @@ async function deleteSession(sessionId) {
   }
 }
 
-function restartSessionFromExisting(sessionId) {
-  clearUserMessageEdit();
+async function restartSessionFromExisting(sessionId) {
+  if (typeof window.ensureChatFeatureLoaded === "function") {
+    try {
+      await window.ensureChatFeatureLoaded();
+    } catch (error) {
+      debugWarn("[chat-feature] restart preload failed", error);
+      return;
+    }
+  }
+  if (typeof clearUserMessageEdit === "function") {
+    clearUserMessageEdit();
+  }
   const source = state.sessions.find((session) => session.id === sessionId);
   if (!source) {
     return;
@@ -751,9 +787,22 @@ function restartSessionFromExisting(sessionId) {
   setText(els.chatStatus, t("chat.restartedFromExisting"));
 
   if (session.titleSource !== "manual") {
-    void generateSessionTitle(session);
+    if (typeof ensureChatRuntimeLoaded === "function") {
+      void ensureChatRuntimeLoaded()
+        .then(() => {
+          if (typeof generateSessionTitle === "function") {
+            return generateSessionTitle(session);
+          }
+          return null;
+        })
+        .catch((error) => debugWarn("[chat-runtime] title generation preload failed", error));
+    } else if (typeof generateSessionTitle === "function") {
+      void generateSessionTitle(session);
+    }
   }
-  void generateSuggestionGuide(session);
+  if (typeof generateSuggestionGuide === "function") {
+    void generateSuggestionGuide(session);
+  }
 }
 
 function exportSingleSession(sessionId) {

@@ -219,23 +219,102 @@ function resolveInitialView() {
   return "chat";
 }
 
+async function hydrateSessionMetasFromDb(options = {}) {
+  const useChatFeature = Boolean(options.chatFeature);
+  try {
+    if (useChatFeature && typeof window.ensureChatFeatureLoaded === "function") {
+      await window.ensureChatFeatureLoaded();
+    } else if (typeof window.ensureChatDbLoaded === "function") {
+      await window.ensureChatDbLoaded();
+    } else if (typeof window._loadScript === "function") {
+      await window._loadScript("./scripts/features/chat-db.js");
+    }
+  } catch (error) {
+    debugWarn("[boot] chat-db preload failed", error);
+    return false;
+  }
+
+  if (!window.__chatDB) {
+    return false;
+  }
+
+  try {
+    var sessions = await window.__chatDB.loadSessionMetas();
+    if (sessions && sessions.length) {
+      state.sessions = sessions;
+    }
+  } catch (e) {
+    debugWarn("[boot] IDB load failed", e);
+  }
+
+  try {
+    var migrated = await window.__chatDB.migrateFromLocalStorage();
+    if (migrated > 0 || (!state.sessions.length)) {
+      var reloaded = await window.__chatDB.loadSessionMetas();
+      if (reloaded && reloaded.length) {
+        state.sessions = reloaded;
+      }
+    }
+  } catch (e) {
+    debugWarn("[boot] migration failed", e);
+  }
+
+  migrateLegacySessions();
+  if (state.currentSessionId && !getCurrentSession() && state.sessions.length) {
+    state.currentSessionId = state.sessions[0].id;
+  }
+
+  var current = getCurrentSession();
+  if (options.hydrateCurrent && current && !current.messagesHydrated) {
+    if (typeof window.ensureChatFeatureLoaded === "function") {
+      await window.ensureChatFeatureLoaded();
+    }
+    if (typeof ensureSessionMessagesHydrated === "function") {
+      try {
+        await ensureSessionMessagesHydrated(current);
+      } catch (e) {
+        debugWarn("[boot] current session hydrate failed", e);
+      }
+    }
+  }
+
+  if (options.renderList && typeof renderChatListMenu === "function") {
+    renderChatListMenu();
+  }
+  return true;
+}
+
+function scheduleSessionMetaHydration(delay = 1800) {
+  const run = () => hydrateSessionMetasFromDb({ renderList: true });
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(run, { timeout: delay + 1400 });
+    return;
+  }
+  window.setTimeout(run, delay);
+}
+
+window.__moyuWarmSessionMetas = function(options = {}) {
+  if (options.immediate) {
+    return hydrateSessionMetasFromDb({ renderList: true });
+  }
+  scheduleSessionMetaHydration(Number.isFinite(options.delay) ? options.delay : 900);
+  return Promise.resolve(false);
+};
+
 async function init() {
   applyI18n();
   applyTheme(state.theme);
-  mountSessionEditButton();
-  mountComposerCancelButton();
   bindNav();
-  bindChat();
   bindInfoPopover();
   bindChatList();
-  bindFileDrop();
 
   const initialView = resolveInitialView();
   if (initialView === "create") {
-    if (typeof window.__moyuCreateStylesReady === "function") {
-      await window.__moyuCreateStylesReady();
+    if (typeof window.ensureCreateRuntimeLoaded === "function") {
+      await window.ensureCreateRuntimeLoaded();
+    } else {
+      await _loadScript("./scripts/features/create.js");
     }
-    await _loadScript("./scripts/features/create.js");
     initCreateView();
     prepareCreateViewForNewSession({ returnTarget: "welcome" });
     switchView("create");
@@ -248,10 +327,10 @@ async function init() {
     initSettingsView();
     switchView("settings");
   } else {
+    if (!state.showWelcomeHome && typeof window.ensureChatFeatureLoaded === "function") {
+      await window.ensureChatFeatureLoaded();
+    }
     switchView(initialView);
-  }
-  if (initialView === "chat" && !state.showWelcomeHome && typeof window.__moyuChatStylesReady === "function") {
-    await window.__moyuChatStylesReady();
   }
   renderChatListMenu();
   renderSession();
@@ -279,49 +358,18 @@ async function init() {
 }
 
 (async function boot() {
-  // 1. 从 IDB 加载全量会话
-  if (window.__chatDB) {
-    try {
-      var sessions = await window.__chatDB.loadSessionMetas();
-      if (sessions && sessions.length) {
-        state.sessions = sessions;
-      }
-    } catch (e) {
-      debugWarn("[boot] IDB load failed", e);
-    }
-    // 2. 总是尝试迁移 localStorage 旧数据（内部有 flag 防重复）
-    //    修复旧版本迁移时 uiType 字段丢失的问题
-    try {
-      var migrated = await window.__chatDB.migrateFromLocalStorage();
-      if (migrated > 0 || (!state.sessions.length)) {
-        var reloaded = await window.__chatDB.loadSessionMetas();
-        if (reloaded && reloaded.length) {
-          state.sessions = reloaded;
-        }
-      }
-    } catch (e) {
-      debugWarn("[boot] migration failed", e);
-    }
+  const startupInitialPage = state.settings?.startup?.initialPage || "welcome";
+  if (startupInitialPage === "last-chat") {
+    await hydrateSessionMetasFromDb({ hydrateCurrent: true });
   }
 
-  // 3. 标准化会话
   migrateLegacySessions();
-  if (window.__chatDB) {
-    var current = getCurrentSession();
-    var shouldHydrateInitialSession = state.settings?.startup?.initialPage === "last-chat";
-    if (current && shouldHydrateInitialSession && !current.messagesHydrated && typeof ensureSessionMessagesHydrated === "function") {
-      try {
-        await ensureSessionMessagesHydrated(current);
-      } catch (e) {
-        debugWarn("[boot] current session hydrate failed", e);
-      }
-    }
+
+  await init();
+  if (startupInitialPage !== "last-chat") {
+    scheduleSessionMetaHydration(2200);
   }
 
-  // 4. 启动
-  await init();
-
-  // 5. 注册 PWA Service Worker（安装到桌面支持）
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(function() {});
   }
