@@ -480,32 +480,31 @@
   min-width: 180px;
   padding: 10px 16px;
   border-radius: 10px;
+  border-width: 1px;
   background: var(--theme-danger-soft);
-  border-color: rgba(198, 40, 40, 0.26);
+  border-color: transparent;
   color: var(--theme-danger);
   font-weight: 600;
   box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .settings-danger-btn:hover {
-  background: var(--theme-danger-soft);
-  border-color: rgba(198, 40, 40, 0.34);
+  background: rgba(196, 43, 28, 0.28);
+  border-color: transparent;
   color: var(--theme-danger);
 }
 
 html[data-theme="light"] .settings-danger-btn {
-  appearance: none;
-  -webkit-appearance: none;
   background: #d74b40;
-  border-color: #d74b40;
+  border-color: transparent;
   color: #ffffff;
-  box-shadow: none;
-  filter: none;
 }
 
 html[data-theme="light"] .settings-danger-btn:hover {
   background: #e0564b;
-  border-color: #e0564b;
+  border-color: transparent;
   color: #ffffff;
 }
 

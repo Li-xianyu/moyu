@@ -315,7 +315,7 @@
 
 .chat-meta-section:last-child {
   border-bottom: 0;
-  padding-bottom: 0;
+  padding-bottom: 18px;
 }
 
 .chat-meta-label {

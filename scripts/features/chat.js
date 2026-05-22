@@ -886,25 +886,24 @@ function shouldRenderThinkingForModel(modelName) {
   return true;
 }
 
-// 移动端会话底部超拖弹性效果
-// 对标侧栏手势的 rubber-band 阻尼和释放动画曲线
+// 移动端会话消息区底部超拖弹性效果
+// 仅作用于 .chat-messages，底部输入框不动
+// 使用 GPU 合成 transform 实现，避免主线程重排抖动
 function initChatOverscroll() {
   if (!isMobileViewport()) return;
 
   var MAX_PX = 60;
   var RELEASE_EASING = "cubic-bezier(0.32, 0.72, 0, 1)";
-
   var main = document.querySelector(".main");
   if (!main) return;
 
-  var messagesEl = null;
+  var msgEl = null;
   var overscrolling = false;
   var anchorY = 0;
-  var basePad = 0;
 
   function el() {
-    if (!messagesEl) messagesEl = document.querySelector("#chatView .chat-messages");
-    return messagesEl;
+    if (!msgEl) msgEl = document.querySelector("#chatView .chat-messages");
+    return msgEl;
   }
 
   function damp(dist) {
@@ -923,10 +922,7 @@ function initChatOverscroll() {
     overscrolling = false;
     anchorY = 0;
     var m = el();
-    if (m) {
-      basePad = parseFloat(getComputedStyle(m).paddingBottom) || 0;
-      m.style.transition = "none";
-    }
+    if (m) m.style.transition = "none";
   }, { passive: true });
 
   main.addEventListener("touchmove", function (e) {
@@ -945,6 +941,7 @@ function initChatOverscroll() {
     if (!anchorY) {
       anchorY = touchY;
       e.preventDefault();
+      m.style.willChange = "transform";
       return;
     }
 
@@ -953,14 +950,15 @@ function initChatOverscroll() {
       anchorY = touchY;
       if (overscrolling) {
         overscrolling = false;
-        m.style.removeProperty("padding-bottom");
+        m.style.transform = "";
+        m.style.willChange = "";
       }
       return;
     }
 
     overscrolling = true;
     e.preventDefault();
-    m.style.paddingBottom = damp(dragPast) + "px";
+    m.style.transform = "translateY(" + (-damp(dragPast)) + "px)";
   }, { passive: false });
 
   function release() {
@@ -971,14 +969,11 @@ function initChatOverscroll() {
     var m = el();
     if (!m) return;
 
-    var px = parseFloat(m.style.paddingBottom) || 0;
-    if (px <= basePad) return;
-
-    m.style.transition = "padding-bottom 0.22s " + RELEASE_EASING;
-    m.style.paddingBottom = basePad + "px";
+    m.style.transition = "transform 0.22s " + RELEASE_EASING;
+    m.style.transform = "";
     m.addEventListener("transitionend", function () {
       m.style.transition = "";
-      m.style.removeProperty("padding-bottom");
+      m.style.willChange = "";
     }, { once: true });
   }
 
