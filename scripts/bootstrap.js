@@ -304,6 +304,9 @@ window.__moyuWarmSessionMetas = function(options = {}) {
 async function init() {
   applyI18n();
   applyTheme(state.theme);
+  if (typeof _updateSystemThemeListener === "function") {
+    _updateSystemThemeListener(state.theme);
+  }
   bindNav();
   bindInfoPopover();
   bindChatList();

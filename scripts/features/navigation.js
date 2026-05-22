@@ -32,6 +32,7 @@ let _chatFeaturePromise = null;
 let _chatRuntimePromise = null;
 let _createRuntimePromise = null;
 let _settingsRuntimePromise = null;
+let _sessionEditorRuntimePromise = null;
 let _chatFeatureBound = false;
 
 function _loadScript(src) {
@@ -194,6 +195,20 @@ function ensureCreateStylesLoaded() {
     : Promise.resolve();
 }
 
+function ensureSessionEditorRuntimeLoaded() {
+  if (_sessionEditorRuntimePromise) {
+    return _sessionEditorRuntimePromise;
+  }
+  _sessionEditorRuntimePromise = Promise.all([
+    ensureSettingsRuntimeLoaded(),
+    ensureCreateStylesLoaded(),
+  ]).catch((error) => {
+    _sessionEditorRuntimePromise = null;
+    throw error;
+  });
+  return _sessionEditorRuntimePromise;
+}
+
 function ensureRolesStylesLoaded() {
   return typeof window.__moyuRolesStylesReady === "function"
     ? window.__moyuRolesStylesReady()
@@ -336,7 +351,7 @@ async function restoreViewFromHistory(entry) {
     state.deleteConfirmSessionId = null;
     state.renameSessionId = null;
     if (entry.editingId) {
-      await ensureSettingsRuntimeLoaded();
+      await ensureSessionEditorRuntimeLoaded();
       initCreateView();
       initSettingsView();
       openSessionEditor(entry.editingId);
@@ -474,6 +489,7 @@ window.ensureChatDbLoaded = ensureChatDbLoaded;
 window.ensureChatFeatureLoaded = ensureChatFeatureLoaded;
 window.ensureSettingsRuntimeLoaded = ensureSettingsRuntimeLoaded;
 window.ensureCreateRuntimeLoaded = ensureCreateRuntimeLoaded;
+window.ensureSessionEditorRuntimeLoaded = ensureSessionEditorRuntimeLoaded;
 window.warmChatFeature = warmChatFeature;
 window.warmSettingsRuntime = warmSettingsRuntime;
 
@@ -557,7 +573,7 @@ function clearSidebarGestureProgress() {
 }
 
 function initSidebarGestureDebugTools() {
-  const STORAGE_KEY = "moyu-sidebar-gesture-debug";
+  // 不再使用 localStorage，而是对接设置里的"调试模式"开关
   const MAX_SESSIONS = 12;
   const MAX_FRAMES = 240;
   const MAX_MOVES = 180;
@@ -774,28 +790,19 @@ function initSidebarGestureDebugTools() {
     enable(options = {}) {
       debug.enabled = true;
       debug.live = Boolean(options.live);
-      if (options.persist !== false) {
-        localStorage.setItem(STORAGE_KEY, "1");
-      }
-      console.info("[MOYU sidebar-debug] enabled", { live: debug.live });
       return this.getState();
     },
-    disable(options = {}) {
+    disable() {
       debug.enabled = false;
       debug.live = false;
       debug.activeSession = null;
       stopFrameLoop();
-      if (options.persist !== false) {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-      console.info("[MOYU sidebar-debug] disabled");
       return this.getState();
     },
     clear() {
       debug.sessions.length = 0;
       debug.activeSession = null;
       stopFrameLoop();
-      console.info("[MOYU sidebar-debug] cleared");
     },
     getState() {
       return {
@@ -804,6 +811,13 @@ function initSidebarGestureDebugTools() {
         sessions: debug.sessions.length,
         activeSessionId: debug.activeSession?.id || null
       };
+    },
+    sync() {
+      if (typeof isDebugModeEnabled === "function" && isDebugModeEnabled()) {
+        if (!debug.enabled) this.enable({ live: true });
+      } else {
+        if (debug.enabled) this.disable();
+      }
     },
     dumpLast() {
       const session = debug.sessions[debug.sessions.length - 1];
@@ -892,7 +906,7 @@ function initSidebarGestureDebugTools() {
       debug.activeSession.dragging = false;
       debug.activeSession.end = payload;
       stopFrameLoop();
-      printSession(debug.activeSession);
+      if (debug.live) printSession(debug.activeSession);
       debug.activeSession = null;
     },
     cancelSession(payload) {
@@ -900,14 +914,15 @@ function initSidebarGestureDebugTools() {
       debug.activeSession.dragging = false;
       debug.activeSession.end = Object.assign({ canceled: true }, payload);
       stopFrameLoop();
-      printSession(debug.activeSession);
+      if (debug.live) printSession(debug.activeSession);
       debug.activeSession = null;
     }
   };
 
-  if (localStorage.getItem(STORAGE_KEY) === "1") {
-    window.__moyuSidebarGestureDebug.enable({ persist: false });
-  }
+  // 侧栏调试默认关闭，不再对接设置开关
+  // if (typeof isDebugModeEnabled === "function" && isDebugModeEnabled()) {
+  //   window.__moyuSidebarGestureDebug.enable({ live: true });
+  // }
 }
 
 initSidebarGestureDebugTools();
@@ -1323,6 +1338,9 @@ function bindSettingsResize() {
   };
 
   els.settingsResizeHandle.addEventListener("pointerdown", (event) => {
+    if (isMobileViewport()) {
+      return;
+    }
     event.preventDefault();
     const shell = getResizeShell();
     if (!shell) {
@@ -1385,7 +1403,7 @@ function mountSessionEditButton() {
     }
     const session = getCurrentSession();
     if (session) {
-      await ensureSettingsRuntimeLoaded();
+      await ensureSessionEditorRuntimeLoaded();
       initCreateView();
       initSettingsView();
       openSessionEditor(session.id);

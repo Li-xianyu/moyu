@@ -36,6 +36,10 @@
   padding: 6px 0 2px;
 }
 
+.settings-back-btn {
+  display: none;
+}
+
 .settings-list-head-copy {
   min-width: 0;
   display: grid;
@@ -910,17 +914,48 @@ html[data-theme="light"] .settings-danger-btn:hover {
   }
 
   #settingsView .settings-list-panel {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
-    padding-bottom: 10px;
+    padding: 0 0 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--theme-border-default);
+  }
+
+  #settingsView .settings-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: max-content;
+    min-height: 28px;
+    padding: 0;
+    margin: 0 0 8px;
+    border: 0;
+    background: transparent;
+    color: #7fb7ff;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    cursor: pointer;
+    transition: color 0.15s ease, opacity 0.15s ease;
+  }
+
+  #settingsView .settings-back-btn:hover {
+    color: #a9ceff;
+  }
+
+  #settingsView .settings-back-icon {
+    width: 14px;
+    height: 14px;
   }
 
   #settingsView .settings-section-nav {
     display: flex;
     flex-direction: row;
-    gap: 8px;
+    gap: 6px;
     overflow-x: auto;
     flex-wrap: nowrap;
-    padding: 0 0 8px;
+    padding: 0 0 10px;
     scrollbar-width: none;
     touch-action: pan-x pan-y;
     -webkit-overflow-scrolling: touch;
@@ -934,12 +969,19 @@ html[data-theme="light"] .settings-danger-btn:hover {
     flex: 0 0 auto;
     width: auto;
     min-height: 34px;
-    padding: 0 12px;
-    border-radius: 999px;
+    padding: 5px 12px;
+    border-radius: 8px;
     gap: 6px;
     color: var(--muted);
     font-size: 12px;
     font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
 
   #settingsView .settings-section-btn.active {
@@ -948,8 +990,8 @@ html[data-theme="light"] .settings-danger-btn:hover {
   }
 
   #settingsView .settings-section-icon {
-    width: 15px;
-    height: 15px;
+    width: 16px;
+    height: 16px;
   }
 
   #apiSettingsPanel.settings-page-panel.active {
@@ -1053,6 +1095,11 @@ html[data-theme="light"] .settings-danger-btn:hover {
   }
 
   #apiSettingsPanel .settings-config-name {
+    display: block;
+    max-width: 10em;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     font-size: 12px;
   }
 
@@ -1084,6 +1131,10 @@ html[data-theme="light"] .settings-danger-btn:hover {
     grid-template-rows: auto;
     gap: 0;
     overflow: visible;
+  }
+
+  #apiSettingsPanel .settings-resize-handle {
+    display: none !important;
   }
 
   #apiSettingsPanel .settings-detail-panel,
@@ -1161,24 +1212,32 @@ html[data-theme="light"] .settings-danger-btn:hover {
 
   #apiSettingsPanel .work-model-list {
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 8px;
+    flex-direction: column;
+    gap: 12px;
     margin-top: 2px;
     padding: 0;
     overflow: visible;
   }
 
   #apiSettingsPanel .work-model-group {
-    display: contents;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
 
   #apiSettingsPanel .work-model-group-label {
-    display: none;
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--theme-text-muted);
+    letter-spacing: 0.02em;
+    padding: 0 4px;
   }
 
   #apiSettingsPanel .work-model-group-list {
-    display: contents;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
   #apiSettingsPanel .work-model-item {

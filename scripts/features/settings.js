@@ -30,6 +30,15 @@ function syncApiEditorVisibility() {
 }
 
 function bindSettings() {
+  els.settingsBackBtn?.addEventListener("click", () => {
+    if (isMobileSettingsViewport() && state.mobileSidebarOpen) {
+      state.mobileSidebarOpen = false;
+      applySidebarState();
+    }
+    switchView("chat");
+    renderSession();
+  });
+
   els.globalSettingsTabBtn.addEventListener("click", () => {
     switchSettingsSection("global");
   });
@@ -437,11 +446,13 @@ function renderSavedConfigs() {
     button.type = "button";
     const isActive = config.id === state.settings.activeConfigId;
     button.className = `settings-config-item ${isActive ? "active" : ""}`.trim();
+    const configLabel = getConfigLabel(config);
+    button.title = configLabel;
     const isDeleteConfirm = state.deleteConfirmConfigId === config.id;
     const workModelCount = Array.isArray(config.workModels) ? config.workModels.length : 0;
     button.innerHTML = `
       <div class="settings-config-top">
-        <strong class="settings-config-name">${escapeHtml(getConfigLabel(config))}</strong>
+        <strong class="settings-config-name">${escapeHtml(configLabel)}</strong>
         <button type="button" class="settings-config-delete-btn ${isDeleteConfirm ? "confirm" : ""}" aria-label="${escapeHtml(state.locale === "en-US" ? "Delete API profile" : "删除接口")}">
           <i data-lucide="x" class="settings-config-delete-icon"></i>
         </button>

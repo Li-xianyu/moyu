@@ -12,14 +12,17 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.22.08";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.23.01";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
       try {
         var t = JSON.parse(localStorage.getItem("moyu-theme"));
-        if (t === "dark" || t === "light") theme = t;
+        if (t === "dark" || t === "light" || t === "system") theme = t;
       } catch(e) {}
+      if (theme === "system") {
+        theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? "light" : "dark";
+      }
       document.documentElement.setAttribute("data-theme", theme);
       var isLight = theme === "light";
       var metaTheme = document.querySelector('meta[name="theme-color"]');
@@ -304,11 +307,17 @@
       }
       window.__moyuCriticalStylesReady = loadStyleList(criticalHrefs, true);
       window.__moyuChatStylesReady = function() { return loadStyleList(chatHrefs, false); };
-      window.__moyuCreateStylesReady = function() {
+      function loadSettingsStyles() {
         return Promise.all([loadStyleList(formHrefs, false), loadStyleList(settingsHrefs, false)]);
+      }
+      window.__moyuCreateStylesReady = function() {
+        return Promise.all([
+          loadSettingsStyles(),
+          window.__moyuChatStylesReady()
+        ]);
       };
       window.__moyuSettingsStylesReady = function() {
-        return window.__moyuCreateStylesReady();
+        return loadSettingsStyles();
       };
       window.__moyuRolesStylesReady = function() {
         return Promise.all([loadStyleList(formHrefs, false), loadStyleList(rolesHrefs, false)]);
@@ -534,6 +543,10 @@
                 <p class="hint-text" data-i18n="settings.sectionHint">先选择要调整的设置分组。</p>
               </div>
             </div>
+            <button id="settingsBackBtn" class="settings-back-btn" type="button">
+              <i data-lucide="chevron-left" class="settings-back-icon" aria-hidden="true"></i>
+              <span data-i18n="settings.back">返回</span>
+            </button>
             <div class="settings-section-nav">
               <button id="globalSettingsTabBtn" class="settings-section-btn active" type="button">
                 <i data-lucide="sliders-horizontal" class="settings-section-icon" aria-hidden="true"></i>
@@ -577,6 +590,7 @@
                       <label class="field settings-language-field">
                         <span data-i18n="settings.themeLabel">界面主题</span>
                         <select id="themeSelect">
+                          <option value="system" data-i18n="settings.theme.system">跟随系统</option>
                           <option value="dark" data-i18n="settings.theme.dark">深色</option>
                           <option value="light" data-i18n="settings.theme.light">浅色</option>
                         </select>
@@ -910,9 +924,9 @@
           </div>
 
           <div id="sessionEditTabs" class="session-edit-tabs hidden" role="tablist" aria-label="编辑当前会话">
-            <button id="sessionEditInfoTabBtn" class="session-edit-tab-btn active" type="button" role="tab" aria-selected="true" data-session-edit-section="details" data-i18n="create.editNavInfo"><i data-lucide="file-text" class="nav-icon-svg"></i><span>会话信息</span></button>
-            <button id="sessionEditOverridesTabBtn" class="session-edit-tab-btn" type="button" role="tab" aria-selected="false" data-session-edit-section="overrides" data-i18n="create.editNavOverrides"><i data-lucide="sliders" class="nav-icon-svg"></i><span>会话界面</span></button>
-            <button id="sessionEditAdvancedTabBtn" class="session-edit-tab-btn" type="button" role="tab" aria-selected="false" data-session-edit-section="advanced" data-i18n="create.editNavAdvanced"><i data-lucide="sliders-horizontal" class="nav-icon-svg"></i><span>高级设置</span></button>
+            <button id="sessionEditInfoTabBtn" class="session-edit-tab-btn active" type="button" role="tab" aria-selected="true" data-session-edit-section="details"><i data-lucide="file-text" class="nav-icon-svg"></i><span data-i18n="create.editNavInfo">会话信息</span></button>
+            <button id="sessionEditOverridesTabBtn" class="session-edit-tab-btn" type="button" role="tab" aria-selected="false" data-session-edit-section="overrides"><i data-lucide="sliders" class="nav-icon-svg"></i><span data-i18n="create.editNavOverrides">会话界面</span></button>
+            <button id="sessionEditAdvancedTabBtn" class="session-edit-tab-btn" type="button" role="tab" aria-selected="false" data-session-edit-section="advanced"><i data-lucide="sliders-horizontal" class="nav-icon-svg"></i><span data-i18n="create.editNavAdvanced">高级设置</span></button>
           </div>
 
           <div class="session-edit-workspace">

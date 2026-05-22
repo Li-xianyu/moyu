@@ -169,7 +169,7 @@ body::after {
     height: auto !important;
     min-height: 0 !important;
     box-sizing: border-box !important;
-    padding: calc(16px + var(--moyu-top-guard, 0px)) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)) !important;
+    padding: calc(46px + var(--moyu-top-guard, 0px)) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)) !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch !important;
@@ -274,6 +274,10 @@ body::after {
 }
 
 @media (max-width: 640px) {
+  #settingsView.view.active {
+    padding-top: calc(42px + var(--moyu-top-guard, 0px)) !important;
+  }
+
   #settingsView.view.active,
   #createView.view.active {
     padding-bottom: 40px !important;

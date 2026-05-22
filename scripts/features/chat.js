@@ -48,6 +48,7 @@ function scheduleCompressPopoverHide() {
 }
 
 function bindChat() {
+  initChatOverscroll();
   els.sendBtn.addEventListener("click", function onSendClick() {
     warmChatRuntime();
     const session = getCurrentSession();
@@ -885,11 +886,106 @@ function shouldRenderThinkingForModel(modelName) {
   return true;
 }
 
+// 移动端会话底部超拖弹性效果
+// 对标侧栏手势的 rubber-band 阻尼和释放动画曲线
+// 策略：不做 preventDefault 跟浏览器抢滚动；只在触底后检测手指超拖位移，
+// 把 damped 值写入 .chat-messages 的 padding-bottom，让底部露出空白。
+function initChatOverscroll() {
+  if (!isMobileViewport()) return;
 
+  var MAX_PX = 22;
+  var RELEASE_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
 
+  var main = document.querySelector(".main");
+  if (!main) return;
 
+  var messagesEl = null;
+  var overscrolling = false;
+  var anchorY = 0;
+  var prevY = 0;
 
+  function el() {
+    if (!messagesEl) messagesEl = document.querySelector("#chatView .chat-messages");
+    return messagesEl;
+  }
 
+  function damp(dist) {
+    var safe = Math.max(0, dist);
+    if (!safe) return 0;
+    return (safe * MAX_PX) / (safe + MAX_PX);
+  }
 
+  function chatActive() {
+    var cv = document.getElementById("chatView");
+    return !!(cv && cv.classList.contains("active"));
+  }
 
+  main.addEventListener("touchstart", function (e) {
+    if (!chatActive()) return;
+    overscrolling = false;
+    anchorY = 0;
+    prevY = e.touches[0].clientY;
+    var m = el();
+    if (m) m.style.transition = "none";
+  }, { passive: true });
 
+  main.addEventListener("touchmove", function (e) {
+    if (!chatActive()) return;
+    var m = el();
+    if (!m) return;
+
+    var touchY = e.touches[0].clientY;
+    var atBottom = main.scrollTop + main.clientHeight >= main.scrollHeight - 3;
+
+    if (!atBottom) {
+      anchorY = 0;
+      prevY = touchY;
+      return;
+    }
+
+    // 触底瞬间记下锚点
+    if (!anchorY) {
+      anchorY = touchY;
+      prevY = touchY;
+      return;
+    }
+
+    var dragPast = anchorY - touchY; // >0 = 手指继续上滑，进入超拖
+    if (dragPast < 0) {
+      // 手指下滑，重置锚点
+      anchorY = touchY;
+      if (overscrolling) {
+        overscrolling = false;
+        m.style.paddingBottom = "0";
+      }
+      prevY = touchY;
+      return;
+    }
+
+    overscrolling = true;
+    m.style.paddingBottom = damp(dragPast) + "px";
+    prevY = touchY;
+  }, { passive: false });
+
+  function release() {
+    if (!overscrolling) return;
+    overscrolling = false;
+    anchorY = 0;
+
+    var m = el();
+    if (!m) return;
+
+    var px = parseFloat(m.style.paddingBottom) || 0;
+    if (px <= 0) return;
+
+    m.style.transition = "padding-bottom 0.22s " + RELEASE_EASING;
+    m.style.paddingBottom = "0";
+    m.addEventListener("transitionend", function () {
+      m.style.transition = "";
+      m.style.paddingBottom = "";
+    }, { once: true });
+  }
+
+  main.addEventListener("touchend", release, { passive: true });
+  main.addEventListener("touchcancel", release, { passive: true });
+}

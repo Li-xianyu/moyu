@@ -457,10 +457,16 @@ function renderChatListMenu() {
     editBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
       closeChatItemMenus();
-      if (typeof window.ensureSettingsRuntimeLoaded === "function") {
-        await window.ensureSettingsRuntimeLoaded();
+      if (typeof window.ensureSessionEditorRuntimeLoaded === "function") {
+        await window.ensureSessionEditorRuntimeLoaded();
+      } else if (typeof window.ensureSettingsRuntimeLoaded === "function") {
+        await Promise.all([
+          window.ensureSettingsRuntimeLoaded(),
+          typeof window.__moyuCreateStylesReady === "function" ? window.__moyuCreateStylesReady() : Promise.resolve(),
+        ]);
       } else if (typeof window._loadScript === "function") {
         await Promise.all([
+          typeof window.__moyuCreateStylesReady === "function" ? window.__moyuCreateStylesReady() : Promise.resolve(),
           window._loadScript("./scripts/features/custom-select.js"),
           window._loadScript("./scripts/features/create.js"),
           window._loadScript("./scripts/features/settings.js"),

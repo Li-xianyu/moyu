@@ -507,27 +507,50 @@ function debugWarn(...args) {
 }
 
 function applyTheme(theme) {
-  document.documentElement.setAttribute("data-theme", theme || "dark");
+  const resolved = theme === "system"
+    ? (window.matchMedia?.('(prefers-color-scheme: light)').matches ? "light" : "dark")
+    : (theme || "dark");
+  document.documentElement.setAttribute("data-theme", resolved);
   const metaTheme = document.querySelector('meta[name="theme-color"]');
   const metaScheme = document.querySelector('meta[name="color-scheme"]');
   if (metaTheme) {
-    metaTheme.setAttribute("content", theme === "light" ? "#f3f3f3" : "#1e1e1e");
+    metaTheme.setAttribute("content", resolved === "light" ? "#f3f3f3" : "#1e1e1e");
   }
   if (metaScheme) {
-    metaScheme.setAttribute("content", theme === "light" ? "light" : "dark");
+    metaScheme.setAttribute("content", resolved === "light" ? "light" : "dark");
   }
-  swapHighlightTheme(theme || "dark");
+  swapHighlightTheme(resolved);
+}
+
+let _themeMediaQuery = null;
+
+function _onSystemThemeChange() {
+  if (state.theme === "system") {
+    applyTheme("system");
+  }
+}
+
+function _updateSystemThemeListener(theme) {
+  if (_themeMediaQuery) {
+    _themeMediaQuery.removeEventListener("change", _onSystemThemeChange);
+    _themeMediaQuery = null;
+  }
+  if (theme === "system") {
+    _themeMediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+    _themeMediaQuery.addEventListener("change", _onSystemThemeChange);
+  }
 }
 
 function setTheme(theme) {
-  const next = theme === "light" ? "light" : "dark";
-  state.theme = next;
-  applyTheme(next);
-  localStorage.setItem(STORAGE_KEYS.theme, JSON.stringify(next));
+  const valid = theme === "system" || theme === "light" ? theme : "dark";
+  state.theme = valid;
+  applyTheme(valid);
+  localStorage.setItem(STORAGE_KEYS.theme, JSON.stringify(valid));
   if (els?.themeSelect) {
-    els.themeSelect.value = next;
+    els.themeSelect.value = valid;
   }
   window.__customSelect?.refreshAll?.();
+  _updateSystemThemeListener(valid);
 }
 
 function swapHighlightTheme(theme) {
@@ -538,6 +561,9 @@ function swapHighlightTheme(theme) {
 }
 
 function cycleTheme() {
-  const next = state.theme === "dark" ? "light" : "dark";
+  const current = state.theme === "system"
+    ? (window.matchMedia?.('(prefers-color-scheme: light)').matches ? "light" : "dark")
+    : state.theme;
+  const next = current === "dark" ? "light" : "dark";
   setTheme(next);
 }

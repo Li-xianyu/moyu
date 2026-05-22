@@ -127,6 +127,7 @@ const els = {
   sidebarToggleBtn: document.getElementById("sidebarToggleBtn"),
   sidebarCollapseBtn: document.getElementById("sidebarCollapseBtn"),
   sidebarBackdrop: document.getElementById("sidebarBackdrop"),
+  settingsBackBtn: document.getElementById("settingsBackBtn"),
   openCurrentChatBtn: document.getElementById("openCurrentChatBtn"),
   chatListEmpty: document.getElementById("chatListEmpty"),
   chatSearchBtn: document.getElementById("chatSearchBtn"),

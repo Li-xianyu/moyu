@@ -2723,6 +2723,11 @@ html[data-theme="light"] .thinking-content {
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
+.session-edit-tab-btn .nav-icon-svg {
+  width: 16px;
+  height: 16px;
+}
+
 .session-edit-tab-btn:hover {
   background: var(--theme-bg-active);
   color: var(--text);
