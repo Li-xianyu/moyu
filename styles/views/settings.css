@@ -919,37 +919,17 @@ html[data-theme="light"] .settings-danger-btn:hover {
       "work";
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto auto;
-    gap: 14px;
-    padding: 2px 0 22px;
-  }
-
-  #apiSettingsPanel .settings-api-list-panel,
-  #apiSettingsPanel .settings-detail-panel,
-  #apiSettingsPanel .settings-model-panel,
-  #apiSettingsPanel .settings-work-models-panel {
-    border: 1px solid var(--theme-border-subtle);
-    border-radius: 20px;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
-      var(--theme-bg-panel);
-    box-shadow: var(--theme-shadow-sm);
-  }
-
-  html[data-theme="light"] #apiSettingsPanel .settings-api-list-panel,
-  html[data-theme="light"] #apiSettingsPanel .settings-detail-panel,
-  html[data-theme="light"] #apiSettingsPanel .settings-model-panel,
-  html[data-theme="light"] #apiSettingsPanel .settings-work-models-panel {
-    background:
-      linear-gradient(180deg, rgba(35, 131, 245, 0.045), rgba(255, 255, 255, 0)),
-      var(--theme-bg-panel);
+    gap: 0;
+    padding: 0 0 22px;
   }
 
   #apiSettingsPanel .settings-api-list-panel {
     min-width: 0;
     display: grid;
     grid-template-rows: auto auto;
-    gap: 12px;
-    padding: 14px;
+    gap: 10px;
+    padding: 0 0 18px;
+    border-bottom: 1px solid var(--theme-bg-hover);
     overflow: hidden;
   }
 
@@ -979,17 +959,17 @@ html[data-theme="light"] .settings-danger-btn:hover {
 
   #apiSettingsPanel #addConfigBtn {
     min-width: 0;
-    min-height: 40px;
-    padding: 9px 14px;
-    border-radius: 999px;
+    min-height: 38px;
+    padding: 8px 14px;
+    border-radius: 12px;
   }
 
   #apiSettingsPanel .settings-config-list {
     display: flex;
-    gap: 10px;
+    gap: 6px;
     max-height: none;
-    margin: 0 -14px;
-    padding: 0 14px 2px;
+    margin: 0;
+    padding: 0 0 4px;
     overflow-x: auto;
     overflow-y: hidden;
     scroll-snap-type: x proximity;
@@ -1002,20 +982,18 @@ html[data-theme="light"] .settings-danger-btn:hover {
   }
 
   #apiSettingsPanel .settings-config-item {
-    flex: 0 0 min(236px, 76vw);
+    flex: 0 0 min(210px, 68vw);
     width: auto;
-    min-height: 92px;
     min-width: 0;
     scroll-snap-align: start;
-    padding: 12px;
-    border: 1px solid var(--theme-border-subtle);
-    border-radius: 16px;
-    background: var(--theme-bg-panel-alt);
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
   }
 
   #apiSettingsPanel .settings-config-item.active {
-    border-color: color-mix(in srgb, var(--theme-accent) 62%, var(--theme-border-default));
-    background: var(--theme-bg-selected-soft);
+    background: var(--theme-bg-active);
   }
 
   #apiSettingsPanel .settings-config-name {
@@ -1040,7 +1018,7 @@ html[data-theme="light"] .settings-danger-btn:hover {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto;
-    gap: 14px;
+    gap: 0;
     overflow: visible;
   }
 
@@ -1050,7 +1028,8 @@ html[data-theme="light"] .settings-danger-btn:hover {
     min-width: 0;
     height: auto;
     overflow: visible;
-    padding: 16px;
+    padding: 18px 0;
+    border-top: 1px solid var(--theme-bg-hover);
   }
 
   #apiSettingsPanel .settings-detail-panel .form-grid {
@@ -1098,9 +1077,9 @@ html[data-theme="light"] .settings-danger-btn:hover {
 
   #apiSettingsPanel .model-list-item {
     min-height: 50px;
-    padding: 13px 14px;
-    border-radius: 14px;
-    background: var(--theme-bg-panel-alt);
+    padding: 11px 12px;
+    border-radius: 10px;
+    background: var(--theme-bg-panel-strong);
     word-break: break-word;
   }
 
@@ -1131,10 +1110,10 @@ html[data-theme="light"] .settings-danger-btn:hover {
 
   #apiSettingsPanel .work-model-item {
     min-height: 46px;
-    padding: 11px 12px;
-    border-radius: 14px;
-    border: 1px solid var(--theme-border-subtle);
-    background: var(--theme-bg-panel-alt);
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 0;
+    background: var(--theme-bg-panel-strong);
   }
 
   #apiSettingsPanel .work-model-name {

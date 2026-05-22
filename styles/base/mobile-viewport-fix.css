@@ -248,7 +248,7 @@ body::after {
 
   #settingsView .settings-config-list {
     display: flex !important;
-    gap: 10px !important;
+    gap: 6px !important;
     max-height: none !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
@@ -256,7 +256,7 @@ body::after {
   }
 
   #settingsView .settings-config-item {
-    flex: 0 0 min(236px, 76vw) !important;
+    flex: 0 0 min(210px, 68vw) !important;
     min-width: 0 !important;
   }
 
