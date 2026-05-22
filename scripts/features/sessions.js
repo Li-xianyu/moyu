@@ -425,7 +425,9 @@ function renderChatListMenu() {
     editBtn.addEventListener("click", async (event) => {
       event.stopPropagation();
       closeChatItemMenus();
-      if (typeof window._loadScript === "function") {
+      if (typeof window.ensureSettingsRuntimeLoaded === "function") {
+        await window.ensureSettingsRuntimeLoaded();
+      } else if (typeof window._loadScript === "function") {
         await Promise.all([
           window._loadScript("./scripts/features/create.js"),
           window._loadScript("./scripts/features/settings.js"),
@@ -433,6 +435,9 @@ function renderChatListMenu() {
       }
       if (typeof initCreateView === "function") {
         initCreateView();
+      }
+      if (typeof initSettingsView === "function") {
+        initSettingsView();
       }
       openSessionEditor(session.id);
     });

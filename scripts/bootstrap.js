@@ -237,7 +237,11 @@ async function init() {
     prepareCreateViewForNewSession({ returnTarget: "welcome" });
     switchView("create");
   } else if (initialView === "settings") {
-    await _loadScript("./scripts/features/settings.js");
+    if (typeof ensureSettingsRuntimeLoaded === "function") {
+      await ensureSettingsRuntimeLoaded();
+    } else {
+      await _loadScript("./scripts/features/settings.js");
+    }
     initSettingsView();
     switchView("settings");
   } else {
@@ -247,6 +251,9 @@ async function init() {
   renderSession();
   updateMobileViewportFix();
   syncMobileDebugConsole();
+  if (typeof warmSettingsRuntime === "function" && initialView !== "settings") {
+    warmSettingsRuntime();
+  }
 
   var loadingEl = document.getElementById('loadingScreen');
   if (loadingEl) {

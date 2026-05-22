@@ -8,6 +8,7 @@ const CHAT_RUNTIME_SCRIPTS = [
 ];
 
 let _chatRuntimePromise = null;
+let _settingsRuntimePromise = null;
 
 function _loadScript(src) {
   if (_scriptState[src] === "loaded") return Promise.resolve();
@@ -54,6 +55,36 @@ function warmChatRuntime() {
   setTimeout(() => {
     ensureChatRuntimeLoaded().catch((error) => debugWarn("[chat-runtime] preload failed", error));
   }, 120);
+}
+
+function ensureSettingsRuntimeLoaded() {
+  if (_settingsRuntimePromise) {
+    return _settingsRuntimePromise;
+  }
+  _settingsRuntimePromise = Promise.all([
+    _loadScript("./scripts/features/create.js"),
+    _loadScript("./scripts/features/settings.js"),
+  ]).catch((error) => {
+    _settingsRuntimePromise = null;
+    throw error;
+  });
+  return _settingsRuntimePromise;
+}
+
+function warmSettingsRuntime() {
+  const preload = () => {
+    ensureSettingsRuntimeLoaded()
+      .then(() => {
+        initCreateView();
+        initSettingsView();
+      })
+      .catch((error) => debugWarn("[settings-runtime] preload failed", error));
+  };
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(preload, { timeout: 2200 });
+    return;
+  }
+  setTimeout(preload, 350);
 }
 
 function pushViewHistory() {
@@ -169,9 +200,9 @@ async function restoreViewFromHistory(entry) {
     state.deleteConfirmSessionId = null;
     state.renameSessionId = null;
     if (entry.editingId) {
-      await _loadScript("./scripts/features/create.js");
-      await _loadScript("./scripts/features/settings.js");
+      await ensureSettingsRuntimeLoaded();
       initCreateView();
+      initSettingsView();
       openSessionEditor(entry.editingId);
     } else {
       await _loadScript("./scripts/features/create.js");
@@ -180,8 +211,7 @@ async function restoreViewFromHistory(entry) {
       switchView("create");
     }
   } else if (entry.view === "settings") {
-    await _loadScript("./scripts/features/create.js");
-    await _loadScript("./scripts/features/settings.js");
+    await ensureSettingsRuntimeLoaded();
     initSettingsView();
     switchView("settings");
   } else if (entry.view === "roles") {
@@ -252,8 +282,7 @@ function bindNav() {
         const returnTarget = state.showWelcomeHome ? "welcome" : "chat";
         prepareCreateViewForNewSession({ returnTarget });
       } else if (view === "settings") {
-        await _loadScript("./scripts/features/create.js");
-        await _loadScript("./scripts/features/settings.js");
+        await ensureSettingsRuntimeLoaded();
         initSettingsView();
       } else if (view === "roles") {
         await _loadScript("./scripts/features/roles.js");
@@ -293,6 +322,8 @@ function initCreateView() {
 }
 
 window._loadScript = _loadScript;
+window.ensureSettingsRuntimeLoaded = ensureSettingsRuntimeLoaded;
+window.warmSettingsRuntime = warmSettingsRuntime;
 
 function isMobileViewport() {
   return window.matchMedia("(max-width: 960px)").matches;
@@ -1170,9 +1201,9 @@ function mountSessionEditButton() {
     }
     const session = getCurrentSession();
     if (session) {
-      await _loadScript("./scripts/features/create.js");
-      await _loadScript("./scripts/features/settings.js");
+      await ensureSettingsRuntimeLoaded();
       initCreateView();
+      initSettingsView();
       openSessionEditor(session.id);
     }
   });
