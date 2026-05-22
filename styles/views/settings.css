@@ -903,3 +903,244 @@ html[data-theme="light"] .settings-danger-btn:hover {
   background: var(--theme-bg-active-strong);
   border-color: var(--theme-accent);
 }
+
+@media (max-width: 960px) {
+  #apiSettingsPanel.settings-page-panel.active {
+    overflow: visible;
+  }
+
+  #apiSettingsPanel .settings-api-shell {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-areas:
+      "list"
+      "top"
+      "work";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    gap: 14px;
+    padding: 2px 0 22px;
+  }
+
+  #apiSettingsPanel .settings-api-list-panel,
+  #apiSettingsPanel .settings-detail-panel,
+  #apiSettingsPanel .settings-model-panel,
+  #apiSettingsPanel .settings-work-models-panel {
+    border: 1px solid var(--theme-border-subtle);
+    border-radius: 20px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
+      var(--theme-bg-panel);
+    box-shadow: var(--theme-shadow-sm);
+  }
+
+  html[data-theme="light"] #apiSettingsPanel .settings-api-list-panel,
+  html[data-theme="light"] #apiSettingsPanel .settings-detail-panel,
+  html[data-theme="light"] #apiSettingsPanel .settings-model-panel,
+  html[data-theme="light"] #apiSettingsPanel .settings-work-models-panel {
+    background:
+      linear-gradient(180deg, rgba(35, 131, 245, 0.045), rgba(255, 255, 255, 0)),
+      var(--theme-bg-panel);
+  }
+
+  #apiSettingsPanel .settings-api-list-panel {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: auto auto;
+    gap: 12px;
+    padding: 14px;
+    overflow: hidden;
+  }
+
+  #apiSettingsPanel .settings-api-list-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 0;
+  }
+
+  #apiSettingsPanel .settings-list-head-copy {
+    min-width: 0;
+    gap: 3px;
+  }
+
+  #apiSettingsPanel .settings-list-head-copy h3 {
+    font-size: 16px;
+    letter-spacing: 0;
+  }
+
+  #apiSettingsPanel .settings-list-head-copy .hint-text {
+    max-width: none;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  #apiSettingsPanel #addConfigBtn {
+    min-width: 0;
+    min-height: 40px;
+    padding: 9px 14px;
+    border-radius: 999px;
+  }
+
+  #apiSettingsPanel .settings-config-list {
+    display: flex;
+    gap: 10px;
+    max-height: none;
+    margin: 0 -14px;
+    padding: 0 14px 2px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #apiSettingsPanel .settings-config-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  #apiSettingsPanel .settings-config-item {
+    flex: 0 0 min(236px, 76vw);
+    width: auto;
+    min-height: 92px;
+    min-width: 0;
+    scroll-snap-align: start;
+    padding: 12px;
+    border: 1px solid var(--theme-border-subtle);
+    border-radius: 16px;
+    background: var(--theme-bg-panel-alt);
+  }
+
+  #apiSettingsPanel .settings-config-item.active {
+    border-color: color-mix(in srgb, var(--theme-accent) 62%, var(--theme-border-default));
+    background: var(--theme-bg-selected-soft);
+  }
+
+  #apiSettingsPanel .settings-config-name {
+    font-size: 15px;
+  }
+
+  #apiSettingsPanel .settings-config-host {
+    font-size: 12px;
+    white-space: normal;
+    word-break: break-all;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  #apiSettingsPanel .settings-resizable-layout,
+  #apiSettingsPanel .settings-top-pane,
+  #apiSettingsPanel .settings-content-grid {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    gap: 14px;
+    overflow: visible;
+  }
+
+  #apiSettingsPanel .settings-detail-panel,
+  #apiSettingsPanel .settings-model-panel,
+  #apiSettingsPanel .settings-work-models-panel {
+    min-width: 0;
+    height: auto;
+    overflow: visible;
+    padding: 16px;
+  }
+
+  #apiSettingsPanel .settings-detail-panel .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  #apiSettingsPanel .settings-actions-row {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  #apiSettingsPanel .settings-actions-row > .primary-btn,
+  #apiSettingsPanel .settings-actions-row > .actions,
+  #apiSettingsPanel .settings-actions-row > .actions > button {
+    width: 100%;
+  }
+
+  #apiSettingsPanel .settings-actions-row .actions-compact {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  #apiSettingsPanel .settings-model-panel {
+    grid-template-rows: auto auto auto;
+    gap: 12px;
+  }
+
+  #apiSettingsPanel .settings-model-panel .sub-panel-head,
+  #apiSettingsPanel .settings-work-models-panel .sub-panel-head {
+    align-items: flex-start;
+    gap: 6px;
+    padding: 0;
+  }
+
+  #apiSettingsPanel .settings-model-panel .model-list {
+    max-height: min(42dvh, 360px);
+    margin-top: 2px;
+    padding-right: 2px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #apiSettingsPanel .model-list-item {
+    min-height: 50px;
+    padding: 13px 14px;
+    border-radius: 14px;
+    background: var(--theme-bg-panel-alt);
+    word-break: break-word;
+  }
+
+  #apiSettingsPanel .model-list-item.selected {
+    color: var(--theme-text-strong);
+    border-color: var(--theme-accent);
+    background: var(--theme-bg-selected-soft);
+  }
+
+  #apiSettingsPanel .settings-work-models-panel {
+    grid-template-rows: auto auto auto;
+    gap: 10px;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  #apiSettingsPanel .work-model-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    margin-top: 2px;
+    padding: 0;
+    overflow: visible;
+  }
+
+  #apiSettingsPanel .work-model-group-list {
+    gap: 8px;
+  }
+
+  #apiSettingsPanel .work-model-item {
+    min-height: 46px;
+    padding: 11px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--theme-border-subtle);
+    background: var(--theme-bg-panel-alt);
+  }
+
+  #apiSettingsPanel .work-model-name {
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: normal;
+    word-break: break-word;
+  }
+}

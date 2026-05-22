@@ -248,21 +248,20 @@ body::after {
 
   #settingsView .settings-config-list {
     display: flex !important;
-    gap: 8px !important;
+    gap: 10px !important;
     max-height: none !important;
     overflow-x: auto !important;
     overflow-y: hidden !important;
-    padding: 0 2px 6px 0 !important;
     -webkit-overflow-scrolling: touch !important;
   }
 
   #settingsView .settings-config-item {
-    flex: 0 0 min(220px, 72vw) !important;
+    flex: 0 0 min(236px, 76vw) !important;
     min-width: 0 !important;
   }
 
   #settingsView .settings-model-panel .model-list {
-    max-height: 320px !important;
+    max-height: min(42dvh, 360px) !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
   }
