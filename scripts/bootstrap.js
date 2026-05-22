@@ -232,6 +232,9 @@ async function init() {
 
   const initialView = resolveInitialView();
   if (initialView === "create") {
+    if (typeof window.__moyuCreateStylesReady === "function") {
+      await window.__moyuCreateStylesReady();
+    }
     await _loadScript("./scripts/features/create.js");
     initCreateView();
     prepareCreateViewForNewSession({ returnTarget: "welcome" });
@@ -247,12 +250,15 @@ async function init() {
   } else {
     switchView(initialView);
   }
+  if (initialView === "chat" && !state.showWelcomeHome && typeof window.__moyuChatStylesReady === "function") {
+    await window.__moyuChatStylesReady();
+  }
   renderChatListMenu();
   renderSession();
   updateMobileViewportFix();
   syncMobileDebugConsole();
   if (typeof warmSettingsRuntime === "function" && initialView !== "settings") {
-    warmSettingsRuntime();
+    warmSettingsRuntime({ delay: 3600 });
   }
   if (window.__moyuCriticalStylesReady?.then) {
     await window.__moyuCriticalStylesReady;

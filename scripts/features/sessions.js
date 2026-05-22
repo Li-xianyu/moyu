@@ -328,6 +328,9 @@ function renderChatListMenu() {
       clearUserMessageEdit();
       state.showWelcomeHome = false;
       state.currentSessionId = session.id;
+      if (typeof window.__moyuChatStylesReady === "function") {
+        await window.__moyuChatStylesReady();
+      }
       if (!(els.views.chat?.classList.contains("active"))) {
         switchView("chat");
       }
@@ -399,6 +402,10 @@ function renderChatListMenu() {
     const moreBtn = document.createElement("button");
     moreBtn.type = "button";
     moreBtn.className = `chat-list-more-btn ${state.openChatMenuId === session.id ? "active" : ""}`.trim();
+    const sessionLabel = session.title || (state.locale === "en-US" ? "Untitled session" : "未命名会话");
+    const moreLabel = state.locale === "en-US" ? `Session actions: ${sessionLabel}` : `会话操作：${sessionLabel}`;
+    moreBtn.setAttribute("aria-label", moreLabel);
+    moreBtn.title = moreLabel;
     moreBtn.innerHTML = `
       <i data-lucide="ellipsis-vertical" class="nav-icon-svg"></i>
     `;

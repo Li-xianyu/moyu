@@ -35,10 +35,14 @@ function ensureChatRuntimeLoaded() {
   if (_chatRuntimePromise) {
     return _chatRuntimePromise;
   }
-  _chatRuntimePromise = CHAT_RUNTIME_SCRIPTS.reduce(
+  const chatStylesReady = typeof window.__moyuChatStylesReady === "function"
+    ? window.__moyuChatStylesReady()
+    : Promise.resolve();
+  const chatScriptsReady = CHAT_RUNTIME_SCRIPTS.reduce(
     (chain, src) => chain.then(() => _loadScript(src)),
     Promise.resolve()
-  ).catch((error) => {
+  );
+  _chatRuntimePromise = Promise.all([chatStylesReady, chatScriptsReady]).catch((error) => {
     _chatRuntimePromise = null;
     throw error;
   });
@@ -61,11 +65,11 @@ function ensureSettingsRuntimeLoaded() {
   if (_settingsRuntimePromise) {
     return _settingsRuntimePromise;
   }
-  const deferredStylesReady = typeof window.__moyuDeferredStylesReady === "function"
-    ? window.__moyuDeferredStylesReady()
+  const settingsStylesReady = typeof window.__moyuSettingsStylesReady === "function"
+    ? window.__moyuSettingsStylesReady()
     : Promise.resolve();
   _settingsRuntimePromise = Promise.all([
-    deferredStylesReady,
+    settingsStylesReady,
     _loadScript("./scripts/features/create.js"),
     _loadScript("./scripts/features/settings.js"),
   ]).catch((error) => {
@@ -81,7 +85,19 @@ function ensureDeferredStylesLoaded() {
     : Promise.resolve();
 }
 
-function warmSettingsRuntime() {
+function ensureCreateStylesLoaded() {
+  return typeof window.__moyuCreateStylesReady === "function"
+    ? window.__moyuCreateStylesReady()
+    : Promise.resolve();
+}
+
+function ensureRolesStylesLoaded() {
+  return typeof window.__moyuRolesStylesReady === "function"
+    ? window.__moyuRolesStylesReady()
+    : Promise.resolve();
+}
+
+function warmSettingsRuntime(options = {}) {
   const preload = () => {
     ensureSettingsRuntimeLoaded()
       .then(() => {
@@ -90,11 +106,17 @@ function warmSettingsRuntime() {
       })
       .catch((error) => debugWarn("[settings-runtime] preload failed", error));
   };
-  if (window.requestIdleCallback) {
-    window.requestIdleCallback(preload, { timeout: 2200 });
+  if (options.immediate) {
+    preload();
     return;
   }
-  setTimeout(preload, 350);
+  const delay = Number.isFinite(options.delay) ? Math.max(0, options.delay) : 3500;
+  const schedule = () => window.setTimeout(preload, delay);
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(schedule, { timeout: delay + 1200 });
+    return;
+  }
+  schedule();
 }
 
 function pushViewHistory() {
@@ -215,6 +237,7 @@ async function restoreViewFromHistory(entry) {
       initSettingsView();
       openSessionEditor(entry.editingId);
     } else {
+      await ensureCreateStylesLoaded();
       await _loadScript("./scripts/features/create.js");
       initCreateView();
       prepareCreateViewForNewSession({ returnTarget: "chat" });
@@ -225,7 +248,7 @@ async function restoreViewFromHistory(entry) {
     initSettingsView();
     switchView("settings");
   } else if (entry.view === "roles") {
-    await ensureDeferredStylesLoaded();
+    await ensureRolesStylesLoaded();
     await _loadScript("./scripts/features/roles.js");
     initRolesView();
     switchView("roles");
@@ -250,6 +273,10 @@ function bindNav() {
     els.sidebarToggleBtn.addEventListener("click", () => {
       if (isMobileViewport()) {
         state.mobileSidebarOpen = !state.mobileSidebarOpen;
+        if (state.mobileSidebarOpen) {
+          warmSettingsRuntime({ immediate: true });
+          if (typeof window.__moyuChatStylesReady === "function") window.__moyuChatStylesReady();
+        }
       } else {
         state.sidebarCollapsed = !(state.sidebarCollapsed === null ? false : state.sidebarCollapsed);
         persistSidebarCollapsed();
@@ -288,6 +315,7 @@ function bindNav() {
     button.addEventListener("click", async () => {
       const view = button.dataset.view;
       if (view === "create") {
+        await ensureCreateStylesLoaded();
         await _loadScript("./scripts/features/create.js");
         initCreateView();
         const returnTarget = state.showWelcomeHome ? "welcome" : "chat";
@@ -296,12 +324,17 @@ function bindNav() {
         await ensureSettingsRuntimeLoaded();
         initSettingsView();
       } else if (view === "roles") {
-        await ensureDeferredStylesLoaded();
+        await ensureRolesStylesLoaded();
         await _loadScript("./scripts/features/roles.js");
         initRolesView();
       }
       switchView(view);
     });
+    if (button.dataset.view === "settings") {
+      ["pointerenter", "focus", "touchstart"].forEach((eventName) => {
+        button.addEventListener(eventName, () => warmSettingsRuntime({ immediate: true }), { once: true, passive: true });
+      });
+    }
   });
 
   applySidebarState();

@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.22.01";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.22.02";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -204,6 +204,11 @@
       justify-items: center;
       text-align: center;
     }
+    .welcome-logo {
+      width: min(248px, 56vw);
+      height: auto;
+      color: var(--theme-bg-sidebar, #111111);
+    }
     .chat-welcome-copy h2 { display: none; }
     .chat-welcome-copy p {
       max-width: 34ch;
@@ -213,6 +218,8 @@
     }
     .chat-stage.empty-state .chat-messages,
     .chat-stage.empty-state .composer-shell { display: none; }
+    .app-shell:has(#chatView.empty-state) .info-btn.floating,
+    .app-shell:has(#chatView.empty-state) .chat-info-popover { display: none; }
     @media (max-width: 960px) {
       .app-shell {
         grid-template-columns: minmax(0, 1fr);
@@ -263,61 +270,62 @@
       var criticalHrefs = [
         "./styles/base/variables.css",
         "./styles/layout/shell.css",
-        "./styles/base/forms.css",
-        "./styles/views/chat.css",
         "./styles/base/responsive.css",
         "./styles/base/mobile-viewport-fix.css"
       ];
-      var deferredHrefs = [
-        "./styles/views/settings.css",
-        "./styles/views/roles.css",
-        "./styles/base/scrollbars.css",
-        hljsTheme,
-        "./styles/base/drop-overlay.css"
-      ];
-      var criticalLoads = [];
-      function appendStylesheet(href) {
+      var chatHrefs = ["./styles/views/chat.css"];
+      var formHrefs = ["./styles/base/forms.css"];
+      var settingsHrefs = ["./styles/views/settings.css"];
+      var rolesHrefs = ["./styles/views/roles.css"];
+      var ambientHrefs = ["./styles/base/scrollbars.css", "./styles/base/drop-overlay.css"];
+      var styleLoads = {};
+      function loadStylesheet(href, blocking) {
+        if (styleLoads[href]) return styleLoads[href];
         var link = document.createElement("link");
-        link.rel = "stylesheet";
+        link.rel = blocking ? "stylesheet" : "preload";
+        if (!blocking) link.as = "style";
         link.href = href + "?v=" + v;
-        criticalLoads.push(new Promise(function(resolve) {
+        styleLoads[href] = new Promise(function(resolve) {
           link.onload = resolve;
           link.onerror = resolve;
-        }));
-        document.head.appendChild(link);
-      }
-      function appendDeferredStylesheet(href) {
-        return new Promise(function(resolve) {
-          var link = document.createElement("link");
-          link.rel = "preload";
-          link.as = "style";
-          link.href = href + "?v=" + v;
-          link.onload = function() {
-            link.onload = null;
-            link.rel = "stylesheet";
-            resolve();
-          };
-          link.onerror = resolve;
-          document.head.appendChild(link);
-        });
-      }
-      for (var i = 0; i < criticalHrefs.length; i++) appendStylesheet(criticalHrefs[i]);
-      window.__moyuCriticalStylesReady = Promise.all(criticalLoads);
-      var deferredStyleLoads = null;
-      var loadDeferredStyles = function() {
-        if (!deferredStyleLoads) {
-          deferredStyleLoads = [];
-          for (var i = 0; i < deferredHrefs.length; i++) {
-            deferredStyleLoads.push(appendDeferredStylesheet(deferredHrefs[i]));
+          if (!blocking) {
+            link.onload = function() {
+              link.onload = null;
+              link.rel = "stylesheet";
+              resolve();
+            };
           }
-        }
-        return Promise.all(deferredStyleLoads);
+        });
+        document.head.appendChild(link);
+        return styleLoads[href];
+      }
+      function loadStyleList(hrefs, blocking) {
+        return Promise.all(hrefs.map(function(href) { return loadStylesheet(href, blocking); }));
+      }
+      window.__moyuCriticalStylesReady = loadStyleList(criticalHrefs, true);
+      window.__moyuChatStylesReady = function() { return loadStyleList(chatHrefs, false); };
+      window.__moyuCreateStylesReady = function() { return loadStyleList(formHrefs, false); };
+      window.__moyuSettingsStylesReady = function() {
+        return Promise.all([loadStyleList(formHrefs, false), loadStyleList(settingsHrefs, false)]);
       };
-      window.__moyuDeferredStylesReady = loadDeferredStyles;
+      window.__moyuRolesStylesReady = function() {
+        return Promise.all([loadStyleList(formHrefs, false), loadStyleList(rolesHrefs, false)]);
+      };
+      window.__moyuHighlightStyleReady = function() { return loadStyleList([hljsTheme], false); };
+      window.__moyuDeferredStylesReady = function() {
+        return Promise.all([
+          window.__moyuChatStylesReady(),
+          window.__moyuCreateStylesReady(),
+          window.__moyuSettingsStylesReady(),
+          window.__moyuRolesStylesReady(),
+          loadStyleList(ambientHrefs, false)
+        ]);
+      };
+      var loadAmbientStyles = function() { loadStyleList(ambientHrefs, false); };
       if (window.requestIdleCallback) {
-        window.requestIdleCallback(loadDeferredStyles, { timeout: 1800 });
+        window.requestIdleCallback(loadAmbientStyles, { timeout: 3500 });
       } else {
-        setTimeout(loadDeferredStyles, 450);
+        setTimeout(loadAmbientStyles, 2200);
       }
     })();
   </script>
@@ -1314,20 +1322,22 @@
     };
     window.__moyuLoadHighlight = function() {
       if (typeof hljs !== 'undefined') {
-        window.__moyuSetupHighlight();
-        return Promise.resolve();
+        return (typeof window.__moyuHighlightStyleReady === "function" ? window.__moyuHighlightStyleReady() : Promise.resolve())
+          .then(function() { window.__moyuSetupHighlight(); });
       }
       if (window.__moyuHighlightLoading) return window.__moyuHighlightLoading;
-      window.__moyuHighlightLoading = new Promise(function(resolve) {
-        var s = document.createElement('script');
-        s.src = './vendor/highlight.js/11.9.0/highlight.min.js?v=' + (window.APP_VERSION || '');
-        s.async = true;
-        s.onload = function() {
-          window.__moyuSetupHighlight();
-          resolve();
-        };
-        s.onerror = resolve;
-        document.body.appendChild(s);
+      window.__moyuHighlightLoading = (typeof window.__moyuHighlightStyleReady === "function" ? window.__moyuHighlightStyleReady() : Promise.resolve()).then(function() {
+        return new Promise(function(resolve) {
+          var s = document.createElement('script');
+          s.src = './vendor/highlight.js/11.9.0/highlight.min.js?v=' + (window.APP_VERSION || '');
+          s.async = true;
+          s.onload = function() {
+            window.__moyuSetupHighlight();
+            resolve();
+          };
+          s.onerror = resolve;
+          document.body.appendChild(s);
+        });
       });
       return window.__moyuHighlightLoading;
     };
