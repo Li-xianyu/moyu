@@ -236,10 +236,29 @@ body::after {
     grid-template-rows: none !important;
   }
 
+  #settingsView .settings-api-shell {
+    grid-template-areas:
+      "list"
+      "top"
+      "work" !important;
+    grid-template-rows: auto auto auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
   #settingsView .settings-config-list {
-    max-height: 220px !important;
-    overflow-y: auto !important;
+    display: flex !important;
+    gap: 8px !important;
+    max-height: none !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 0 2px 6px 0 !important;
     -webkit-overflow-scrolling: touch !important;
+  }
+
+  #settingsView .settings-config-item {
+    flex: 0 0 min(220px, 72vw) !important;
+    min-width: 0 !important;
   }
 
   #settingsView .settings-model-panel .model-list {
