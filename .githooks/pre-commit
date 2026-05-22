@@ -1,9 +1,13 @@
 #!/bin/bash
-# Auto-bump version in index.html before each commit
-# Version format: YYYYM.DD.RR  (e.g. 20265.13.01 = 2026/May/13 rev01)
+# Auto-bump version in index.html + sw.js before each commit
+# Version format: YYYY.M.D.RR  (e.g. 2026.5.23.1 = 2026/May/23 1st rev)
 
-FILE="index.html"
-CURRENT=$(grep 'window.APP_VERSION = "' "$FILE" | sed 's/.*"\([^"]*\)".*/\1/')
+set -e
+
+HTML_FILE="index.html"
+SW_FILE="sw.js"
+
+CURRENT=$(grep 'window.APP_VERSION = "' "$HTML_FILE" | sed 's/.*"\([^"]*\)".*/\1/')
 [ -z "$CURRENT" ] && exit 0
 
 OLD_DATE="${CURRENT%.*}"
@@ -12,14 +16,16 @@ OLD_REV="${CURRENT##*.}"
 YEAR=$(date +%Y)
 MONTH=$(date +%-m)
 DAY=$(date +%-d)
-TODAY="${YEAR}${MONTH}.${DAY}"
+TODAY="${YEAR}.${MONTH}.${DAY}"
 
 if [ "$OLD_DATE" = "$TODAY" ]; then
-  NEW_REV=$(printf "%02d" $((10#$OLD_REV + 1)))
+  NEW_REV=$(printf "%d" $((10#$OLD_REV + 1)))
 else
-  NEW_REV="01"
+  NEW_REV="1"
 fi
 
 NEW_VER="${TODAY}.${NEW_REV}"
-sed -i 's/window\.APP_VERSION = "[^"]*"/window.APP_VERSION = "'"$NEW_VER"'"/' "$FILE"
-git add "$FILE"
+sed -i 's/window\.APP_VERSION = "[^"]*"/window.APP_VERSION = "'"$NEW_VER"'"/' "$HTML_FILE"
+sed -i 's/const SW_VERSION = "[^"]*"/const SW_VERSION = "'"$NEW_VER"'"/' "$SW_FILE"
+
+git add "$HTML_FILE" "$SW_FILE"

@@ -891,8 +891,8 @@ function shouldRenderThinkingForModel(modelName) {
 function initChatOverscroll() {
   if (!isMobileViewport()) return;
 
-  var MAX_PX = 22;
-  var RELEASE_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
+  var MAX_PX = 60;
+  var RELEASE_EASING = "cubic-bezier(0.32, 0.72, 0, 1)";
 
   var main = document.querySelector(".main");
   if (!main) return;
@@ -944,6 +944,7 @@ function initChatOverscroll() {
 
     if (!anchorY) {
       anchorY = touchY;
+      e.preventDefault();
       return;
     }
 
@@ -958,6 +959,7 @@ function initChatOverscroll() {
     }
 
     overscrolling = true;
+    e.preventDefault();
     m.style.paddingBottom = damp(dragPast) + "px";
   }, { passive: false });
 

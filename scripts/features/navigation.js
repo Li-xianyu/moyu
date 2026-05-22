@@ -1037,8 +1037,8 @@ function bindMobileSwipeGesture() {
     const t = e.touches[0];
     const dx = t.clientX - touchStartX;
     const dy = Math.abs(t.clientY - touchStartY);
-    if (dy > Math.abs(dx) * 1.8) return;
-    if (Math.abs(dx) < 10) return;
+    if (dy > Math.abs(dx) * 1.2) return;
+    if (Math.abs(dx) < 15) return;
 
     if (!isDragging) {
       isDragging = true;

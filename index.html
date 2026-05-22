@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.23.02";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.5.23.2";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -223,6 +223,8 @@
     .chat-stage.empty-state .composer-shell { display: none; }
     .app-shell:has(#chatView.empty-state) .info-btn.floating,
     .app-shell:has(#chatView.empty-state) .chat-info-popover { display: none; }
+    .app-shell:not(:has(#chatView.active)) .info-btn.floating,
+    .app-shell:not(:has(#chatView.active)) .chat-info-popover { display: none; }
     @media (max-width: 960px) {
       .app-shell {
         grid-template-columns: minmax(0, 1fr);
