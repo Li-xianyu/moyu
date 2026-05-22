@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "20265.21.44";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "20265.21.45";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -101,6 +101,139 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0; }
     }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--loading-bg, #1e1e1e);
+      color: var(--loading-text, #cccccc);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    .app-shell {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      height: 100vh;
+      height: 100dvh;
+      min-height: 100vh;
+      overflow: hidden;
+      position: relative;
+      background: var(--bg, var(--loading-bg, #1e1e1e));
+    }
+    .sidebar {
+      min-height: 0;
+      padding: 18px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow: hidden;
+      background: var(--sidebar, #111111);
+    }
+    .brand > h1,
+    .brand > p { display: none; }
+    .brand-mark,
+    .nav-btn,
+    .nav-text-toggle {
+      display: flex;
+      align-items: center;
+    }
+    .nav-main {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .nav-bottom { margin-top: auto; }
+    .chat-list-control {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      flex-direction: column;
+    }
+    .chat-list-menu {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      flex-direction: column;
+    }
+    .main {
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      padding: 20px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      position: relative;
+    }
+    .view {
+      display: none;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .view.active { display: block; }
+    #chatView {
+      min-height: 100%;
+      overflow: visible;
+    }
+    .chat-stage {
+      display: flex;
+      flex-direction: column;
+      min-height: 100%;
+      max-width: min(100%, 820px);
+      width: 100%;
+      margin: 0 auto;
+      position: relative;
+    }
+    .chat-stage.empty-state { justify-content: center; }
+    .chat-welcome {
+      display: none;
+      flex: 1 1 0;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      padding: 32px 24px;
+    }
+    .chat-stage.empty-state .chat-welcome { display: flex; }
+    .chat-welcome-copy {
+      width: min(480px, 100%);
+      display: grid;
+      gap: 14px;
+      justify-items: center;
+      text-align: center;
+    }
+    .chat-welcome-copy h2 { display: none; }
+    .chat-welcome-copy p {
+      max-width: 34ch;
+      margin: 0;
+      line-height: 1.7;
+      color: var(--muted, #9d9d9d);
+    }
+    .chat-stage.empty-state .chat-messages,
+    .chat-stage.empty-state .composer-shell { display: none; }
+    @media (max-width: 960px) {
+      .app-shell {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
+      }
+      .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: min(260px, 76vw);
+        z-index: 32;
+        transform: translateX(-100%);
+        opacity: 0;
+        pointer-events: none;
+      }
+      .app-shell.sidebar-drawer-open .sidebar {
+        transform: translateX(0);
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .main { padding: 14px; }
+    }
   </style>
   <script>
     // Suppress unhandled rejections from third-party CDN scripts
@@ -119,24 +252,64 @@
       var hljsTheme = theme === "light"
         ? "./vendor/highlight.js/11.9.0/styles/atom-one-light.min.css"
         : "./vendor/highlight.js/11.9.0/styles/atom-one-dark.min.css";
-      var hrefs = [
+      var criticalHrefs = [
         "./styles/base/variables.css",
         "./styles/layout/shell.css",
-        "./styles/views/settings.css",
         "./styles/base/forms.css",
         "./styles/views/chat.css",
-        "./styles/views/roles.css",
         "./styles/base/responsive.css",
+        "./styles/base/mobile-viewport-fix.css"
+      ];
+      var deferredHrefs = [
+        "./styles/views/settings.css",
+        "./styles/views/roles.css",
         "./styles/base/scrollbars.css",
         hljsTheme,
-        "./styles/base/mobile-viewport-fix.css",
         "./styles/base/drop-overlay.css"
       ];
-      for (var i = 0; i < hrefs.length; i++) {
+      var criticalLoads = [];
+      function appendStylesheet(href) {
         var link = document.createElement("link");
         link.rel = "stylesheet";
-        link.href = hrefs[i] + "?v=" + v;
+        link.href = href + "?v=" + v;
+        criticalLoads.push(new Promise(function(resolve) {
+          link.onload = resolve;
+          link.onerror = resolve;
+        }));
         document.head.appendChild(link);
+      }
+      function appendDeferredStylesheet(href) {
+        return new Promise(function(resolve) {
+          var link = document.createElement("link");
+          link.rel = "preload";
+          link.as = "style";
+          link.href = href + "?v=" + v;
+          link.onload = function() {
+            link.onload = null;
+            link.rel = "stylesheet";
+            resolve();
+          };
+          link.onerror = resolve;
+          document.head.appendChild(link);
+        });
+      }
+      for (var i = 0; i < criticalHrefs.length; i++) appendStylesheet(criticalHrefs[i]);
+      window.__moyuCriticalStylesReady = Promise.all(criticalLoads);
+      var deferredStyleLoads = null;
+      var loadDeferredStyles = function() {
+        if (!deferredStyleLoads) {
+          deferredStyleLoads = [];
+          for (var i = 0; i < deferredHrefs.length; i++) {
+            deferredStyleLoads.push(appendDeferredStylesheet(deferredHrefs[i]));
+          }
+        }
+        return Promise.all(deferredStyleLoads);
+      };
+      window.__moyuDeferredStylesReady = loadDeferredStyles;
+      if (window.requestIdleCallback) {
+        window.requestIdleCallback(loadDeferredStyles, { timeout: 1800 });
+      } else {
+        setTimeout(loadDeferredStyles, 450);
       }
     })();
   </script>
@@ -188,21 +361,24 @@
   };
   function measureText() {
     if (!host) return;
-    var measure = document.createElement('span');
-    measure.setAttribute('aria-hidden', 'true');
-    measure.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;pointer-events:none;left:0;top:0;';
-    host.appendChild(measure);
+    var canvas = measureText._canvas || (measureText._canvas = document.createElement('canvas'));
+    var ctx = canvas.getContext('2d');
+    var computed = window.getComputedStyle(host);
+    ctx.font = computed.font || [
+      computed.fontStyle,
+      computed.fontVariant,
+      computed.fontWeight,
+      computed.fontSize + "/" + computed.lineHeight,
+      computed.fontFamily
+    ].join(" ");
     metrics = [0];
     for (var i = 1; i <= phrase.length; i++) {
-      measure.textContent = phrase.substring(0, i);
-      metrics[i] = measure.getBoundingClientRect().width;
+      metrics[i] = ctx.measureText(phrase.substring(0, i)).width;
     }
     fullWidth = metrics[phrase.length] || 0;
-    host.removeChild(measure);
-    cursorWidth = cursor ? cursor.getBoundingClientRect().width : 0;
-    var computed = window.getComputedStyle(host);
     var parsedGap = parseFloat(computed.getPropertyValue('--tw-gap'));
     gap = Number.isFinite(parsedGap) ? parsedGap : 3;
+    cursorWidth = Math.max(1, ctx.measureText("0").width * 0.5);
     host.style.setProperty('--tw-full-width', Math.ceil(fullWidth) + 'px');
     updateTypewriterFrame(0);
   }
@@ -1123,6 +1299,29 @@
           hljs.highlightElement(el);
         });
       };
+      document.querySelectorAll('pre code').forEach(function(el) {
+        delete el.dataset.highlighted;
+        hljs.highlightElement(el);
+      });
+    };
+    window.__moyuLoadHighlight = function() {
+      if (typeof hljs !== 'undefined') {
+        window.__moyuSetupHighlight();
+        return Promise.resolve();
+      }
+      if (window.__moyuHighlightLoading) return window.__moyuHighlightLoading;
+      window.__moyuHighlightLoading = new Promise(function(resolve) {
+        var s = document.createElement('script');
+        s.src = './vendor/highlight.js/11.9.0/highlight.min.js?v=' + (window.APP_VERSION || '');
+        s.async = true;
+        s.onload = function() {
+          window.__moyuSetupHighlight();
+          resolve();
+        };
+        s.onerror = resolve;
+        document.body.appendChild(s);
+      });
+      return window.__moyuHighlightLoading;
     };
   </script>
   <script>
@@ -1130,7 +1329,6 @@
       var v = window.APP_VERSION;
       var srcs = [
         "./vendor/lucide/0.468.0/lucide.min.js",
-        "./vendor/highlight.js/11.9.0/highlight.min.js",
         "./scripts/core/constants.js",
         "./scripts/core/helpers.js",
         "./scripts/core/state.js",
@@ -1144,7 +1342,6 @@
         "./scripts/features/chat-ui.js",
         "./scripts/features/chat-edit.js",
         "./scripts/features/chat.js",
-        "./scripts/features/roles.js",
         "./scripts/features/custom-select.js",
         "./scripts/bootstrap.js"
       ];
@@ -1154,9 +1351,6 @@
         s.src = srcs[i] + "?v=" + v;
         s.async = false;
         s.onload = function() {
-          if (srcs[i].indexOf("/highlight.js/") !== -1 && typeof window.__moyuSetupHighlight === "function") {
-            window.__moyuSetupHighlight();
-          }
           if (srcs[i].indexOf("/lucide/") !== -1 && window.lucide && lucide.createIcons) {
             lucide.createIcons();
           }
@@ -1165,6 +1359,14 @@
         s.onerror = function() { load(i + 1); };
         document.body.appendChild(s);
       })(0);
+      var warmHighlight = function() {
+        if (typeof window.__moyuLoadHighlight === "function") window.__moyuLoadHighlight();
+      };
+      if (window.requestIdleCallback) {
+        window.requestIdleCallback(warmHighlight, { timeout: 2500 });
+      } else {
+        setTimeout(warmHighlight, 1200);
+      }
     })();
   </script>
   <div id="toastContainer" class="toast-container"></div>

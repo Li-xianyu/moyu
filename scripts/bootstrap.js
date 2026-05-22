@@ -254,6 +254,9 @@ async function init() {
   if (typeof warmSettingsRuntime === "function" && initialView !== "settings") {
     warmSettingsRuntime();
   }
+  if (window.__moyuCriticalStylesReady?.then) {
+    await window.__moyuCriticalStylesReady;
+  }
 
   var loadingEl = document.getElementById('loadingScreen');
   if (loadingEl) {
@@ -265,11 +268,7 @@ async function init() {
         if (tw && typeof tw.stop === "function") tw.stop();
       }, 400);
     }
-    if (tw && tw.cycleCount < 1) {
-      tw.onCycle = fadeOut;
-    } else {
-      fadeOut();
-    }
+    fadeOut();
   }
 }
 

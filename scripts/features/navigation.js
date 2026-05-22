@@ -61,7 +61,11 @@ function ensureSettingsRuntimeLoaded() {
   if (_settingsRuntimePromise) {
     return _settingsRuntimePromise;
   }
+  const deferredStylesReady = typeof window.__moyuDeferredStylesReady === "function"
+    ? window.__moyuDeferredStylesReady()
+    : Promise.resolve();
   _settingsRuntimePromise = Promise.all([
+    deferredStylesReady,
     _loadScript("./scripts/features/create.js"),
     _loadScript("./scripts/features/settings.js"),
   ]).catch((error) => {
@@ -69,6 +73,12 @@ function ensureSettingsRuntimeLoaded() {
     throw error;
   });
   return _settingsRuntimePromise;
+}
+
+function ensureDeferredStylesLoaded() {
+  return typeof window.__moyuDeferredStylesReady === "function"
+    ? window.__moyuDeferredStylesReady()
+    : Promise.resolve();
 }
 
 function warmSettingsRuntime() {
@@ -215,6 +225,7 @@ async function restoreViewFromHistory(entry) {
     initSettingsView();
     switchView("settings");
   } else if (entry.view === "roles") {
+    await ensureDeferredStylesLoaded();
     await _loadScript("./scripts/features/roles.js");
     initRolesView();
     switchView("roles");
@@ -285,6 +296,7 @@ function bindNav() {
         await ensureSettingsRuntimeLoaded();
         initSettingsView();
       } else if (view === "roles") {
+        await ensureDeferredStylesLoaded();
         await _loadScript("./scripts/features/roles.js");
         initRolesView();
       }
