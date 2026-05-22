@@ -7,6 +7,28 @@ async function ensureSessionStoreForSettings() {
   return Boolean(window.__chatDB);
 }
 
+let apiEditorRevealed = false;
+
+function isMobileSettingsViewport() {
+  return window.matchMedia("(max-width: 960px)").matches;
+}
+
+function revealApiEditor() {
+  apiEditorRevealed = true;
+  syncApiEditorVisibility();
+}
+
+function collapseApiEditorForMobile() {
+  apiEditorRevealed = false;
+  syncApiEditorVisibility();
+}
+
+function syncApiEditorVisibility() {
+  if (!els.apiSettingsPanel) return;
+  const shouldCollapse = isMobileSettingsViewport() && !apiEditorRevealed;
+  els.apiSettingsPanel.classList.toggle("api-editor-collapsed", shouldCollapse);
+}
+
 function bindSettings() {
   els.globalSettingsTabBtn.addEventListener("click", () => {
     switchSettingsSection("global");
@@ -143,6 +165,7 @@ function bindSettings() {
     state.settings.configs.unshift(config);
     state.settings.activeConfigId = config.id;
     state.deleteConfirmConfigId = null;
+    revealApiEditor();
     persistSettings();
     hydrateSettingsInputs();
     renderSavedConfigs();
@@ -278,6 +301,7 @@ function bindSettings() {
   }
 
   preventToggleWhileTyping();
+  window.addEventListener("resize", syncApiEditorVisibility, { passive: true });
 }
 
 // 移动端设置页：输入框有焦点时，点开关只收起键盘，不触发切换。
@@ -297,7 +321,11 @@ function preventToggleWhileTyping() {
 }
 
 function switchSettingsSection(section) {
+  const previousSection = state.currentSettingsSection;
   state.currentSettingsSection = ["global", "assistant", "session", "api"].includes(section) ? section : "global";
+  if (state.currentSettingsSection === "api" && previousSection !== "api") {
+    collapseApiEditorForMobile();
+  }
   renderSettingsSection();
 }
 
@@ -316,6 +344,7 @@ function renderSettingsSection() {
   els.assistantSettingsPanel.classList.toggle("active", isAssistant);
   els.apiSettingsPanel.classList.toggle("active", isApi);
   els.sessionSettingsPanel.classList.toggle("active", isSession);
+  syncApiEditorVisibility();
 
 }
 
@@ -425,6 +454,7 @@ function renderSavedConfigs() {
     button.addEventListener("click", () => {
       state.settings.activeConfigId = config.id;
       state.deleteConfirmConfigId = null;
+      revealApiEditor();
       persistSettings();
     hydrateSettingsInputs();
     renderSavedConfigs();
