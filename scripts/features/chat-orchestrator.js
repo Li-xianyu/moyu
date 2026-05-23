@@ -735,7 +735,11 @@ async function evaluateChaosNpcIntent(session, npc, npcState, stagedMessages, cy
     },
   ];
 
-  const payload = await createChatCompletionPayload(config.host, config.key, npc.model, messages, false, 0.45);
+  const intentTemp = typeof getSessionAgentParam === "function"
+    ? getSessionAgentParam(session, npc.name, "temperature")
+    : undefined;
+  const temp = intentTemp !== undefined ? intentTemp : getNpcResponseTemperature(session, npc.model);
+  const payload = await createChatCompletionPayload(config.host, config.key, npc.model, messages, false, temp);
   const parsed = parseChaosJson(payload.content) || {};
   const targeted = isChaosNpcTargeted(session, npc, stagedMessages);
   const latestIsPeer = latestVisible?.role === "assistant" && latestVisible.speaker && latestVisible.speaker !== npc.name;
@@ -774,7 +778,18 @@ function selectChaosResponders(intents, cycle) {
   const ranked = (Array.isArray(intents) ? intents : [])
     .filter((item) => item && (item.speak || item.impulse >= 24))
     .sort((a, b) => b.impulse - a.impulse);
-  if (!ranked.length) return [];
+  if (!ranked.length) {
+    // 全员不想接话 → 强制冲动最高的 NPC 发言，避免意图评估白烧钱
+    const sorted = (Array.isArray(intents) ? intents : [])
+      .filter((item) => item)
+      .sort((a, b) => b.impulse - a.impulse);
+    if (sorted.length) {
+      sorted[0].impulse = Math.max(50, sorted[0].impulse || 0);
+      sorted[0].forceReply = true;
+      return [sorted[0]];
+    }
+    return [];
+  }
 
   const threshold = cycle === 0 ? 24 : 30;
   const selected = [];
@@ -821,7 +836,9 @@ async function generateChaosNpcReply(session, npc, npcState, intent, stagedMessa
         "4. 别写成教科书，但可以说出有内容的见解。",
         "5. 不要重复你自己刚说过的话，也别顺着别人的句式复读。",
         "6. 同一个话题绕了 3 轮以上就别硬续了，可以抛个新话题——别总跳到推荐东西上。",
-        "7. 如果你这一拍其实不想说，输出 <SKIP>。",
+        ...(intent.forceReply
+          ? ["这一拍你必须说点什么，不能跳过。"]
+          : ["7. 如果你这一拍其实不想说，输出 <SKIP>。"]),
       ].filter(Boolean).join("\n"),
     },
     {
@@ -836,7 +853,11 @@ async function generateChaosNpcReply(session, npc, npcState, intent, stagedMessa
     },
   ];
 
-  const payload = await createChatCompletionPayload(config.host, config.key, npc.model, messages, false, 0.72);
+  const replyTemp = typeof getSessionAgentParam === "function"
+    ? getSessionAgentParam(session, npc.name, "temperature")
+    : undefined;
+  const temp = replyTemp !== undefined ? replyTemp : getNpcResponseTemperature(session, npc.model);
+  const payload = await createChatCompletionPayload(config.host, config.key, npc.model, messages, false, temp);
   const content = sanitizeChaosReply(payload.content);
   if (!content) return null;
   if (latestComparable && normalizeComparableText(latestComparable.content) === normalizeComparableText(content)) {

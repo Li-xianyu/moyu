@@ -465,6 +465,9 @@ function getNpcResponseTemperature(session, model) {
   if (session?.mode === SESSION_MODE_STORY) {
     return weak ? 0.45 : 0.72;
   }
+  if (session?.mode === SESSION_MODE_CHAOS) {
+    return 0.8;
+  }
   return weak ? 0.25 : 0.5;
 }
 
