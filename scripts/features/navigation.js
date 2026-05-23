@@ -995,6 +995,7 @@ function bindMobileSwipeGesture() {
     touchStartY = e.touches[0].clientY;
     wasOpen = state.mobileSidebarOpen;
     isDragging = false;
+    state.sidebarDragging = false;
     gestureBlocked = false;
     touchAxisLock = "";
     gestureStartedInsideSidebar = Boolean(target?.closest?.(".sidebar"));
@@ -1048,9 +1049,10 @@ function bindMobileSwipeGesture() {
 
     if (!isDragging) {
       isDragging = true;
+      state.sidebarDragging = true;
       try { e.preventDefault(); } catch (_) {}
       const mainEl = document.querySelector(".main");
-      if (mainEl) mainEl.style.touchAction = "none";
+      if (mainEl) mainEl.style.setProperty("overflow", "hidden", "important");
       const sb = getSb();
       sbWidth = sb ? sb.getBoundingClientRect().width : 260;
       if (sb) sb.style.transition = "none";
@@ -1113,8 +1115,9 @@ function bindMobileSwipeGesture() {
       return;
     }
     isDragging = false;
+    state.sidebarDragging = false;
     const mainEl = document.querySelector(".main");
-    if (mainEl) mainEl.style.touchAction = "";
+    if (mainEl) mainEl.style.removeProperty("overflow");
 
     const sb = getSb();
     const progress = gestureProgress;
@@ -1174,6 +1177,7 @@ function bindMobileSwipeGesture() {
       clearGestureTimer = 0;
     }
     isDragging = false;
+    state.sidebarDragging = false;
     clearSidebarGestureProgress();
     touchStartX = 0;
     touchStartY = 0;

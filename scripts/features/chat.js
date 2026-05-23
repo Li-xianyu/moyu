@@ -918,7 +918,7 @@ function initChatOverscroll() {
   }
 
   main.addEventListener("touchstart", function () {
-    if (!chatActive()) return;
+    if (!chatActive() || state.sidebarDragging) return;
     overscrolling = false;
     anchorY = 0;
     var m = el();
@@ -926,7 +926,7 @@ function initChatOverscroll() {
   }, { passive: true });
 
   main.addEventListener("touchmove", function (e) {
-    if (!chatActive()) return;
+    if (!chatActive() || state.sidebarDragging) return;
     var m = el();
     if (!m) return;
 
