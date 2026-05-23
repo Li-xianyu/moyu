@@ -346,6 +346,9 @@ async function init() {
   if (window.__moyuCriticalStylesReady?.then) {
     await window.__moyuCriticalStylesReady;
   }
+  if (typeof window.__moyuChatStylesReady === "function") {
+    await window.__moyuChatStylesReady();
+  }
 
   var loadingEl = document.getElementById('loadingScreen');
   if (loadingEl) {
