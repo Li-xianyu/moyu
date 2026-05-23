@@ -213,10 +213,17 @@ body::after {
   }
 
   #settingsView .settings-stage {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-    align-content: start !important;
+    display: block !important;
     width: 100% !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+    padding-bottom: 20px !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #settingsView .settings-list-panel {
+    padding-right: 0;
+    border-right: none;
   }
 
   #settingsView .settings-main-panel {

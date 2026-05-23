@@ -755,7 +755,7 @@
 
 .message-block.agent-plain-block .message-meta,
 .message-block.agent-plain-block .message-tools {
-  width: min(78%, 640px);
+  width: min(92%, 720px);
   max-width: 100%;
   min-width: 0;
 }
@@ -823,7 +823,7 @@
   border-radius: 0;
   line-height: 1.65;
   white-space: normal;
-  width: min(78%, 640px);
+  width: min(92%, 720px);
   max-width: 100%;
   min-width: 0;
   overflow-wrap: break-word;
@@ -2600,6 +2600,13 @@ html[data-theme="light"] .thinking-content {
   .composer-status-bar {
     min-height: 20px;
     padding: 0;
+  }
+
+  .suggest-btn {
+    width: 16px;
+    height: 16px;
+    font-size: 12px;
+    margin-right: 4px;
   }
 
   .suggestion-bar {

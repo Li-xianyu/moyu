@@ -940,7 +940,7 @@ function initChatOverscroll() {
 
     if (!anchorY) {
       anchorY = touchY;
-      e.preventDefault();
+      try { e.preventDefault(); } catch (_) {}
       m.style.willChange = "transform";
       return;
     }
@@ -957,7 +957,7 @@ function initChatOverscroll() {
     }
 
     overscrolling = true;
-    e.preventDefault();
+    try { e.preventDefault(); } catch (_) {}
     m.style.transform = "translateY(" + (-damp(dragPast)) + "px)";
   }, { passive: false });
 

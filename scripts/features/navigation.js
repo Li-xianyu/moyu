@@ -920,6 +920,7 @@ function bindMobileSwipeGesture() {
   let isDragging = false;
   let gestureBlocked = false;
   let gestureStartedInsideSidebar = false;
+  let touchAxisLock = "";
   let wasOpen = false;
   let sbWidth = 0;
   let gestureProgress = 0;
@@ -995,6 +996,7 @@ function bindMobileSwipeGesture() {
     wasOpen = state.mobileSidebarOpen;
     isDragging = false;
     gestureBlocked = false;
+    touchAxisLock = "";
     gestureStartedInsideSidebar = Boolean(target?.closest?.(".sidebar"));
     sbWidth = 0;
     gestureProgress = wasOpen ? 1 : 0;
@@ -1037,11 +1039,16 @@ function bindMobileSwipeGesture() {
     const t = e.touches[0];
     const dx = t.clientX - touchStartX;
     const dy = Math.abs(t.clientY - touchStartY);
-    if (dy > Math.abs(dx) * 1.2) return;
+    // 方向锁定：首次确定主导方向后，整轮手势不再切换
+    if (!touchAxisLock && dy > 12 && dy > Math.abs(dx)) {
+      touchAxisLock = "vertical";
+    }
+    if (touchAxisLock === "vertical") return;
     if (Math.abs(dx) < 15) return;
 
     if (!isDragging) {
       isDragging = true;
+      try { e.preventDefault(); } catch (_) {}
       const sb = getSb();
       sbWidth = sb ? sb.getBoundingClientRect().width : 260;
       if (sb) sb.style.transition = "none";
@@ -1087,7 +1094,7 @@ function bindMobileSwipeGesture() {
       sidebarScrollTop: getSb() ? Number(getSb().scrollTop.toFixed ? getSb().scrollTop.toFixed(2) : getSb().scrollTop) : null
     });
 
-    if (e.cancelable) e.preventDefault();
+    try { e.preventDefault(); } catch (_) {}
   }, { passive: false });
 
   document.addEventListener("touchend", () => {
