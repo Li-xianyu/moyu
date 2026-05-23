@@ -376,7 +376,8 @@
   }
 
   .welcome-greeting {
-    font-size: clamp(22px, 5.5vw, 28px);
+    font-family: "Courier New", Courier, monospace;
+    font-size: clamp(24px, 6vw, 30px);
   }
 
   .welcome-action-line {
