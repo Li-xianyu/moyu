@@ -1069,7 +1069,8 @@ function bindMobileSwipeGesture() {
 
     // Visual: never let sidebar go past its bounds
     const visualProgress = Math.max(0, Math.min(1, progress));
-    const excessPx = dx > 0 && progress >= 1 ? Math.max(0, dx - sbWidth) : 0;
+    const fullyOpenAt = wasOpen ? 0 : sbWidth;
+    const excessPx = dx > 0 && progress >= 1 ? Math.max(0, dx - fullyOpenAt) : 0;
     const openEdgeOffsetPx = excessPx > 0 ? getRubberBandOffset(excessPx) : 0;
     gestureProgress = visualProgress;
 
