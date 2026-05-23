@@ -349,9 +349,6 @@ async function init() {
   var loadingEl = document.getElementById('loadingScreen');
   if (loadingEl) {
     var tw = window.__moyuTypewriter;
-    // Force SVG <use> → <symbol> resolution before fading
-    var _wl = document.querySelector('.welcome-logo');
-    if (_wl) void _wl.getBoundingClientRect();
     function fadeOut() {
       loadingEl.classList.add('loading-screen--fade-out');
       setTimeout(function() {
