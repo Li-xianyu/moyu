@@ -349,6 +349,9 @@ async function init() {
   var loadingEl = document.getElementById('loadingScreen');
   if (loadingEl) {
     var tw = window.__moyuTypewriter;
+    // Force SVG <use> → <symbol> resolution before fading
+    var _wl = document.querySelector('.welcome-logo');
+    if (_wl) void _wl.getBoundingClientRect();
     function fadeOut() {
       loadingEl.classList.add('loading-screen--fade-out');
       setTimeout(function() {
@@ -358,24 +361,6 @@ async function init() {
     }
     fadeOut();
   }
-
-  // DEBUG: measure welcome layout shifts
-  (function() {
-    var logWelcomeMetrics = function(label) {
-      var logo = document.querySelector('.welcome-logo');
-      var copy = document.querySelector('.chat-welcome-copy');
-      if (!logo || !copy) { console.log('[welcome-debug]', label, 'elements not found'); return; }
-      var lr = logo.getBoundingClientRect();
-      var cr = copy.getBoundingClientRect();
-      console.log('[welcome-debug]', label,
-        'logo:', Math.round(lr.width), 'x', Math.round(lr.height),
-        '| copy:', Math.round(cr.width), 'x', Math.round(cr.height));
-    };
-    logWelcomeMetrics('pre-fade');
-    [100, 400, 800, 1500, 3000].forEach(function(ms) {
-      setTimeout(function() { logWelcomeMetrics(ms + 'ms'); }, ms);
-    });
-  })();
 
   // 首屏转场后立即用 idle 时间并行预热全部功能（settings 已在上方预热）
   var warmAll = function() {
