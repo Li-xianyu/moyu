@@ -1039,8 +1039,8 @@ function bindMobileSwipeGesture() {
     const t = e.touches[0];
     const dx = t.clientX - touchStartX;
     const dy = Math.abs(t.clientY - touchStartY);
-    // 方向锁定：首次确定主导方向后，整轮手势不再切换
-    if (!touchAxisLock && dy > 12 && dy > Math.abs(dx)) {
+    // 方向锁定：激活侧栏前，垂直主导时放弃手势
+    if (!isDragging && !touchAxisLock && dy > 12 && dy > Math.abs(dx)) {
       touchAxisLock = "vertical";
     }
     if (touchAxisLock === "vertical") return;
@@ -1049,6 +1049,8 @@ function bindMobileSwipeGesture() {
     if (!isDragging) {
       isDragging = true;
       try { e.preventDefault(); } catch (_) {}
+      const mainEl = document.querySelector(".main");
+      if (mainEl) mainEl.style.touchAction = "none";
       const sb = getSb();
       sbWidth = sb ? sb.getBoundingClientRect().width : 260;
       if (sb) sb.style.transition = "none";
@@ -1111,6 +1113,8 @@ function bindMobileSwipeGesture() {
       return;
     }
     isDragging = false;
+    const mainEl = document.querySelector(".main");
+    if (mainEl) mainEl.style.touchAction = "";
 
     const sb = getSb();
     const progress = gestureProgress;
