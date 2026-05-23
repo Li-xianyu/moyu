@@ -377,6 +377,7 @@
 
   .welcome-logo {
     width: min(200px, 58vw);
+    aspect-ratio: 200 / 120;
   }
 
   .message {

@@ -603,6 +603,7 @@
 .welcome-logo {
   width: min(248px, 56vw);
   height: auto;
+  aspect-ratio: 200 / 120;
   color: var(--theme-bg-sidebar);
 }
 
