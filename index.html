@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "2026.5.23.36";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.5.23.37";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -197,13 +197,16 @@
       align-items: center;
       justify-content: center;
       min-height: 0;
-      padding: 32px 24px;
+      padding: 40px 32px;
+      background: color-mix(in srgb, var(--bg) 95%, var(--text) 3%);
+      border-radius: 16px;
+      box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 5%, transparent 95%);
     }
     .chat-stage.empty-state .chat-welcome { display: flex; }
     .chat-welcome-copy {
-      width: min(480px, 100%);
+      width: min(400px, 100%);
       display: grid;
-      gap: 14px;
+      gap: 20px;
       justify-items: center;
       text-align: center;
     }
@@ -211,9 +214,14 @@
       height: auto;
       aspect-ratio: 200 / 120;
       color: var(--theme-bg-sidebar, #111111);
+      animation: moyu-float 4s ease-in-out infinite;
     }
     @media (min-width: 960px) {
       .welcome-logo { width: min(248px, 56vw); }
+    }
+    @keyframes moyu-float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
     }
     .chat-welcome-copy h2 { display: none; }
     .chat-welcome-copy p {

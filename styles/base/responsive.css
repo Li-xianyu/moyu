@@ -362,11 +362,12 @@
   }
 
   .chat-welcome {
-    padding: 28px 18px;
+    padding: 24px 16px;
+    border-radius: 12px;
   }
 
   .chat-welcome-copy {
-    gap: 8px;
+    gap: 16px;
   }
 
   .chat-welcome-copy p {
