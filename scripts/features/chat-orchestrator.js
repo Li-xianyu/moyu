@@ -6,13 +6,10 @@ const CHAT_CONVERSATION_THRESHOLD = 3000;
 const CHAT_SUMMARY_TARGET_MAX = 800;
 const CHAT_AUTO_COMPRESS_THRESHOLD = 600;
 
-const CHAOS_MODE_MAX_CYCLES = 4;
 const CHAOS_MODE_MAX_RESPONDERS = 3;
 const CHAOS_MODE_TRANSCRIPT_LIMIT = 12;
 const CHAOS_MODE_REPLY_HARD_LIMIT = 50;
-const CHAOS_MODE_INTENT_BASELINE = 56;
 const CHAOS_REACTION_TAGS = ["典", "孝", "急", "乐", "崩", "无", "草", "哈", "赞", "？"];
-const CHAOS_AUTOPLAY_MAX_STREAK = 10;
 const CHAOS_SUMMARY_TARGET = 400;
 const CHAOS_AUTO_COMPRESS_THRESHOLD = 30;
 const CHAOS_PERSONAS = [
@@ -32,8 +29,6 @@ function getChaosPersona(npc) {
   return CHAOS_PERSONAS[index];
 }
 
-let chaosAutoplayTimer = null;
-let chaosAutoplaySessionId = "";
 
 function buildChatSummaryBlock(session) {
   const summary = session?.chatSummary;
@@ -586,38 +581,7 @@ function ensureChaosState(session) {
   return session.chaosState;
 }
 
-function cancelChaosAutoplay() {
-  if (chaosAutoplayTimer) {
-    clearTimeout(chaosAutoplayTimer);
-    chaosAutoplayTimer = null;
-  }
-  chaosAutoplaySessionId = "";
-}
-
-function scheduleChaosAutoplay(session, options = {}) {
-  if (!session || session.mode !== SESSION_MODE_CHAOS) {
-    cancelChaosAutoplay();
-    return;
-  }
-  const delayMs = Math.max(0, Number(options.delayMs) || 0);
-  cancelChaosAutoplay();
-  chaosAutoplaySessionId = session.id;
-  chaosAutoplayTimer = setTimeout(async () => {
-    chaosAutoplayTimer = null;
-    if (state.isSending) return;
-    if (state.showWelcomeHome) return;
-    if (state.currentSessionId !== session.id) return;
-    const activeSession = getCurrentSession();
-    if (!activeSession || activeSession.mode !== SESSION_MODE_CHAOS) return;
-    if (!els.views.chat?.classList.contains("active")) return;
-    state.isSending = true;
-    updateComposerMode();
-    await runSessionTurn(activeSession);
-  }, delayMs);
-}
-
-window.__scheduleChaosAutoplay = scheduleChaosAutoplay;
-window.__cancelChaosAutoplay = cancelChaosAutoplay;
+window.__cancelChaosAutoplay = function cancelChaosAutoplay() {};
 
 function buildChaosTranscriptMessages(session, stagedMessages = [], limit = CHAOS_MODE_TRANSCRIPT_LIMIT) {
   const visibleMessages = (session?.messages || []).filter((message) =>
@@ -894,140 +858,133 @@ function applyChaosReplyState(session, reply, intent, cycle) {
   npcState.lastSpokeCycle = cycle;
 }
 
-function coolDownChaosStates(session, selectedNames = new Set()) {
-  const chaosState = ensureChaosState(session);
-  Object.entries(chaosState.npcStates || {}).forEach(([name, npcState]) => {
-    if (!npcState) return;
-    if (selectedNames.has(name)) return;
-    npcState.fatigue = clampChaosValue(npcState.fatigue - 10);
-    npcState.emotion = clampChaosValue(npcState.emotion - 4);
-    if (npcState.reactionTag !== "无") {
-      npcState.reactionTag = "无";
-    }
+async function runChaosWave(session, responders, chaosState, waveIndex) {
+  const replies = [];
+  const spokeNames = new Set();
+  const promises = responders.map((intent) => {
+    const npcState = chaosState.npcStates[intent.npc.name] || {};
+    const typingDelay = 600 + Math.random() * 2400;
+    return new Promise((resolve) => {
+      setTimeout(async () => {
+        if (state.abortController?.signal.aborted) { resolve(); return; }
+        try {
+          const reply = await generateChaosNpcReply(session, intent.npc, npcState, intent, [], waveIndex);
+          if (reply) {
+            session.messages.push(reply);
+            applyChaosReplyState(session, reply, intent, waveIndex);
+            spokeNames.add(reply.speaker);
+            renderMessages({ stickToBottom: true });
+            replies.push(reply);
+          }
+        } catch (error) {
+          debugWarn("[chaos] reply failed", { npc: intent.npc.name, error: error?.message });
+        }
+        resolve();
+      }, typingDelay);
+    });
   });
-  chaosState.turnIndex = (Number(chaosState.turnIndex) || 0) + 1;
+
+  await Promise.all(promises);
+
+  if (replies.length && window.__chatDB?.saveMessages) {
+    const startSeq = getSessionMessageCount(session);
+    window.__chatDB.saveMessages(session.id, replies, startSeq).catch(() => {});
+    session.messageCount = Math.max(Number(session.messageCount) || 0, startSeq + replies.length);
+  }
+  return { replies, spokeNames };
 }
 
 async function runChaosTurn(session) {
   const sceneNpcs = getSceneNpcs(session).filter((npc) => npc?.name && npc?.model);
   if (!sceneNpcs.length) {
     setText(els.chatStatus, "混沌模式暂无可发言成员");
-    return;
-  }
-
-  ensureChaosState(session);
-  let totalReplies = 0;
-  let highestSelectedImpulse = 0;
-
-  for (let cycle = 0; cycle < CHAOS_MODE_MAX_CYCLES; cycle += 1) {
-    if (state.abortController?.signal.aborted) {
-      throw new DOMException("Aborted", "AbortError");
-    }
-
-    if (state.currentSessionId !== session.id) {
-      throw new DOMException("Aborted", "AbortError");
-    }
-
-    setInlineChatStatus(cycle === 0 ? "群成员正在判断要不要接话..." : "群聊还在继续发酵...");
-    const chaosState = ensureChaosState(session);
-    const intents = [];
-    for (const npc of sceneNpcs) {
-      try {
-        const intent = await evaluateChaosNpcIntent(session, npc, chaosState.npcStates[npc.name], [], cycle);
-        if (intent) intents.push(intent);
-      } catch (error) {
-        debugWarn("[chaos] intent failed", { npc: npc.name, error: error?.message || String(error) });
-      }
-    }
-
-    const responders = selectChaosResponders(intents, cycle);
-    if (!responders.length) {
-      break;
-    }
-    if (state.currentSessionId !== session.id) {
-      throw new DOMException("Aborted", "AbortError");
-    }
-    highestSelectedImpulse = Math.max(
-      highestSelectedImpulse,
-      ...responders.map((item) => Number(item.impulse) || 0)
-    );
-
-    setInlineChatStatus(`${responders.map((item) => item.npc.name).join("、")} 正在回嘴...`);
-
-    // 逐条生成——串行发请求避免 API 网关截断
-    const replies = [];
-    for (const intent of responders) {
-      try {
-        const reply = await generateChaosNpcReply(session, intent.npc, chaosState.npcStates[intent.npc.name], intent, [], cycle);
-        if (reply) {
-          session.messages.push(reply);
-          applyChaosReplyState(session, reply, intent, cycle);
-          renderMessages({ stickToBottom: true });
-          replies.push(reply);
-          // 让出主线程，让浏览器有机会把这条消息画出来
-          await new Promise((r) => setTimeout(r, 16));
-        }
-      } catch (error) {
-        debugWarn("[chaos] reply failed", { npc: intent.npc.name, error: error?.message || String(error) });
-      }
-    }
-
-    if (!replies.length) {
-      break;
-    }
-    if (state.currentSessionId !== session.id) {
-      throw new DOMException("Aborted", "AbortError");
-    }
-
-    const selectedNames = new Set(replies.map((r) => r.speaker));
-    coolDownChaosStates(session, selectedNames);
-
-    // 持久化：每轮回复写入 IndexedDB，防止刷新丢失
-    if (window.__chatDB?.saveMessages && replies.length) {
-      const startSeq = getSessionMessageCount(session);
-      window.__chatDB.saveMessages(session.id, replies, startSeq).catch(function (err) {
-        debugWarn("[chaos] save cycle messages failed", err);
-      });
-      session.messageCount = Math.max(Number(session.messageCount) || 0, startSeq + replies.length);
-    }
-
-    totalReplies += replies.length;
-
-    const shouldContinue = replies.length >= 2 && responders.some((item) => item.impulse >= 72);
-    if (!shouldContinue) {
-      break;
-    }
-  }
-
-  if (!totalReplies) {
-    const chaosState = ensureChaosState(session);
-    chaosState.autoplayStreak = 0;
-    touchSession(session);
-    persistSessions();
-    setText(els.chatStatus, "这波没人接话");
-    ensureChaosSummary(session).catch(() => {});
     return { replyCount: 0, shouldAutoplay: false, strongestImpulse: 0 };
   }
 
-  const strongestImpulse = highestSelectedImpulse;
-  syncLoadedSessionMessageCount(session);
   const chaosState = ensureChaosState(session);
-  const previousStreak = Number(chaosState.autoplayStreak) || 0;
-  const shouldAutoplay = previousStreak < CHAOS_AUTOPLAY_MAX_STREAK
-    && totalReplies > 0
-    && (totalReplies >= 2 || strongestImpulse >= 60);
-  chaosState.autoplayStreak = shouldAutoplay ? previousStreak + 1 : 0;
+  chaosState.autoplayStreak = 0;
+  let totalReplies = 0;
+  let strongestImpulse = 0;
+
+  function checkAbort() {
+    if (state.abortController?.signal.aborted || state.currentSessionId !== session.id) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+  }
+
+  // Phase 1 — all NPCs evaluate intent in parallel
+  setInlineChatStatus("群成员正在看消息...");
+  checkAbort();
+  const intents = await Promise.all(
+    sceneNpcs.map((npc) =>
+      evaluateChaosNpcIntent(session, npc, chaosState.npcStates[npc.name] || {}, [], 0)
+        .catch((err) => {
+          if (err?.name === "AbortError") throw err;
+          debugWarn("[chaos] intent failed", { npc: npc.name, error: err?.message || String(err) });
+          return null;
+        })
+    )
+  );
+  checkAbort();
+  const validIntents = intents.filter(Boolean);
+  let responders = selectChaosResponders(validIntents, 0);
+
+  // Track who stayed silent this phase
+  const phase1Skipped = new Set(
+    validIntents
+      .filter((intent) => !responders.some((r) => r.npc.name === intent.npc.name))
+      .map((i) => i.npc.name)
+  );
+
+  if (responders.length) {
+    checkAbort();
+    setInlineChatStatus(`${responders.map((r) => r.npc.name).join("、")} 正在输入...`);
+    const result = await runChaosWave(session, responders, chaosState, 0);
+    checkAbort();
+    totalReplies += result.replies.length;
+    result.replies.forEach((r) => { strongestImpulse = Math.max(strongestImpulse, Number(r._impulse) || 0); });
+  }
+
+  // Phase 2 — NPCs that stayed silent get a second look with fresh context
+  if (phase1Skipped.size && totalReplies > 0) {
+    checkAbort();
+    const p2Npcs = sceneNpcs.filter((npc) => phase1Skipped.has(npc.name));
+    setInlineChatStatus("有人在酝酿接话...");
+    const p2Intents = await Promise.all(
+      p2Npcs.map((npc) =>
+        evaluateChaosNpcIntent(session, npc, chaosState.npcStates[npc.name] || {}, [], 1)
+          .catch((err) => {
+            if (err?.name === "AbortError") throw err;
+            debugWarn("[chaos] phase2 intent failed", { npc: npc.name, error: err?.message || String(err) });
+            return null;
+          })
+      )
+    );
+    checkAbort();
+    const p2Responders = selectChaosResponders(p2Intents.filter(Boolean), 1);
+    if (p2Responders.length) {
+      checkAbort();
+      setInlineChatStatus(`${p2Responders.map((r) => r.npc.name).join("、")} 忍不住接了一句...`);
+      const result = await runChaosWave(session, p2Responders, chaosState, 1);
+      totalReplies += result.replies.length;
+      result.replies.forEach((r) => { strongestImpulse = Math.max(strongestImpulse, Number(r._impulse) || 0); });
+    }
+  }
+
+  // Finalize
+  syncLoadedSessionMessageCount(session);
   touchSession(session);
   persistSessions();
   renderMessages({ stickToBottom: true });
   renderChatListMenu();
-  setText(els.chatStatus, `群聊刷出了 ${totalReplies} 条消息`);
+
+  if (totalReplies) {
+    setText(els.chatStatus, `群聊刷出了 ${totalReplies} 条消息`);
+  } else {
+    setText(els.chatStatus, "这波没人接话");
+  }
   ensureChaosSummary(session).catch(() => {});
-  return {
-    replyCount: totalReplies,
-    shouldAutoplay,
-    strongestImpulse,
-  };
+  return { replyCount: totalReplies, shouldAutoplay: false, strongestImpulse };
 }
 
 async function runSessionTurn(session) {
@@ -1038,14 +995,9 @@ async function runSessionTurn(session) {
 
   if (session.mode === SESSION_MODE_CHAOS) {
     try {
-      const chaosOutcome = await runChaosTurn(session);
-      if (chaosOutcome?.shouldAutoplay) {
-        scheduleChaosAutoplay(session);
-      } else {
-        cancelChaosAutoplay();
-      }
+      await runChaosTurn(session);
     } catch (error) {
-      cancelChaosAutoplay();
+      window.__cancelChaosAutoplay();
       if (error.name === "AbortError") {
         session.messages.push({ role: "system", speaker: "系统", content: t("chat.stoppedHint"), createdAt: new Date().toISOString() });
         touchSession(session);
