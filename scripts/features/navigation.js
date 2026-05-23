@@ -520,20 +520,20 @@ function setSidebarGestureProgress(progress, options = {}) {
   const eased = 1 - Math.pow(1 - clamped, 1.55);
   const interacting = Boolean(options.interacting);
   const openEdgeOffsetPx = Math.max(0, Number(options.openEdgeOffsetPx) || 0);
+  const sbW = Number(options.sbWidth) || 260;
 
   if (els.appShell) {
     els.appShell.classList.toggle("sidebar-swiping", clamped > 0.001);
   }
 
   if (sb) {
-    if (openEdgeOffsetPx > 0 && clamped >= 0.999) {
-      sb.style.transform = `translate3d(${openEdgeOffsetPx}px, 0, 0)`;
-      sb.style.boxShadow = "";
-    } else {
-      sb.style.transform = `translate3d(${-100 * (1 - clamped)}%, 0, 0)`;
-      sb.style.boxShadow = "";
+    var pctOffset = -100 * (1 - clamped);
+    if (openEdgeOffsetPx > 0) {
+      pctOffset = (openEdgeOffsetPx / sbW) * 100;
     }
+    sb.style.transform = "translate3d(" + pctOffset + "%,0,0)";
     sb.style.opacity = clamped;
+    sb.style.boxShadow = "";
   }
 
   if (bd) {
@@ -1069,14 +1069,14 @@ function bindMobileSwipeGesture() {
 
     // Visual: never let sidebar go past its bounds
     const visualProgress = Math.max(0, Math.min(1, progress));
-    const openEdgeOffsetPx = dx > 0 && progress >= 1
-      ? getRubberBandOffset(dx)
-      : 0;
+    const excessPx = dx > 0 && progress >= 1 ? Math.max(0, dx - sbWidth) : 0;
+    const openEdgeOffsetPx = excessPx > 0 ? getRubberBandOffset(excessPx) : 0;
     gestureProgress = visualProgress;
 
     setSidebarGestureProgress(visualProgress, {
       interacting: true,
-      openEdgeOffsetPx: openEdgeOffsetPx
+      openEdgeOffsetPx: openEdgeOffsetPx,
+      sbWidth: sbWidth
     });
     getDebugTools()?.recordMove({
       t: Number(performance.now().toFixed(2)),
