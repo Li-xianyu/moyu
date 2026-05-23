@@ -629,7 +629,8 @@
 .welcome-greeting {
   width: fit-content;
   margin: 0;
-  font-size: clamp(20px, 5vw, 28px);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(22px, 5.5vw, 30px);
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.02em;
