@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "2026.5.23.34";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.5.23.35";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -204,10 +204,11 @@
       width: min(480px, 100%);
       display: grid;
       gap: 14px;
-      justify-items: center;
-      text-align: center;
+      justify-items: start;
+      text-align: left;
     }
     .welcome-logo {
+      justify-self: center;
       height: auto;
       aspect-ratio: 200 / 120;
       color: var(--theme-bg-sidebar, #111111);

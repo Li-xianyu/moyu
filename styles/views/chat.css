@@ -596,8 +596,8 @@
 
 .chat-welcome-copy {
   display: grid;
-  justify-items: center;
-  text-align: center;
+  justify-items: start;
+  text-align: left;
 }
 @media (min-width: 960px) {
   .chat-welcome-copy { width: min(480px, 100%); gap: 14px; }
@@ -637,7 +637,7 @@
 .welcome-actions {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
 }
 
@@ -650,7 +650,7 @@
 
 .welcome-action-btn-inline {
   display: inline;
-  padding: 0;
+  padding: 0 4px;
   border: none;
   background: none;
   color: var(--accent);

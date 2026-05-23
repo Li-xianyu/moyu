@@ -469,6 +469,9 @@ function bindWelcomeActions() {
       await ensureSettingsRuntimeLoaded();
       initSettingsView();
       switchView("settings");
+      if (typeof switchSettingsSection === "function") {
+        switchSettingsSection("api");
+      }
     }
   });
 }
