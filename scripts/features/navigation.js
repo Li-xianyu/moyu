@@ -1042,7 +1042,7 @@ function bindMobileSwipeGesture() {
     if (!isDragging) {
       isDragging = true;
       state.sidebarDragging = true;
-      try { e.preventDefault(); } catch (_) {}
+      if (e.cancelable) e.preventDefault();
       const mainEl = document.querySelector(".main");
       if (mainEl) mainEl.style.setProperty("overflow", "hidden", "important");
       const sb = getSb();
@@ -1090,7 +1090,7 @@ function bindMobileSwipeGesture() {
       sidebarScrollTop: getSb() ? Number(getSb().scrollTop.toFixed ? getSb().scrollTop.toFixed(2) : getSb().scrollTop) : null
     });
 
-    try { e.preventDefault(); } catch (_) {}
+    if (e.cancelable) e.preventDefault();
   }, { passive: false });
 
   document.addEventListener("touchend", () => {
