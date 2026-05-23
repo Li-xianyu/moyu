@@ -719,6 +719,12 @@ html[data-theme="light"] .settings-danger-btn:hover {
   .settings-field-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+  .settings-field-grid--basics {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .settings-field-grid--basics .settings-language-field {
+    width: auto;
+  }
 }
 
 @media (min-width: 961px) and (max-width: 1400px) {
