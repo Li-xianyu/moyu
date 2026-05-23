@@ -626,14 +626,6 @@
   .chat-welcome-copy p { max-width: 34ch; line-height: 1.7; }
 }
 
-.welcome-greeting {
-  margin: 0;
-  font-size: clamp(20px, 5vw, 28px);
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.02em;
-}
-
 .welcome-actions {
   display: flex;
   flex-direction: column;

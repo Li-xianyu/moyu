@@ -369,8 +369,10 @@
     gap: 8px;
   }
 
-  .welcome-greeting {
-    font-size: clamp(18px, 4.5vw, 24px);
+  .chat-welcome-copy p {
+    max-width: 28ch;
+    font-size: 13px;
+    line-height: 1.65;
   }
 
   .welcome-action-btn {
