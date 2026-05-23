@@ -596,7 +596,21 @@
 
 .chat-welcome-copy {
   display: grid;
-  justify-items: start;
+  justify-items: center;
+  text-align: center;
+}
+
+.welcome-greeting {
+  width: fit-content;
+  text-align: left;
+}
+
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: fit-content;
   text-align: left;
 }
 @media (min-width: 960px) {
