@@ -397,7 +397,9 @@ async function sendUserMessage() {
   autoResizeChatInput();
   renderMessages();
   renderChatListMenu();
-  pinLastUserMessageToTop();
+  if (session.mode !== SESSION_MODE_CHAOS) {
+    pinLastUserMessageToTop();
+  }
   // 保存用户消息到 IndexedDB
   if (window.__chatDB) {
     const lastUser = session.messages[session.messages.length - 1];

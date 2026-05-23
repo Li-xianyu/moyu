@@ -599,8 +599,7 @@ function scheduleChaosAutoplay(session, options = {}) {
     cancelChaosAutoplay();
     return;
   }
-  const nonSystemCount = (session.messages || []).filter((message) => message && message.role !== "system").length;
-  const delayMs = Math.max(220, Number(options.delayMs) || (nonSystemCount === 0 ? 1200 : 1400 + Math.round(Math.random() * 1200)));
+  const delayMs = Math.max(0, Number(options.delayMs) || 0);
   cancelChaosAutoplay();
   chaosAutoplaySessionId = session.id;
   chaosAutoplayTimer = setTimeout(async () => {
@@ -918,7 +917,6 @@ async function runChaosTurn(session) {
       } catch (error) {
         debugWarn("[chaos] intent failed", { npc: npc.name, error: error?.message || String(error) });
       }
-      await new Promise((r) => setTimeout(r, 180));
     }
 
     const responders = selectChaosResponders(intents, cycle);
