@@ -1,17 +1,46 @@
 ﻿"use strict";
 
+// ===== 域拆分辅助：创建带 getter/setter 的实时别名对象 =====
+function createLiveAlias(target, props) {
+  var obj = {};
+  props.forEach(function (key) {
+    Object.defineProperty(obj, key, {
+      get: function () { return target[key]; },
+      set: function (v) { target[key] = v; },
+      enumerable: true
+    });
+  });
+  return obj;
+}
+
+// ===== 全局状态 =====
 const state = {
+  // ======== 持久化配置 ========
   locale: loadJson(STORAGE_KEYS.locale, "zh-CN"),
   settings: normalizeSettings(loadJson(STORAGE_KEYS.settings, { host: "", key: "", configs: [] })),
   modelCache: loadJson(STORAGE_KEYS.modelCache, {}),
+  theme: loadJson(STORAGE_KEYS.theme, "dark"),
+  userRoles: loadJson(STORAGE_KEYS.userRoles, []),
+
+  // ======== 会话数据 ========
   sessions: [],
   currentSessionId: loadJson(STORAGE_KEYS.currentSessionId, null),
+  chatRenderWindows: {},
+  chatRenderActiveSessionId: null,
+  chatHistoryLoadPending: false,
+
+  // ======== UI 状态 ========
   sidebarCollapsed: loadJson(STORAGE_KEYS.sidebarCollapsed, null),
-  theme: loadJson(STORAGE_KEYS.theme, "dark"),
   mobileSidebarOpen: false,
   currentSettingsSection: "global",
   showWelcomeHome: false,
   createExitTarget: "welcome",
+  suggestHintTimer: null,
+  userScrolledAway: false,
+  userTopAnchorActive: false,
+  userTopAnchorAutoFollow: false,
+
+  // ======== 聊天交互状态 ========
   isSending: false,
   chatInlineStatus: "",
   editingSessionId: null,
@@ -27,16 +56,29 @@ const state = {
   deleteConfirmSessionId: null,
   deleteConfirmConfigId: null,
   chatSearchQuery: "",
-  suggestHintTimer: null,
-  userScrolledAway: false,
-  userTopAnchorActive: false,
-  userTopAnchorAutoFollow: false,
   abortController: null,
-  chatRenderWindows: {},
-  chatRenderActiveSessionId: null,
-  chatHistoryLoadPending: false,
-  userRoles: loadJson(STORAGE_KEYS.userRoles, []),
 };
+
+// ===== 命名空间快捷入口（新代码推荐使用，不破坏旧代码） =====
+state.config = createLiveAlias(state, [
+  "locale", "settings", "modelCache", "theme", "userRoles"
+]);
+state.ui = createLiveAlias(state, [
+  "sidebarCollapsed", "mobileSidebarOpen", "currentSettingsSection",
+  "showWelcomeHome", "createExitTarget", "suggestHintTimer",
+  "userScrolledAway", "userTopAnchorActive", "userTopAnchorAutoFollow"
+]);
+state.chat = createLiveAlias(state, [
+  "isSending", "chatInlineStatus", "editingSessionId", "currentSessionEditSection",
+  "editingUserMessageId", "openUserMessageToolsId", "openAgentTokenInfoId",
+  "openAgentToolTraceId", "openCompressMemoryInfo", "directorThinking",
+  "openChatMenuId", "renameSessionId", "deleteConfirmSessionId",
+  "deleteConfirmConfigId", "chatSearchQuery", "abortController",
+  "chatHistoryLoadPending"
+]);
+state.session = createLiveAlias(state, [
+  "sessions", "currentSessionId", "chatRenderWindows", "chatRenderActiveSessionId"
+]);
 
 const els = {
   appShell: document.querySelector(".app-shell"),

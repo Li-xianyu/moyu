@@ -824,12 +824,54 @@ function updateStreamingBubble(targetMessage) {
     }
     const isSingleLine = !targetMessage.pending && !/[\r\n]/.test(targetMessage.content || "");
     bubble.classList.toggle('single-line', isSingleLine);
+    applyStreamingTailFade(bubble, targetMessage);
   }
 
   // streaming 过程中用户消息钉在视口顶部
   if (state.userTopAnchorActive && state.isSending) {
     recalcUserTopAnchorSpacer();
   }
+}
+
+function applyStreamingTailFade(bubble, message) {
+  if (!message.streaming) return;
+  var session = getCurrentSession();
+  if (!session || session.mode !== SESSION_MODE_WORK) return;
+
+  var FADE_COUNT = 8;
+  var textNodes = [];
+  var walker = document.createTreeWalker(bubble, NodeFilter.SHOW_TEXT, null, false);
+  var node;
+  while (node = walker.nextNode()) {
+    var p = node.parentNode;
+    while (p && p !== bubble) {
+      if (p.tagName === 'CODE' || p.tagName === 'PRE') { node = null; break; }
+      p = p.parentNode;
+    }
+    if (node) textNodes.push(node);
+  }
+  if (textNodes.length === 0) return;
+
+  var lastNode = textNodes[textNodes.length - 1];
+  var text = lastNode.textContent;
+  if (text.length < FADE_COUNT) return;
+
+  var splitAt = text.length - FADE_COUNT;
+  var before = text.slice(0, splitAt);
+  var tail = text.slice(splitAt);
+
+  var fragment = document.createDocumentFragment();
+  fragment.appendChild(document.createTextNode(before));
+
+  for (var i = 0; i < tail.length; i++) {
+    var idx = i + 1;
+    var span = document.createElement('span');
+    span.className = 'tail-fade tail-fade-' + (idx > 8 ? 8 : idx);
+    span.textContent = tail.charAt(i);
+    fragment.appendChild(span);
+  }
+
+  lastNode.parentNode.replaceChild(fragment, lastNode);
 }
 
 function createStreamBatchController(targetMessage, revealFn, updateFn) {

@@ -898,6 +898,21 @@
   animation: caret-blink 0.9s steps(1) infinite;
 }
 
+/* Work mode: hide blinking cursor during streaming — replaced by tail fade */
+.work-mode .message.streaming::after {
+  display: none;
+}
+
+/* Tail fade: last few streaming characters progressively transparent */
+.tail-fade-1 { opacity: 0.88; }
+.tail-fade-2 { opacity: 0.76; }
+.tail-fade-3 { opacity: 0.64; }
+.tail-fade-4 { opacity: 0.52; }
+.tail-fade-5 { opacity: 0.40; }
+.tail-fade-6 { opacity: 0.28; }
+.tail-fade-7 { opacity: 0.16; }
+.tail-fade-8 { opacity: 0.06; }
+
 /* ===== Thinking / Reasoning Section ===== */
 .thinking-section {
   margin: 0 0 8px;

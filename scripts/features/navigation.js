@@ -915,12 +915,10 @@ initSidebarGestureDebugTools();
 function bindMobileSwipeGesture() {
   if (!("ontouchstart" in window)) return;
 
-  let touchStartX = 0;
-  let touchStartY = 0;
+  let touchCtx = null;
   let isDragging = false;
   let gestureBlocked = false;
   let gestureStartedInsideSidebar = false;
-  let touchAxisLock = "";
   let wasOpen = false;
   let sbWidth = 0;
   let gestureProgress = 0;
@@ -991,21 +989,20 @@ function bindMobileSwipeGesture() {
     }
     clearSidebarGestureProgress();
 
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
+    touchCtx = Gesture.create();
+    Gesture.startFrom(touchCtx, e.touches[0]);
     wasOpen = state.mobileSidebarOpen;
     isDragging = false;
     state.sidebarDragging = false;
     gestureBlocked = false;
-    touchAxisLock = "";
     gestureStartedInsideSidebar = Boolean(target?.closest?.(".sidebar"));
     sbWidth = 0;
     gestureProgress = wasOpen ? 1 : 0;
 
     getDebugTools()?.startSession({
       t: Number(performance.now().toFixed(2)),
-      x: touchStartX,
-      y: touchStartY,
+      x: touchCtx.startX,
+      y: touchCtx.startY,
       wasOpen: wasOpen,
       progress: gestureProgress,
       targetLabel: getDebugTools()?.describeTarget?.(e.target) || String(e.target || ""),
@@ -1016,7 +1013,7 @@ function bindMobileSwipeGesture() {
 
     if (isCodeBlockHorizontalScrollArea(target)) {
       gestureBlocked = true;
-      touchStartX = 0;
+      Gesture.clear(touchCtx);
       getDebugTools()?.cancelSession({
         t: Number(performance.now().toFixed(2)),
         reason: "code-block-horizontal-scroll"
@@ -1026,7 +1023,7 @@ function bindMobileSwipeGesture() {
 
     if (isLocalHorizontalGestureArea(target)) {
       gestureBlocked = true;
-      touchStartX = 0;
+      Gesture.clear(touchCtx);
       getDebugTools()?.cancelSession({
         t: Number(performance.now().toFixed(2)),
         reason: "local-horizontal-scroll-area"
@@ -1036,16 +1033,15 @@ function bindMobileSwipeGesture() {
   }, { passive: true });
 
   document.addEventListener("touchmove", (e) => {
-    if (!isMobileViewport() || touchStartX === 0 || gestureBlocked) return;
+    if (!isMobileViewport() || !touchCtx || !touchCtx.startX || gestureBlocked) return;
     const t = e.touches[0];
-    const dx = t.clientX - touchStartX;
-    const dy = Math.abs(t.clientY - touchStartY);
+    Gesture.update(touchCtx, t);
+    const dx = touchCtx.dx;
+    const dy = touchCtx.dy;
     // 方向锁定：激活侧栏前，垂直主导时放弃手势
-    if (!isDragging && !touchAxisLock && dy > 12 && dy > Math.abs(dx)) {
-      touchAxisLock = "vertical";
-    }
-    if (touchAxisLock === "vertical") return;
-    if (Math.abs(dx) < 15) return;
+    Gesture.lockVertical(touchCtx, 12);
+    if (Gesture.isVertical(touchCtx)) return;
+    if (Math.abs(dx) < Gesture.H_MIN) return;
 
     if (!isDragging) {
       isDragging = true;
@@ -1108,8 +1104,7 @@ function bindMobileSwipeGesture() {
         t: Number(performance.now().toFixed(2)),
         reason: gestureBlocked ? "gesture-blocked" : "no-drag"
       });
-      touchStartX = 0;
-      touchStartY = 0;
+      Gesture.clear(touchCtx);
       gestureBlocked = false;
       gestureStartedInsideSidebar = false;
       return;
@@ -1164,8 +1159,7 @@ function bindMobileSwipeGesture() {
       sidebarScrollTop: sb ? Number(sb.scrollTop.toFixed ? sb.scrollTop.toFixed(2) : sb.scrollTop) : null
     });
 
-    touchStartX = 0;
-    touchStartY = 0;
+    Gesture.clear(touchCtx);
     gestureBlocked = false;
     gestureStartedInsideSidebar = false;
     gestureProgress = willOpen ? 1 : 0;
@@ -1179,8 +1173,7 @@ function bindMobileSwipeGesture() {
     isDragging = false;
     state.sidebarDragging = false;
     clearSidebarGestureProgress();
-    touchStartX = 0;
-    touchStartY = 0;
+    Gesture.clear(touchCtx);
     gestureBlocked = false;
     gestureStartedInsideSidebar = false;
     gestureProgress = state.mobileSidebarOpen ? 1 : 0;
