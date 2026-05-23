@@ -1,7 +1,7 @@
 "use strict";
 
 var Gesture = {
-  H_MIN: 15,
+  H_MIN: 10,
   V_LOCK: 12,
 
   create: function () {

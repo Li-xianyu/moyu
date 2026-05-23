@@ -684,6 +684,9 @@ button,
     display: none;
   }
 
+  .app-shell.sidebar-swiping .main {
+    overflow: hidden !important;
+  }
   .app-shell.sidebar-swiping .sidebar,
   .app-shell.sidebar-swiping .chat-list-items {
     overflow-y: hidden;

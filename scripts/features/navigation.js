@@ -985,6 +985,8 @@ function bindMobileSwipeGesture() {
     }
     clearSidebarGestureProgress();
 
+    var preSb = getSb();
+    sbWidth = preSb ? preSb.getBoundingClientRect().width : 260;
     touchCtx = Gesture.create();
     Gesture.startFrom(touchCtx, e.touches[0]);
     wasOpen = state.mobileSidebarOpen;
@@ -992,7 +994,6 @@ function bindMobileSwipeGesture() {
     state.sidebarDragging = false;
     gestureBlocked = false;
     gestureStartedInsideSidebar = Boolean(target?.closest?.(".sidebar"));
-    sbWidth = 0;
     gestureProgress = wasOpen ? 1 : 0;
 
     getDebugTools()?.startSession({
@@ -1042,11 +1043,9 @@ function bindMobileSwipeGesture() {
     if (!isDragging) {
       isDragging = true;
       state.sidebarDragging = true;
+      if (els.appShell) els.appShell.classList.add("sidebar-swiping");
       if (e.cancelable) e.preventDefault();
-      const mainEl = document.querySelector(".main");
-      if (mainEl) mainEl.style.setProperty("overflow", "hidden", "important");
       const sb = getSb();
-      sbWidth = sb ? sb.getBoundingClientRect().width : 260;
       if (sb) sb.style.transition = "none";
       const bd = getBd();
       if (bd) bd.style.transition = "none";
