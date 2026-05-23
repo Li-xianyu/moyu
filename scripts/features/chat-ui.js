@@ -862,15 +862,10 @@ function applyStreamingTailFade(bubble, message) {
 
   var fragment = document.createDocumentFragment();
   fragment.appendChild(document.createTextNode(before));
-
-  for (var i = 0; i < tail.length; i++) {
-    var idx = i + 1;
-    var span = document.createElement('span');
-    span.className = 'tail-fade tail-fade-' + (idx > 8 ? 8 : idx);
-    span.textContent = tail.charAt(i);
-    fragment.appendChild(span);
-  }
-
+  var wrap = document.createElement('span');
+  wrap.className = 'tail-wrap';
+  wrap.textContent = tail;
+  fragment.appendChild(wrap);
   lastNode.parentNode.replaceChild(fragment, lastNode);
 }
 

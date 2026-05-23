@@ -838,9 +838,31 @@
 }
 
 .message.system {
-  background: var(--theme-bg-active);
-  color: var(--theme-text-primary);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--muted);
   max-width: 100%;
+  width: auto;
+  text-align: center;
+  font-size: 12px;
+  padding: 4px 16px;
+  line-height: 1.6;
+  border-radius: 0;
+}
+
+.message.system::before {
+  content: "";
+  display: block;
+  width: 32px;
+  height: 1px;
+  background: var(--line);
+  margin: 0 auto 6px;
+}
+
+.message-block.system {
+  justify-items: center;
+  width: 100%;
 }
 
 @media (hover: none), (pointer: coarse) {
@@ -903,15 +925,11 @@
   display: none;
 }
 
-/* Tail fade: last few streaming characters progressively transparent */
-.tail-fade-1 { opacity: 0.88; }
-.tail-fade-2 { opacity: 0.76; }
-.tail-fade-3 { opacity: 0.64; }
-.tail-fade-4 { opacity: 0.52; }
-.tail-fade-5 { opacity: 0.40; }
-.tail-fade-6 { opacity: 0.28; }
-.tail-fade-7 { opacity: 0.16; }
-.tail-fade-8 { opacity: 0.06; }
+/* Tail fade: last ~8 chars wrapped in a gradient mask for smooth opacity falloff */
+.work-mode .message.streaming .tail-wrap {
+  -webkit-mask-image: linear-gradient(to left, transparent 0%, black 100%);
+  mask-image: linear-gradient(to left, transparent 0%, black 100%);
+}
 
 /* ===== Thinking / Reasoning Section ===== */
 .thinking-section {

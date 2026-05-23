@@ -340,7 +340,7 @@ async function init() {
   updateMobileViewportFix();
   syncMobileDebugConsole();
   if (typeof warmSettingsRuntime === "function" && initialView !== "settings") {
-    warmSettingsRuntime({ delay: 3600 });
+    warmSettingsRuntime();
   }
   if (window.__moyuCriticalStylesReady?.then) {
     await window.__moyuCriticalStylesReady;
@@ -358,6 +358,17 @@ async function init() {
     }
     fadeOut();
   }
+
+  // 首屏转场后立即用 idle 时间并行预热全部功能（settings 已在上方预热）
+  var warmAll = function() {
+    hydrateSessionMetasFromDb({ renderList: true }).catch(function() {});
+    if (typeof ensureChatFeatureLoaded === "function") ensureChatFeatureLoaded().catch(function() {});
+  };
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(warmAll, { timeout: 1000 });
+  } else {
+    window.setTimeout(warmAll, 300);
+  }
 }
 
 (async function boot() {
@@ -369,9 +380,6 @@ async function init() {
   migrateLegacySessions();
 
   await init();
-  if (startupInitialPage !== "last-chat") {
-    scheduleSessionMetaHydration(2200);
-  }
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./sw.js").catch(function() {});

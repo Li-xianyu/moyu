@@ -107,21 +107,19 @@ function ensureChatFeatureLoaded() {
   return _chatFeaturePromise;
 }
 
-function warmChatFeature(options = {}) {
-  const preload = () => {
-    ensureChatFeatureLoaded().catch((error) => debugWarn("[chat-feature] preload failed", error));
+function warmChatFeature(options) {
+  var preload = function() {
+    ensureChatFeatureLoaded().catch(function(error) { debugWarn("[chat-feature] preload failed", error); });
   };
-  if (options.immediate) {
+  if (options && options.immediate) {
     preload();
     return;
   }
-  const delay = Number.isFinite(options.delay) ? Math.max(0, options.delay) : 900;
-  const schedule = () => window.setTimeout(preload, delay);
   if (window.requestIdleCallback) {
-    window.requestIdleCallback(schedule, { timeout: delay + 900 });
+    window.requestIdleCallback(preload, { timeout: 2000 });
     return;
   }
-  schedule();
+  window.setTimeout(preload, 600);
 }
 
 function ensureChatRuntimeLoaded() {
@@ -216,25 +214,23 @@ function ensureRolesStylesLoaded() {
 }
 
 function warmSettingsRuntime(options = {}) {
-  const preload = () => {
+  var preload = function() {
     ensureSettingsRuntimeLoaded()
-      .then(() => {
+      .then(function() {
         initCreateView();
         initSettingsView();
       })
-      .catch((error) => debugWarn("[settings-runtime] preload failed", error));
+      .catch(function(error) { debugWarn("[settings-runtime] preload failed", error); });
   };
   if (options.immediate) {
     preload();
     return;
   }
-  const delay = Number.isFinite(options.delay) ? Math.max(0, options.delay) : 3500;
-  const schedule = () => window.setTimeout(preload, delay);
   if (window.requestIdleCallback) {
-    window.requestIdleCallback(schedule, { timeout: delay + 1200 });
+    window.requestIdleCallback(preload, { timeout: 2000 });
     return;
   }
-  schedule();
+  window.setTimeout(preload, 600);
 }
 
 function pushViewHistory() {
