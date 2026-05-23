@@ -375,9 +375,12 @@
     line-height: 1.65;
   }
 
-  .welcome-action-btn {
+  .welcome-greeting {
+    font-size: clamp(18px, 4.5vw, 24px);
+  }
+
+  .welcome-action-line {
     font-size: 13px;
-    padding: 6px 14px;
   }
 
   .welcome-logo {

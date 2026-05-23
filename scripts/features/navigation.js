@@ -456,7 +456,7 @@ function bindNav() {
 
 function bindWelcomeActions() {
   document.addEventListener("click", async (e) => {
-    var btn = e.target.closest(".welcome-action-btn");
+    var btn = e.target.closest(".welcome-action-btn-inline");
     if (!btn) return;
     var view = btn.dataset.view;
     if (view === "create") {
