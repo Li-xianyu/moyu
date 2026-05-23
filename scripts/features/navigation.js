@@ -1037,7 +1037,7 @@ function bindMobileSwipeGesture() {
     const dy = touchCtx.dy;
     // 方向锁定：激活侧栏前，垂直主导时放弃手势
     Gesture.lockVertical(touchCtx, 12);
-    if (Gesture.isVertical(touchCtx)) return;
+    if (!isDragging && Gesture.isVertical(touchCtx)) return;
     if (Math.abs(dx) < Gesture.H_MIN) return;
 
     if (!isDragging) {
