@@ -454,6 +454,25 @@ function bindNav() {
   applySidebarState();
 }
 
+function bindWelcomeActions() {
+  document.addEventListener("click", async (e) => {
+    var btn = e.target.closest(".welcome-action-btn");
+    if (!btn) return;
+    var view = btn.dataset.view;
+    if (view === "create") {
+      await ensureCreateRuntimeLoaded();
+      initCreateView();
+      var returnTarget = state.showWelcomeHome ? "welcome" : "chat";
+      prepareCreateViewForNewSession({ returnTarget: returnTarget });
+      switchView("create");
+    } else if (view === "settings") {
+      await ensureSettingsRuntimeLoaded();
+      initSettingsView();
+      switchView("settings");
+    }
+  });
+}
+
 bindMobileSwipeGesture();
 
 let _settingsInited = false;

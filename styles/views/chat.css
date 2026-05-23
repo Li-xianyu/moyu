@@ -626,6 +626,52 @@
   .chat-welcome-copy p { max-width: 34ch; line-height: 1.7; }
 }
 
+.welcome-greeting {
+  margin: 0;
+  font-size: clamp(20px, 5vw, 28px);
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: -2px 0 0;
+}
+
+.welcome-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background 0.15s ease, gap 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.welcome-action-btn:hover {
+  background: var(--theme-bg-hover);
+  gap: 12px;
+}
+.welcome-action-btn:active {
+  background: var(--theme-bg-active-strong);
+}
+
+.welcome-action-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
 .chat-stage.empty-state {
   justify-content: center;
 }

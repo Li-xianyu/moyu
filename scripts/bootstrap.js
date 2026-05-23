@@ -308,6 +308,7 @@ async function init() {
     _updateSystemThemeListener(state.theme);
   }
   bindNav();
+  bindWelcomeActions();
   bindInfoPopover();
   bindChatList();
 

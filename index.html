@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "2026.5.23.31";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.5.23.32";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -1195,8 +1195,17 @@
                 <use href="#moyuFishIcon"></use>
               </svg>
               <h2 data-i18n="brand.title">MOYU-模鱼</h2>
-              <p data-i18n="chat.welcomeIntro">一个多 AI 剧场与角色对话实验场。</p>
-              <p data-i18n="chat.welcomeHint">先在左侧设置接口与工作模型，再创建聊天开始模鱼。</p>
+              <p class="welcome-greeting">Hello! Moyuer!</p>
+              <div class="welcome-actions">
+                <button class="welcome-action-btn" data-view="settings">
+                  <span data-i18n="chat.welcomeActionSettings">设置接口与工作模型</span>
+                  <i data-lucide="arrow-right" class="welcome-action-icon"></i>
+                </button>
+                <button class="welcome-action-btn" data-view="create">
+                  <span data-i18n="chat.welcomeActionCreate">创建聊天开始模鱼</span>
+                  <i data-lucide="arrow-right" class="welcome-action-icon"></i>
+                </button>
+              </div>
             </div>
           </div>
 
