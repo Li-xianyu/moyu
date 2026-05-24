@@ -1237,6 +1237,7 @@ function buildMessageBlock(message, sessionMode, enableMd) {
     metaHtml += `\n        <span>${new Date(message.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span>\n      `;
     meta.innerHTML = metaHtml;
     block.appendChild(meta);
+    syncMessageThinkingIcon(block, message);
   }
 
   const isSingleLineMessage = !message.pending && !/[\r\n]/.test(message.content || "");
@@ -1317,11 +1318,83 @@ function syncMessageModelProviderIcon(block, message, session = getCurrentSessio
   }
 }
 
+function initAiThinkingIcon(el) {
+  if (!el || el.dataset._aiInit) return;
+  el.dataset._aiInit = '1';
+  el.innerHTML = `
+    <i class="corner"></i><i></i><i></i><i class="corner"></i>
+    <i></i><i></i><i></i><i></i>
+    <i></i><i></i><i></i><i></i>
+    <i class="corner"></i><i></i><i></i><i class="corner"></i>
+  `;
+  const cells = [...el.children];
+  const cores = [5,6,10,9];
+  const edges = [1,2,7,11,14,13,8,4];
+  const speed = parseFloat(getComputedStyle(el).getPropertyValue('--ai-speed')) || 1;
+  const from = hex(getComputedStyle(el).getPropertyValue('--ai-from'));
+  const to = hex(getComputedStyle(el).getPropertyValue('--ai-to'));
+  function hex(v) {
+    v = (v || '#333').trim().replace('#','');
+    if (v.length === 3) v = v.split('').map(x => x + x).join('');
+    const n = parseInt(v, 16);
+    return [(n>>16)&255, (n>>8)&255, n&255];
+  }
+  function mix(a,b,t) { return a.map((v,i) => v + (b[i] - v) * t); }
+  function dist(a,b,l) { const d = Math.abs(a - b); return Math.min(d, l - d); }
+  let running = true;
+  el._stop = function() { running = false; };
+  function render(t) {
+    if (!running) return;
+    if (!el.isConnected) { running = false; return; }
+    const cp = (t * 0.0028 * speed) % 4;
+    const dp = (t * 0.0024 * speed + 2.5) % 8;
+    cores.forEach((idx,i) => {
+      const light = Math.exp(-(dist(i,cp,4)**2)*2.8);
+      const c = mix(from, to, .08 + light * .65);
+      cells[idx].style.background = 'rgb(' + c.join(',') + ')';
+    });
+    edges.forEach((idx,i) => {
+      const dark = Math.exp(-(dist(i,dp,8)**2)*1.1);
+      const wave = Math.sin(t * 0.004 * speed + i) * .08;
+      const c = mix(from, to, .88 + wave - dark * .62);
+      cells[idx].style.background = 'rgb(' + c.join(',') + ')';
+    });
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+}
+
+function syncMessageThinkingIcon(block, message) {
+  if (message.role !== 'assistant') return;
+  const meta = block.querySelector('.message-meta');
+  if (!meta) return;
+  const name = meta.querySelector('strong');
+  if (!name) return;
+  let icon = meta.querySelector('.ai-thinking-icon');
+  const shouldShow = message.streaming;
+  if (shouldShow && !icon) {
+    icon = document.createElement('span');
+    icon.className = 'ai-thinking-icon';
+    icon.dataset.aiThinking = '';
+    icon.style.cssText = '--ai-from:#111; --ai-to:#fff; --ai-speed:1.25';
+    name.after(icon);
+    initAiThinkingIcon(icon);
+  } else if (!shouldShow && icon) {
+    if (icon._stop) icon._stop();
+    icon.remove();
+  } else if (shouldShow && icon) {
+    icon.style.display = '';
+  } else if (!shouldShow && !icon) {
+    // nothing to do
+  }
+}
+
 function syncModelProviderIconVisibility(session = getCurrentSession()) {
   if (!session || !els.chatMessages) return;
   const messagesById = new Map((session.messages || []).filter(Boolean).map((message) => [message.id, message]));
   els.chatMessages.querySelectorAll(".message-block.agent[data-message-id]").forEach((block) => {
     syncMessageModelProviderIcon(block, messagesById.get(block.dataset.messageId), session);
+    syncMessageThinkingIcon(block, messagesById.get(block.dataset.messageId));
   });
 }
 
@@ -1357,6 +1430,7 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
 
   // 3. Update model-provider-icon in message-meta
   syncMessageModelProviderIcon(block, message);
+  syncMessageThinkingIcon(block, message);
 
   bindInlineMetaToggles(block, message);
 

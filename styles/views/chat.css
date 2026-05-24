@@ -837,6 +837,24 @@
   filter: brightness(0) saturate(100%);
 }
 
+.ai-thinking-icon {
+  --size: 16px;
+  --gap: 1px;
+  --radius: 1.5px;
+  width: var(--size);
+  height: var(--size);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--gap);
+  flex-shrink: 0;
+}
+.ai-thinking-icon i {
+  border-radius: var(--radius);
+}
+.ai-thinking-icon i.corner {
+  opacity: 0;
+}
+
 .message-block.agent-plain-block {
   display: flex;
   flex-direction: column;
