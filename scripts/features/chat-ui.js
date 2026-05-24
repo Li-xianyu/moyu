@@ -1150,6 +1150,7 @@ function renderMessages(options = {}) {
   if (shouldStickToBottom) {
     if (state.userTopAnchorActive && state.isSending) {
       recalcUserTopAnchorSpacer();
+      updateStreamingIndicator();
       return;
     }
     if (!state.userScrolledAway) {
