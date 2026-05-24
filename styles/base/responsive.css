@@ -339,8 +339,8 @@
     right: 10px;
   }
   .chat-header-actions .info-btn.floating {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
   }
 
   .chat-info-popover {
@@ -770,6 +770,15 @@
     left: 10px;
   }
 
+  .chat-header-actions {
+    top: 10px;
+    right: 10px;
+  }
+  .chat-header-actions .info-btn.floating {
+    width: 36px;
+    height: 36px;
+  }
+
   .view-with-shell-offset {
     padding-top: 46px;
   }
@@ -805,11 +814,10 @@
     right: 8px;
   }
   .chat-header-actions .info-btn.floating {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
   }
 }
-
 
 /* V4_FORCE_MOBILE_BOTTOM_GUARD: fallback if mobile-viewport-fix.css is not loaded */
 @media (max-width: 960px), (hover: none) and (pointer: coarse) {

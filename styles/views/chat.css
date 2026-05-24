@@ -83,15 +83,22 @@
   background: var(--theme-floating-surface);
   backdrop-filter: blur(10px);
   overflow: hidden;
+  gap: 1px;
 }
 .chat-header-actions .info-btn.floating {
   position: relative;
   top: auto;
   right: auto;
+  width: 38px;
+  height: 38px;
   backdrop-filter: none;
   background: transparent;
   box-shadow: none;
   border: none;
+  border-radius: 999px;
+}
+.chat-header-actions .info-btn.floating:hover {
+  background: var(--theme-bg-active);
 }
 .app-shell:has(#chatView.empty-state) .chat-header-actions { display: none; }
 .app-shell:has(#settingsView.active) .chat-header-actions,
