@@ -370,6 +370,15 @@ async function restoreViewFromHistory(entry) {
 }
 
 window.addEventListener("popstate", async (e) => {
+  // Mobile: system back closes sidebar first
+  if (isMobileViewport() && state.mobileSidebarOpen) {
+    state.mobileSidebarOpen = false;
+    applySidebarState();
+    // Re-push so the app stays on the current page
+    if (e.state) history.pushState(e.state, "");
+    return;
+  }
+
   if (e.state?.view || e.state?.moyuApp) {
     const entry = e.state?.moyuApp ? e.state : createRootHistoryEntry();
     _restoringAppHistory = true;
@@ -1060,7 +1069,7 @@ function bindMobileSwipeGesture() {
     // 方向锁定：激活侧栏前，垂直主导时放弃手势
     Gesture.lockVertical(touchCtx, 12);
     if (!isDragging && Gesture.isVertical(touchCtx)) return;
-    if (Math.abs(dx) < Gesture.H_MIN) return;
+    if (Math.abs(dx) < Gesture.H_MIN && !wasOpen) return;
 
     if (!isDragging) {
       isDragging = true;
