@@ -2655,6 +2655,11 @@ html[data-theme="light"] .thinking-content {
   50% { opacity: 1; }
 }
 
+.composer-status-bar .ai-thinking-icon {
+  margin-right: 6px;
+  flex: 0 0 auto;
+}
+
 .suggestion-bar {
   display: none;
   position: absolute;
@@ -2753,6 +2758,11 @@ html[data-theme="light"] .thinking-content {
     width: 16px;
     height: 16px;
     font-size: 12px;
+    margin-right: 4px;
+  }
+
+  .composer-status-bar .ai-thinking-icon {
+    --size: 16px;
     margin-right: 4px;
   }
 

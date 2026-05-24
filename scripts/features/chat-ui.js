@@ -1160,12 +1160,14 @@ function renderMessages(options = {}) {
       clearUserTopAnchorSpacer();
     }
     lucide.createIcons();
+    updateStreamingIndicator();
     return;
   }
 
   const heightDelta = scrollEl.scrollHeight - previousScrollHeight;
   scrollEl.scrollTop = previousScrollTop + Math.max(0, heightDelta);
   lucide.createIcons();
+  updateStreamingIndicator();
 }
 
 /* ---- Narration helpers ---- */
@@ -1330,9 +1332,9 @@ function initAiThinkingIcon(el) {
   const cells = [...el.children];
   const cores = [5,6,10,9];
   const edges = [1,2,7,11,14,13,8,4];
-  const speed = parseFloat(getComputedStyle(el).getPropertyValue('--ai-speed')) || 1;
-  const from = hex(getComputedStyle(el).getPropertyValue('--ai-from'));
-  const to = hex(getComputedStyle(el).getPropertyValue('--ai-to'));
+  const speed = parseFloat(el.style.getPropertyValue('--ai-speed')) || 1;
+  const from = hex(el.style.getPropertyValue('--ai-from') || '#111');
+  const to = hex(el.style.getPropertyValue('--ai-to') || '#fff');
   function hex(v) {
     v = (v || '#333').trim().replace('#','');
     if (v.length === 3) v = v.split('').map(x => x + x).join('');
@@ -1365,37 +1367,24 @@ function initAiThinkingIcon(el) {
 }
 
 function syncMessageThinkingIcon(block, message) {
-  if (message.role !== 'assistant') return;
-  const meta = block.querySelector('.message-meta');
-  if (!meta) return;
-  const name = meta.querySelector('strong');
-  if (!name) return;
+  // moved to status bar — clean up any leftover icon in meta
+  const existing = block?.querySelector('.message-meta .ai-thinking-icon');
+  if (existing) existing.remove();
+}
+
+function updateStreamingIndicator() {
   const session = getCurrentSession();
-  const msgs = session?.messages || [];
-  let lastAssistantId = null;
-  for (let i = msgs.length - 1; i >= 0; i--) {
-    if (msgs[i] && msgs[i].role === 'assistant') {
-      lastAssistantId = msgs[i].id;
-      break;
-    }
-  }
-  const isLast = message.id && message.id === lastAssistantId;
-  const existing = meta.querySelector('.ai-thinking-icon');
-  if (!isLast) {
-    if (existing) existing.remove();
-    return;
-  }
-  const shouldShow = message.streaming;
-  if (!existing) {
-    const icon = document.createElement('span');
-    icon.className = 'ai-thinking-icon';
-    icon.dataset.aiThinking = '';
-    icon.style.cssText = '--ai-from:#111; --ai-to:#fff; --ai-speed:1.25';
-    name.after(icon);
-    initAiThinkingIcon(icon);
-    icon.classList.toggle('active', shouldShow);
+  const isStreaming = session?.messages?.some(function(m) { return m.streaming; }) || false;
+  const suggestBtn = document.getElementById('suggestBtn');
+  const thinkingIcon = document.getElementById('statusBarThinkingIcon');
+  if (!suggestBtn || !thinkingIcon) return;
+  if (isStreaming) {
+    suggestBtn.style.display = 'none';
+    thinkingIcon.style.display = '';
+    initAiThinkingIcon(thinkingIcon);
   } else {
-    existing.classList.toggle('active', shouldShow);
+    suggestBtn.style.display = '';
+    thinkingIcon.style.display = 'none';
   }
 }
 
