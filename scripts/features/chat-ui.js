@@ -1372,21 +1372,15 @@ function syncMessageThinkingIcon(block, message) {
   if (!name) return;
   let icon = meta.querySelector('.ai-thinking-icon');
   const shouldShow = message.streaming;
-  if (shouldShow && !icon) {
+  if (!icon) {
     icon = document.createElement('span');
     icon.className = 'ai-thinking-icon';
     icon.dataset.aiThinking = '';
     icon.style.cssText = '--ai-from:#111; --ai-to:#fff; --ai-speed:1.25';
     name.after(icon);
     initAiThinkingIcon(icon);
-  } else if (!shouldShow && icon) {
-    if (icon._stop) icon._stop();
-    icon.remove();
-  } else if (shouldShow && icon) {
-    icon.style.display = '';
-  } else if (!shouldShow && !icon) {
-    // nothing to do
   }
+  icon.classList.toggle('active', shouldShow);
 }
 
 function syncModelProviderIconVisibility(session = getCurrentSession()) {

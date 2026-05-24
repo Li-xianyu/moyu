@@ -838,7 +838,7 @@
 }
 
 .ai-thinking-icon {
-  --size: 16px;
+  --size: 20px;
   --gap: 1px;
   --radius: 1.5px;
   width: var(--size);
@@ -847,6 +847,12 @@
   grid-template-columns: repeat(4, 1fr);
   gap: var(--gap);
   flex-shrink: 0;
+  visibility: hidden;
+  transition: filter 0.3s ease, visibility 0.3s ease;
+}
+.ai-thinking-icon.active {
+  visibility: visible;
+  filter: drop-shadow(0 0 4px rgba(255,255,255,0.35));
 }
 .ai-thinking-icon i {
   border-radius: var(--radius);
