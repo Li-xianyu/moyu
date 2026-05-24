@@ -334,6 +334,15 @@
     right: 48px;
   }
 
+  .chat-header-actions {
+    top: 10px;
+    right: 10px;
+  }
+  .chat-header-actions .info-btn.floating {
+    width: 32px;
+    height: 32px;
+  }
+
   .chat-info-popover {
     inset: 0;
     padding: 48px 8px 0;
@@ -789,6 +798,15 @@
 
   .info-btn.floating.session-edit-btn {
     right: 46px;
+  }
+
+  .chat-header-actions {
+    top: 8px;
+    right: 8px;
+  }
+  .chat-header-actions .info-btn.floating {
+    width: 32px;
+    height: 32px;
   }
 }
 

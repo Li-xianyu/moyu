@@ -582,6 +582,7 @@ button,
   transition: transform 0.22s ease;
 }
 
+.app-shell.compress-lock .chat-header-actions,
 .app-shell.compress-lock .sidebar,
 .app-shell.compress-lock .shell-toggle-btn,
 .app-shell.compress-lock .sidebar-backdrop,

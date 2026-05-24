@@ -1430,7 +1430,8 @@ function mountSessionEditButton() {
     }
   });
 
-  els.infoToggleBtn.insertAdjacentElement("beforebegin", button);
+  const container = document.getElementById("chatHeaderActions");
+  if (container) container.insertBefore(button, els.infoToggleBtn);
   els.editSessionBtn = button;
   lucide.createIcons();
 }

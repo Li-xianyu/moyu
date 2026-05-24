@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "2026.5.24.2";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.5.24.4";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -233,8 +233,10 @@
     }
     .chat-stage.empty-state .chat-messages,
     .chat-stage.empty-state .composer-shell { display: none; }
+    .app-shell:has(#chatView.empty-state) .chat-header-actions,
     .app-shell:has(#chatView.empty-state) .info-btn.floating,
     .app-shell:has(#chatView.empty-state) .chat-info-popover { display: none; }
+    .app-shell:not(:has(#chatView.active)) .chat-header-actions,
     .app-shell:not(:has(#chatView.active)) .info-btn.floating,
     .app-shell:not(:has(#chatView.active)) .chat-info-popover { display: none; }
     @media (max-width: 960px) {
@@ -1249,7 +1251,9 @@
         </div>
       </section>
     </main>
-    <button id="infoToggleBtn" class="info-btn floating" type="button" aria-label="会话信息">i</button>
+    <div id="chatHeaderActions" class="chat-header-actions">
+      <button id="infoToggleBtn" class="info-btn floating" type="button" aria-label="会话信息">i</button>
+    </div>
     <div id="chatInfoPopover" class="chat-info-popover hidden">
       <div class="chat-info-card">
         <h3>会话信息</h3>

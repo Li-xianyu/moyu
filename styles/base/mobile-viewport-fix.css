@@ -51,6 +51,7 @@ body::after {
   }
 
   .shell-toggle-btn,
+  .chat-header-actions,
   .info-btn.floating {
     margin-top: var(--moyu-top-guard, 0px) !important;
   }

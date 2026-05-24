@@ -71,6 +71,32 @@
   right: 66px;
 }
 
+/* capsule container for header action buttons */
+.chat-header-actions {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--theme-floating-surface);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+.chat-header-actions .info-btn.floating {
+  position: relative;
+  top: auto;
+  right: auto;
+  backdrop-filter: none;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+}
+.app-shell:has(#chatView.empty-state) .chat-header-actions { display: none; }
+.app-shell:has(#settingsView.active) .chat-header-actions,
+.app-shell:has(#createView.active) .chat-header-actions { display: none; }
+
 .icon-only-btn {
   display: inline-flex;
   align-items: center;
