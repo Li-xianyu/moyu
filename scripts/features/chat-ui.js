@@ -149,6 +149,7 @@ function finishUserTopAnchor() {
   if (shouldFollow) {
     requestAnimationFrame(scrollChatToBottom);
   }
+  updateStreamingIndicator();
 }
 
 const CHAT_VIRTUAL_RECENT_RENDER_COUNT = 60;
@@ -1389,6 +1390,7 @@ function updateStreamingIndicator() {
     thinkingIcon.style.display = 'none';
   }
 }
+window.__updateStreamingIndicator = updateStreamingIndicator;
 
 function syncModelProviderIconVisibility(session = getCurrentSession()) {
   if (!session || !els.chatMessages) return;
