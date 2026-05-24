@@ -1376,11 +1376,11 @@ function syncMessageThinkingIcon(block, message) {
 function updateStreamingIndicator() {
   const session = getCurrentSession();
   if (!session || session.mode !== SESSION_MODE_WORK) return;
-  const isStreaming = session.messages?.some(function(m) { return m.streaming; }) || false;
+  const isBusy = state.isSending || session.messages?.some(function(m) { return m.streaming || m.pending; }) || false;
   const suggestBtn = document.getElementById('suggestBtn');
   const thinkingIcon = document.getElementById('statusBarThinkingIcon');
   if (!suggestBtn || !thinkingIcon) return;
-  if (isStreaming) {
+  if (isBusy) {
     suggestBtn.style.display = 'none';
     thinkingIcon.style.display = '';
     initAiThinkingIcon(thinkingIcon);
