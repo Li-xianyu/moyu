@@ -1374,7 +1374,8 @@ function syncMessageThinkingIcon(block, message) {
 
 function updateStreamingIndicator() {
   const session = getCurrentSession();
-  const isStreaming = session?.messages?.some(function(m) { return m.streaming; }) || false;
+  if (!session || session.mode !== SESSION_MODE_WORK) return;
+  const isStreaming = session.messages?.some(function(m) { return m.streaming; }) || false;
   const suggestBtn = document.getElementById('suggestBtn');
   const thinkingIcon = document.getElementById('statusBarThinkingIcon');
   if (!suggestBtn || !thinkingIcon) return;

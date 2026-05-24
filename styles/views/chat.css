@@ -2658,6 +2658,7 @@ html[data-theme="light"] .thinking-content {
 .composer-status-bar .ai-thinking-icon {
   margin-right: 6px;
   flex: 0 0 auto;
+  visibility: visible;
 }
 
 .suggestion-bar {
