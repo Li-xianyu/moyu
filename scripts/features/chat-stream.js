@@ -770,7 +770,6 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   };
 
   targetMessage.streaming = false;
-  targetMessage.pending = false;
   touchSession(session);
   persistSessions();
   renderMessages({ stickToBottom: true });

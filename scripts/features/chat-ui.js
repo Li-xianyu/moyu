@@ -1370,17 +1370,33 @@ function syncMessageThinkingIcon(block, message) {
   if (!meta) return;
   const name = meta.querySelector('strong');
   if (!name) return;
-  let icon = meta.querySelector('.ai-thinking-icon');
+  const session = getCurrentSession();
+  const msgs = session?.messages || [];
+  let lastAssistantId = null;
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i] && msgs[i].role === 'assistant') {
+      lastAssistantId = msgs[i].id;
+      break;
+    }
+  }
+  const isLast = message.id && message.id === lastAssistantId;
+  const existing = meta.querySelector('.ai-thinking-icon');
+  if (!isLast) {
+    if (existing) existing.remove();
+    return;
+  }
   const shouldShow = message.streaming;
-  if (!icon) {
-    icon = document.createElement('span');
+  if (!existing) {
+    const icon = document.createElement('span');
     icon.className = 'ai-thinking-icon';
     icon.dataset.aiThinking = '';
     icon.style.cssText = '--ai-from:#111; --ai-to:#fff; --ai-speed:1.25';
     name.after(icon);
     initAiThinkingIcon(icon);
+    icon.classList.toggle('active', shouldShow);
+  } else {
+    existing.classList.toggle('active', shouldShow);
   }
-  icon.classList.toggle('active', shouldShow);
 }
 
 function syncModelProviderIconVisibility(session = getCurrentSession()) {
