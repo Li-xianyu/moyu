@@ -89,7 +89,7 @@ body::after {
     bottom: 0 !important;
     z-index: 5 !important;
     flex: 0 0 auto !important;
-    padding-top: 8px !important;
+    padding-top: 16px !important;
     padding-bottom: 2px !important;
     background: linear-gradient(180deg, transparent 0%, var(--bg, #1e1e1e) 40%) !important;
     box-shadow: none !important;

@@ -1,5 +1,5 @@
 // Bump together with APP_VERSION to force old caches out.
-const SW_VERSION = "2026.5.24.19";
+const SW_VERSION = "2026.5.25.2";
 const CACHE_NAME = "moyu-v" + SW_VERSION;
 
 function cacheable(req, res) {
@@ -66,6 +66,4 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(cacheFirst(e.request));
     return;
   }
-
-  e.respondWith(networkFirst(e.request));
 });

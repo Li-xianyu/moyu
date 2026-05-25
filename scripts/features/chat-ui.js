@@ -491,7 +491,7 @@ function buildBubbleContent(message) {
   const thinkingText = (message.thinking || "").trim();
   if (thinkingText) {
     html += `<details class="thinking-section"${message.streaming || message.thinkingExpanded ? " open" : ""}>`;
-    html += `<summary><span class="thinking-label">思考过程</span></summary>`;
+    html += `<summary><span class="thinking-label">${t("chat.thinkingLabel")}</span></summary>`;
     html += `<div class="thinking-content">${escapeHtml(thinkingText).replace(/\n/g, "<br>")}</div>`;
     html += `</details>`;
   }

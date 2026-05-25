@@ -660,6 +660,13 @@ button,
   box-sizing: border-box;
 }
 
+.chat-header-actions {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  z-index: 5;
+}
+
 .app-shell.sidebar-collapsed .shell-toggle-btn {
   left: 16px;
 }

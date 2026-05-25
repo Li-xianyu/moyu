@@ -47,6 +47,9 @@
 }
 
 .info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 34px;
   height: 34px;
   border-radius: 999px;
@@ -73,10 +76,6 @@
 
 /* capsule container for header action buttons */
 .chat-header-actions {
-  position: fixed;
-  top: 16px;
-  right: 24px;
-  z-index: 5;
   display: flex;
   align-items: center;
   border-radius: 999px;
@@ -1047,18 +1046,43 @@
 
 /* ===== Thinking / Reasoning Section ===== */
 .thinking-section {
+  position: relative;
   margin: 0 0 8px;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
-  font-size: 12px;
-  line-height: 1.55;
-  color: #b0b6c0;
+  overflow: visible;
 }
 
-.thinking-section[open] {
-  padding-bottom: 6px;
+.thinking-section[open]::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 42px;
+  bottom: 20px;
+  width: 2px;
+  background: color-mix(in srgb, var(--theme-text-primary) 18%, transparent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.thinking-section[open]::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 34px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--theme-accent);
+  border: 2px solid color-mix(in srgb, var(--theme-text-primary) 20%, transparent);
+  pointer-events: none;
+}
+
+/* Push content right so text doesn't overlap the line */
+.thinking-section[open] .thinking-content {
+  padding-left: 22px;
 }
 
 .thinking-section summary {
@@ -1564,22 +1588,21 @@ html[data-theme="light"] .message.agent .story-thought {
 }
 
 .thinking-content {
+  display: block !important;
+  visibility: hidden;
   opacity: 0;
-  height: 0;
-  overflow: hidden;
-  padding: 0;
+  height: auto;
+  max-height: min(42vh, 520px);
+  padding: 0 0 8px 22px;
   color: #c8ccd3;
   line-height: 1.65;
-  transition: opacity 0.2s ease, padding 0.2s ease;
-  will-change: opacity;
+  transition: opacity 0.2s ease;
 }
 
 .thinking-section[open] .thinking-content {
-  height: auto;
-  max-height: min(42vh, 520px);
-  overflow-y: auto;
+  visibility: visible;
   opacity: 1;
-  padding: 0 0 8px;
+  overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(156, 163, 175, 0.38) transparent;
 }
@@ -1614,7 +1637,6 @@ html[data-theme="light"] .thinking-section .thinking-label {
 
 html[data-theme="light"] .thinking-content {
   color: #1f2937;
-  opacity: 1;
 }
 
 @media (max-width: 640px) {
@@ -1892,7 +1914,7 @@ html[data-theme="light"] .thinking-content {
   z-index: 5;
   display: grid;
   gap: 4px;
-  padding-top: 12px;
+  padding-top: 20px;
   padding-bottom: 2px;
   flex: 0 0 auto;
   border: 0;
@@ -1909,9 +1931,7 @@ html[data-theme="light"] .thinking-content {
   margin: 0 -2px 6px;
   padding: 5px 8px;
   border-radius: 10px;
-  background: var(--theme-bg-panel-alt);
-  border: 1px solid var(--theme-border-subtle);
-  border-bottom: 0;
+  border: 0;
 }
 
 .composer-status-bar .status-text {
@@ -1925,6 +1945,7 @@ html[data-theme="light"] .thinking-content {
   line-height: 1.45;
   color: var(--muted);
   transition: color 0.16s ease;
+  text-shadow: 0 0 6px var(--bg), 0 0 12px var(--bg);
 }
 
 .composer-status-bar .status-text[data-tone="muted"] {
@@ -2744,7 +2765,7 @@ html[data-theme="light"] .thinking-content {
 
   .composer-shell {
     gap: 4px;
-    padding: 8px;
+    padding: 16px 8px;
     padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
     border-radius: 16px;
     box-shadow: none;
@@ -2803,7 +2824,7 @@ html[data-theme="light"] .thinking-content {
   }
 
   .composer-shell {
-    padding: 6px 10px;
+    padding: 16px 10px;
     padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
   }
 
