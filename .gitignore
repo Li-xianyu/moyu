@@ -3,3 +3,12 @@ moyu.zip
 tmp-*.png
 .codex
 AGENTS.md
+ssh_helper.py
+setup_reality.py
+setup_fast.py
+fix_clients.py
+fix_reality.py
+fix_both.py
+fix_all.py
+gen_clash.py
+gen_clash2.py
