@@ -1480,7 +1480,7 @@ function buildMessageTools(message) {
     ttsBtn.type = "button";
     ttsBtn.className = "message-edit-btn";
     ttsBtn.title = "朗读";
-    ttsBtn.innerHTML = `<i data-lucide="volume-2" class="message-edit-icon"></i>`;
+    ttsBtn.innerHTML = `<i data-lucide="${isTtsActiveForMessage(message.id) ? "pause" : "volume-2"}" class="message-edit-icon"></i>`;
     ttsBtn.addEventListener("click", function(e) {
       e.stopPropagation();
       toggleTts(message, ttsBtn);
@@ -1516,40 +1516,191 @@ function buildMessageTools(message) {
   return tools;
 }
 
-var _ttsMessageId = null;
-var _ttsUtterance = null;
+var TTS_CHUNK_MAX_LENGTH = 160;
+var TTS_KEEP_ALIVE_INTERVAL_MS = 12000;
+var _ttsSession = null;
+var _ttsKeepAliveTimer = null;
 
-function toggleTts(message, btn) {
-  if (_ttsMessageId === message.id && window.speechSynthesis.speaking) {
+function isTtsActiveForMessage(messageId) {
+  return Boolean(_ttsSession && _ttsSession.messageId === messageId);
+}
+
+function normalizeTtsText(text) {
+  return String(text || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function splitTtsLongSegment(segment, maxLength) {
+  var pieces = [];
+  var start = 0;
+  while (start < segment.length) {
+    var end = Math.min(segment.length, start + maxLength);
+    if (end < segment.length) {
+      var slice = segment.slice(start, end);
+      var breakAt = Math.max(
+        slice.lastIndexOf("。"),
+        slice.lastIndexOf("！"),
+        slice.lastIndexOf("？"),
+        slice.lastIndexOf("；"),
+        slice.lastIndexOf("，"),
+        slice.lastIndexOf(","),
+        slice.lastIndexOf("."),
+        slice.lastIndexOf("!"),
+        slice.lastIndexOf("?"),
+        slice.lastIndexOf(";"),
+        slice.lastIndexOf(":"),
+        slice.lastIndexOf("："),
+        slice.lastIndexOf("\n"),
+        slice.lastIndexOf(" ")
+      );
+      if (breakAt >= Math.floor(maxLength * 0.45)) {
+        end = start + breakAt + 1;
+      }
+    }
+    var piece = segment.slice(start, end).trim();
+    if (piece) {
+      pieces.push(piece);
+    }
+    start = end;
+  }
+  return pieces;
+}
+
+function splitTtsText(text) {
+  var normalized = normalizeTtsText(text);
+  if (!normalized) return [];
+  var roughSegments = normalized
+    .replace(/([。！？!?；;：:\n])/g, "$1\u0000")
+    .split("\u0000");
+  var chunks = [];
+  roughSegments.forEach(function(segment) {
+    var trimmed = segment.trim();
+    if (!trimmed) return;
+    if (trimmed.length <= TTS_CHUNK_MAX_LENGTH) {
+      chunks.push(trimmed);
+      return;
+    }
+    splitTtsLongSegment(trimmed, TTS_CHUNK_MAX_LENGTH).forEach(function(piece) {
+      if (piece) chunks.push(piece);
+    });
+  });
+  return chunks;
+}
+
+function clearTtsKeepAlive() {
+  if (_ttsKeepAliveTimer) {
+    clearInterval(_ttsKeepAliveTimer);
+    _ttsKeepAliveTimer = null;
+  }
+}
+
+function startTtsKeepAlive() {
+  clearTtsKeepAlive();
+  _ttsKeepAliveTimer = setInterval(function() {
+    if (!_ttsSession) {
+      clearTtsKeepAlive();
+      return;
+    }
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+        return;
+      }
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      } else if (_ttsSession.index < _ttsSession.chunks.length) {
+        speakTtsChunk(_ttsSession);
+      }
+    } catch (err) {
+      finishTtsSession(_ttsSession, true);
+    }
+  }, TTS_KEEP_ALIVE_INTERVAL_MS);
+}
+
+function finishTtsSession(session, cancelled) {
+  if (!session) return;
+  if (_ttsSession === session) {
+    _ttsSession = null;
+  }
+  clearTtsKeepAlive();
+  session.cancelled = Boolean(cancelled);
+  session.currentUtterance = null;
+  setTtsIcon(session.btn, "volume-2");
+}
+
+function cancelTtsSession() {
+  var session = _ttsSession;
+  if (!session) return;
+  session.cancelled = true;
+  clearTtsKeepAlive();
+  try {
     window.speechSynthesis.cancel();
-    _ttsMessageId = null;
-    _ttsUtterance = null;
-    setTtsIcon(btn, "volume-2");
+  } catch (err) {}
+  _ttsSession = null;
+  session.currentUtterance = null;
+  setTtsIcon(session.btn, "volume-2");
+}
+
+function speakTtsChunk(session) {
+  if (!session || session.cancelled) return;
+  if (session.index >= session.chunks.length) {
+    finishTtsSession(session, false);
     return;
   }
-  if (window.speechSynthesis.speaking) {
-    window.speechSynthesis.cancel();
-  }
-  var text = message.content || "";
-  if (!text.trim()) return;
-  var utterance = new SpeechSynthesisUtterance(text);
+  var utterance = new SpeechSynthesisUtterance(session.chunks[session.index]);
   utterance.lang = "zh-CN";
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
   utterance.onend = function() {
-    _ttsMessageId = null;
-    _ttsUtterance = null;
-    setTtsIcon(btn, "volume-2");
+    if (_ttsSession !== session || session.cancelled) return;
+    session.currentUtterance = null;
+    session.index += 1;
+    if (session.index >= session.chunks.length) {
+      finishTtsSession(session, false);
+      return;
+    }
+    window.setTimeout(function() {
+      if (_ttsSession === session && !session.cancelled) {
+        speakTtsChunk(session);
+      }
+    }, 0);
   };
   utterance.onerror = function() {
-    _ttsMessageId = null;
-    _ttsUtterance = null;
-    setTtsIcon(btn, "volume-2");
+    finishTtsSession(session, true);
   };
-  _ttsMessageId = message.id;
-  _ttsUtterance = utterance;
-  setTtsIcon(btn, "pause");
+  session.currentUtterance = utterance;
   window.speechSynthesis.speak(utterance);
+}
+
+function toggleTts(message, btn) {
+  if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance !== "function") {
+    return;
+  }
+  if (isTtsActiveForMessage(message.id)) {
+    cancelTtsSession();
+    return;
+  }
+  cancelTtsSession();
+  var chunks = splitTtsText(message.content || "");
+  if (!chunks.length) return;
+  var session = {
+    messageId: message.id,
+    btn: btn,
+    chunks: chunks,
+    index: 0,
+    cancelled: false,
+    currentUtterance: null
+  };
+  _ttsSession = session;
+  setTtsIcon(btn, "pause");
+  startTtsKeepAlive();
+  speakTtsChunk(session);
 }
 
 function setTtsIcon(btn, iconName) {
@@ -1559,6 +1710,23 @@ function setTtsIcon(btn, iconName) {
     lucide.createIcons();
   }
 }
+
+document.addEventListener("visibilitychange", function() {
+  if (!_ttsSession || document.visibilityState !== "visible") {
+    return;
+  }
+  try {
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+      return;
+    }
+    if (!window.speechSynthesis.speaking && _ttsSession.index < _ttsSession.chunks.length) {
+      speakTtsChunk(_ttsSession);
+    }
+  } catch (err) {
+    finishTtsSession(_ttsSession, true);
+  }
+});
 
 function bindInlineMetaToggles(block, message) {
   if (!block || !message?.id) return;
