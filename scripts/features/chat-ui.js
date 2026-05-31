@@ -1475,6 +1475,19 @@ function buildMessageTools(message) {
     tools.appendChild(tokenSpan);
   }
 
+  if (message.role === "assistant") {
+    const ttsBtn = document.createElement("button");
+    ttsBtn.type = "button";
+    ttsBtn.className = "message-edit-btn";
+    ttsBtn.title = "朗读";
+    ttsBtn.innerHTML = `<i data-lucide="volume-2" class="message-edit-icon"></i>`;
+    ttsBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      toggleTts(message, ttsBtn);
+    });
+    tools.appendChild(ttsBtn);
+  }
+
   const copyBtn = document.createElement("button");
   copyBtn.type = "button";
   copyBtn.className = "message-edit-btn";
@@ -1501,6 +1514,50 @@ function buildMessageTools(message) {
 
   lucide.createIcons();
   return tools;
+}
+
+var _ttsMessageId = null;
+var _ttsUtterance = null;
+
+function toggleTts(message, btn) {
+  if (_ttsMessageId === message.id && window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    _ttsMessageId = null;
+    _ttsUtterance = null;
+    setTtsIcon(btn, "volume-2");
+    return;
+  }
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+  }
+  var text = message.content || "";
+  if (!text.trim()) return;
+  var utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "zh-CN";
+  utterance.rate = 1.0;
+  utterance.pitch = 1.0;
+  utterance.onend = function() {
+    _ttsMessageId = null;
+    _ttsUtterance = null;
+    setTtsIcon(btn, "volume-2");
+  };
+  utterance.onerror = function() {
+    _ttsMessageId = null;
+    _ttsUtterance = null;
+    setTtsIcon(btn, "volume-2");
+  };
+  _ttsMessageId = message.id;
+  _ttsUtterance = utterance;
+  setTtsIcon(btn, "pause");
+  window.speechSynthesis.speak(utterance);
+}
+
+function setTtsIcon(btn, iconName) {
+  var icon = btn.querySelector(".message-edit-icon");
+  if (icon) {
+    icon.dataset.lucide = iconName;
+    lucide.createIcons();
+  }
 }
 
 function bindInlineMetaToggles(block, message) {

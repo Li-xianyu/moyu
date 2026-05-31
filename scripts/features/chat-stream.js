@@ -39,6 +39,20 @@ function buildNpcVoiceRules(session, npc, turnContext) {
   ].filter(Boolean).join("\n");
 }
 
+function createCombinedSignal(signals) {
+  const active = signals.filter(Boolean);
+  if (active.length === 0) return null;
+  if (active.length === 1) return active[0];
+  const c = new AbortController();
+  for (const s of active) {
+    if (s.aborted) { c.abort(s.reason); return c.signal; }
+    s.addEventListener("abort", () => c.abort(s.reason), { once: true });
+  }
+  return c.signal;
+}
+
+const NPC_RESPONSE_TIMEOUT_MS = 8000;
+
 async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = []) {
   const targetMessage = {
     id: `msg-${npc.name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -317,7 +331,27 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
   // 保存上下文到消息（供搜索标记检测使用）
   targetMessage._contextMessages = messages;
 
-  await streamChatCompletion(session, npc.name, npc.model, messages, npc.configId);
+  const npcTimeoutCtl = new AbortController();
+  let npcTimeoutId;
+  const cancelNpcTimeout = () => { clearTimeout(npcTimeoutId); };
+  npcTimeoutId = setTimeout(() => npcTimeoutCtl.abort(new Error("NPC_TIMEOUT")), NPC_RESPONSE_TIMEOUT_MS);
+
+  try {
+    await streamChatCompletion(session, npc.name, npc.model, messages, npc.configId, npcTimeoutCtl.signal, cancelNpcTimeout);
+  } catch (err) {
+    if (npcTimeoutCtl.signal.aborted) {
+      targetMessage.streaming = false;
+      targetMessage.pending = false;
+      targetMessage.content = "本轮回复未成功响应";
+      touchSession(session);
+      persistSessions();
+      renderMessages({ stickToBottom: true });
+      return;
+    }
+    throw err;
+  } finally {
+    clearTimeout(npcTimeoutId);
+  }
 
   // ── 保存 AI 响应到 IndexedDB ──
   if (window.__chatDB && !targetMessage.streaming) {
@@ -472,7 +506,7 @@ function getNpcResponseTemperature(session, model) {
 }
 
 
-async function streamChatCompletion(session, speaker, model, messages, configId = "") {
+async function streamChatCompletion(session, speaker, model, messages, configId = "", extraSignal = null, onStreamStarted = null) {
   const targetMessage = findLatestAssistantMessage(session, speaker);
   if (!targetMessage) {
     throw new Error(`未找到 ${speaker} 的输出占位`);
@@ -497,6 +531,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     streamRevealed = true;
     initialBuffer = "";
     initialThinkingBuffer = "";
+    if (onStreamStarted) onStreamStarted();
   };
 
   const shouldTrackUsage = getSessionSetting(session, "showTokenDisplay") !== false;
@@ -523,6 +558,8 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     return body;
   };
 
+  const fetchSignal = createCombinedSignal([state.abortController?.signal, extraSignal]);
+
   const doStreamFetch = (withUsage, withTemp = true) => fetch(`${targetConfig.host}/chat/completions`, {
     method: "POST",
     headers: {
@@ -530,7 +567,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
       "Content-Type": "application/json",
     },
     body: JSON.stringify(buildStreamBody(withUsage, withTemp)),
-    signal: state.abortController?.signal,
+    signal: fetchSignal,
   });
 
   let response = shouldTrackUsage ? await doStreamFetch(true) : await doStreamFetch(false);
