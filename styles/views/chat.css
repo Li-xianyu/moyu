@@ -1577,6 +1577,7 @@ html[data-theme="light"] .message.agent .story-thought {
 }
 
 .thinking-section .thinking-label {
+  --thinking-arrow-rotation: 45deg;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1584,37 +1585,51 @@ html[data-theme="light"] .message.agent .story-thought {
 
 .thinking-section .thinking-label::after {
   content: "";
+  display: inline-block;
+  flex: 0 0 auto;
   width: 6px;
   height: 6px;
+  margin-top: -1px;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
-  transform: rotate(45deg) translateY(-1px);
+  transform: rotate(var(--thinking-arrow-rotation));
+  transform-origin: 50% 50%;
+  will-change: transform;
   opacity: 0.75;
   transition: transform 0.2s ease;
 }
 
-.thinking-section[open] .thinking-label::after {
-  transform: rotate(225deg) translateY(1px);
+.thinking-section .thinking-label.thinking-label-no-motion::after {
+  transition: none;
 }
 
 .thinking-content {
   display: block !important;
   visibility: hidden;
   opacity: 0;
-  height: auto;
-  max-height: min(42vh, 520px);
-  padding: 0 0 8px 22px;
+  height: 0;
+  max-height: none;
+  overflow: hidden;
+  padding: 0 0 0 22px;
   color: #c8ccd3;
   line-height: 1.65;
-  transition: opacity 0.2s ease;
+  transition:
+    height 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.18s ease,
+    padding-bottom 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0.24s;
 }
 
 .thinking-section[open] .thinking-content {
   visibility: visible;
   opacity: 1;
+  height: auto;
+  max-height: min(42vh, 520px);
+  padding-bottom: 8px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(156, 163, 175, 0.38) transparent;
+  transition-delay: 0s, 0s, 0s, 0s;
 }
 
 .thinking-section[open] .thinking-content::-webkit-scrollbar {

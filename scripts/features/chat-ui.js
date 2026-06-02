@@ -2038,12 +2038,145 @@ document.addEventListener("visibilitychange", function() {
   }
 });
 
+function syncThinkingArrowRotation(section, immediate, forceOpenState) {
+  if (!section) return;
+  const label = section.querySelector(".thinking-label");
+  if (!label) return;
+
+  const isExpanded = typeof forceOpenState === "boolean" ? forceOpenState : section.open;
+  const desiredRotation = isExpanded ? 225 : 45;
+  const storedRotation = Number(label.dataset.arrowRotationDeg);
+  let nextRotation = desiredRotation;
+
+  if (Number.isFinite(storedRotation)) {
+    const normalizedRotation = ((storedRotation % 360) + 360) % 360;
+    nextRotation = storedRotation + ((desiredRotation - normalizedRotation + 360) % 360);
+  }
+
+  if (immediate) {
+    label.classList.add("thinking-label-no-motion");
+  }
+
+  label.dataset.arrowRotationDeg = String(nextRotation);
+  label.style.setProperty("--thinking-arrow-rotation", nextRotation + "deg");
+
+  if (immediate) {
+    requestAnimationFrame(function() {
+      label.classList.remove("thinking-label-no-motion");
+    });
+  }
+}
+
+function getThinkingContentExpandedHeight(content) {
+  if (!content) return 0;
+  const computed = window.getComputedStyle(content);
+  const maxHeight = parseFloat(computed.maxHeight);
+  const scrollHeight = content.scrollHeight;
+  if (Number.isFinite(maxHeight) && maxHeight > 0) {
+    return Math.min(scrollHeight, maxHeight);
+  }
+  return scrollHeight;
+}
+
+function clearThinkingContentInlineStyles(content) {
+  if (!content) return;
+  content.style.removeProperty("height");
+  content.style.removeProperty("overflow-y");
+  content.style.removeProperty("opacity");
+  content.style.removeProperty("padding-bottom");
+}
+
+function animateThinkingSection(section, shouldOpen, onStateChange) {
+  const content = section?.querySelector(".thinking-content");
+  if (!section || !content) {
+    if (section) section.open = shouldOpen;
+    if (typeof onStateChange === "function") onStateChange(shouldOpen);
+    return;
+  }
+  if (section.dataset.thinkingAnimating === "true") {
+    return;
+  }
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    section.open = shouldOpen;
+    clearThinkingContentInlineStyles(content);
+    syncThinkingArrowRotation(section, false, shouldOpen);
+    if (typeof onStateChange === "function") onStateChange(shouldOpen);
+    return;
+  }
+
+  const finish = function(finalOpen) {
+    section.dataset.thinkingAnimating = "false";
+    section.open = finalOpen;
+    clearThinkingContentInlineStyles(content);
+    syncThinkingArrowRotation(section, false);
+    if (typeof onStateChange === "function") onStateChange(finalOpen);
+  };
+
+  section.dataset.thinkingAnimating = "true";
+
+  if (shouldOpen) {
+    section.open = true;
+    syncThinkingArrowRotation(section, false, true);
+    content.style.overflowY = "hidden";
+    content.style.height = "0px";
+    content.style.opacity = "0";
+    content.style.paddingBottom = "0px";
+    content.getBoundingClientRect();
+    const targetHeight = getThinkingContentExpandedHeight(content);
+    requestAnimationFrame(function() {
+      content.style.height = targetHeight + "px";
+      content.style.opacity = "1";
+      content.style.paddingBottom = "8px";
+    });
+  } else {
+    syncThinkingArrowRotation(section, false, false);
+    const currentHeight = Math.max(content.getBoundingClientRect().height, getThinkingContentExpandedHeight(content));
+    content.style.overflowY = "hidden";
+    content.style.height = currentHeight + "px";
+    content.style.opacity = "1";
+    content.style.paddingBottom = "8px";
+    content.getBoundingClientRect();
+    requestAnimationFrame(function() {
+      content.style.height = "0px";
+      content.style.opacity = "0";
+      content.style.paddingBottom = "0px";
+    });
+  }
+
+  const onTransitionEnd = function(event) {
+    if (event.target !== content || event.propertyName !== "height") return;
+    content.removeEventListener("transitionend", onTransitionEnd);
+    finish(shouldOpen);
+  };
+
+  content.addEventListener("transitionend", onTransitionEnd);
+}
+
 function bindInlineMetaToggles(block, message) {
   if (!block || !message?.id) return;
   const thinkingSection = block.querySelector(".thinking-section");
+  if (thinkingSection) {
+    syncThinkingArrowRotation(thinkingSection, !thinkingSection.dataset.boundToggle);
+  }
   if (thinkingSection && !thinkingSection.dataset.boundToggle) {
     thinkingSection.dataset.boundToggle = "true";
+    const summary = thinkingSection.querySelector("summary");
+    if (summary) {
+      summary.addEventListener("click", function(event) {
+        event.preventDefault();
+        animateThinkingSection(thinkingSection, !thinkingSection.open, function(expanded) {
+          message.thinkingExpanded = expanded;
+          if (window.persistSessions) {
+            window.persistSessions();
+          }
+        });
+      });
+    }
     thinkingSection.addEventListener("toggle", () => {
+      if (thinkingSection.dataset.thinkingAnimating === "true") {
+        return;
+      }
+      syncThinkingArrowRotation(thinkingSection, false);
       message.thinkingExpanded = thinkingSection.open;
       if (window.persistSessions) {
         window.persistSessions();
