@@ -794,7 +794,7 @@
 
 .message-block.agent .message-tools {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: 6px;
   height: 24px;
@@ -804,10 +804,20 @@
   transition: opacity 0.15s ease;
 }
 
+.message-tools-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
 .message-token-label {
   font-size: 11px;
   line-height: 1.45;
   color: #9198a1;
+  flex: 1 1 auto;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

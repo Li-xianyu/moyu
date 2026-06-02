@@ -381,10 +381,10 @@ function updateCreateExitButton() {
   if (els.sessionEditExitLabel) {
     els.sessionEditExitLabel.textContent = meta.label;
   }
-  if (els.cancelEditBtn) {
-    els.cancelEditBtn.setAttribute("aria-label", meta.label);
-    els.cancelEditBtn.title = meta.label;
-    els.cancelEditBtn.dataset.targetView = meta.target;
+  if (els.sessionEditExitBtn) {
+    els.sessionEditExitBtn.setAttribute("aria-label", meta.label);
+    els.sessionEditExitBtn.title = meta.label;
+    els.sessionEditExitBtn.dataset.targetView = meta.target;
   }
 }
 
@@ -457,7 +457,7 @@ function bindCreateEditNavigation() {
       });
     });
 
-  els.cancelEditBtn?.addEventListener("click", async () => {
+  els.sessionEditExitBtn?.addEventListener("click", async () => {
     if (state.editingSessionId) {
       await ensureChatFeatureForCreateTransition();
       state.editingSessionId = null;
