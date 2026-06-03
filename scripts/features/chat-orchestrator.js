@@ -48,18 +48,13 @@ function buildChatSummaryBlock(session) {
 function buildChatContextTokenMetrics(session) {
   if (!session) return null;
   const visibleMessages = getVisibleHistoryMessages(session);
-  const cutoffIndex = session?.compressedUntilMessageId
-    ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
-    : -1;
-  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
-    ? session.compressedUntilSequence
-    : Math.max(-1, ...(typeof getCompressionSegments === "function" ? getCompressionSegments(session, "chat").map((segment) => Number(segment.endSeq) || -1) : []));
+  const cutoffSeq = typeof getCompressedCutoffSeq === "function"
+    ? getCompressedCutoffSeq(session, "chat")
+    : (Number.isFinite(session?.compressedUntilSequence) ? session.compressedUntilSequence : -1);
   const activeMessages = session?.chatSummary
-    ? (cutoffIndex >= 0
-      ? visibleMessages.slice(cutoffIndex + 1)
-      : (cutoffSeq >= 0
-        ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
-        : visibleMessages))
+    ? (cutoffSeq >= 0
+      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+      : visibleMessages)
     : visibleMessages;
   const summaryTokens = estimateTokens(session?.chatSummary || "");
   const segmentTokens = estimateChatMessagesTokens(
@@ -1782,17 +1777,12 @@ async function ensureChatSummary(session, options = {}) {
   const config = resolveModelConfig(configId, npc.model, session.configId);
 
   const visibleMessages = getVisibleHistoryMessages(session);
-  const cutoffIdx = session?.compressedUntilMessageId
-    ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
-    : -1;
-  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
-    ? session.compressedUntilSequence
-    : Math.max(-1, ...(typeof getCompressionSegments === "function" ? getCompressionSegments(session, "chat").map((segment) => Number(segment.endSeq) || -1) : []));
-  const unsummarizedMessages = cutoffIdx >= 0
-    ? visibleMessages.slice(cutoffIdx + 1)
-    : (cutoffSeq >= 0
-      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
-      : visibleMessages);
+  const cutoffSeq = typeof getCompressedCutoffSeq === "function"
+    ? getCompressedCutoffSeq(session, "chat")
+    : (Number.isFinite(session?.compressedUntilSequence) ? session.compressedUntilSequence : -1);
+  const unsummarizedMessages = cutoffSeq >= 0
+    ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+    : visibleMessages;
   const compressible = force
     ? visibleMessages.slice(0, Math.max(0, visibleMessages.length - 4))
     : unsummarizedMessages.slice(0, Math.max(0, unsummarizedMessages.length - 4));
@@ -2007,9 +1997,36 @@ function appendCompressionSegment(session, kind, messages, summary) {
     segments.push(segment);
   }
   segments.sort((a, b) => (Number(a.startSeq) || 0) - (Number(b.startSeq) || 0));
-  session.compressionSegments = segments.slice(-80);
+  session.compressionSegments = segments.slice(-30);
   session.compressedUntilSequence = Math.max(Number(session.compressedUntilSequence) || -1, endSeq);
+  mergeAdjacentSmallSegments(session, kind);
   return segment;
+}
+
+function mergeAdjacentSmallSegments(session, kind) {
+  const segments = Array.isArray(session.compressionSegments) ? session.compressionSegments : [];
+  const sameKind = segments.filter((s) => s && s.kind === kind);
+  if (sameKind.length < 2) return;
+  const MERGE_TOKEN_THRESHOLD = 300;
+  let merged = true;
+  while (merged) {
+    merged = false;
+    for (let i = 0; i < sameKind.length - 1; i++) {
+      const a = sameKind[i];
+      const b = sameKind[i + 1];
+      if (!a || !b) continue;
+      const combinedTokens = (Number(a.tokenCount) || 0) + (Number(b.tokenCount) || 0);
+      if (combinedTokens > MERGE_TOKEN_THRESHOLD) continue;
+      a.summary = `${String(a.summary || "").trim()}\n${String(b.summary || "").trim()}`;
+      a.endSeq = b.endSeq;
+      a.endMessageId = b.endMessageId;
+      a.messageCount = (Number(a.messageCount) || 0) + (Number(b.messageCount) || 0);
+      a.tokenCount = combinedTokens;
+      sameKind.splice(i + 1, 1);
+      merged = true;
+      break;
+    }
+  }
 }
 
 function scheduleAutoCompressAfterTurn(session) {
@@ -2040,17 +2057,12 @@ async function tryAutoCompressSession(session) {
     const needsRecompress = metrics.contextCurrent >= metrics.contextThreshold;
     // 算未压缩消息数，超过 recentLimit 才有合并价值
     const visibleMessages = getVisibleHistoryMessages(session);
-    const cutoffIdx = session?.compressedUntilMessageId
-      ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
-      : -1;
-    const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
-      ? session.compressedUntilSequence
-      : Math.max(-1, ...(typeof getCompressionSegments === "function" ? getCompressionSegments(session, "director").map((segment) => Number(segment.endSeq) || -1) : []));
-    unsummarizedCount = cutoffIdx >= 0
-      ? Math.max(0, visibleMessages.length - cutoffIdx - 1)
-      : (cutoffSeq >= 0
-        ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq).length
-        : visibleMessages.length);
+    const cutoffSeq = typeof getCompressedCutoffSeq === "function"
+      ? getCompressedCutoffSeq(session, "director")
+      : (Number.isFinite(session?.compressedUntilSequence) ? session.compressedUntilSequence : -1);
+    unsummarizedCount = cutoffSeq >= 0
+      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq).length
+      : visibleMessages.length;
     const needsMerge = unsummarizedCount > DIRECTOR_RECENT_HISTORY_LIMIT;
     const hasEnoughFreshMessages = unsummarizedCount >= DIRECTOR_AUTO_COMPRESS_MIN_UNSUMMARIZED;
     const shouldAutoCompress = needsRecompress && hasEnoughFreshMessages;
@@ -2101,17 +2113,12 @@ async function tryAutoCompressChat(session) {
   if (!session || state.isSending || _autoCompressPending) return;
 
   const visibleMessages = getVisibleHistoryMessages(session);
-  const cutoffIdx = session?.compressedUntilMessageId
-    ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
-    : -1;
-  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
-    ? session.compressedUntilSequence
-    : Math.max(-1, ...(typeof getCompressionSegments === "function" ? getCompressionSegments(session, "chat").map((segment) => Number(segment.endSeq) || -1) : []));
-  const unsummarizedMessages = cutoffIdx >= 0
-    ? visibleMessages.slice(cutoffIdx + 1)
-    : (cutoffSeq >= 0
-      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
-      : visibleMessages);
+  const cutoffSeq = typeof getCompressedCutoffSeq === "function"
+    ? getCompressedCutoffSeq(session, "chat")
+    : (Number.isFinite(session?.compressedUntilSequence) ? session.compressedUntilSequence : -1);
+  const unsummarizedMessages = cutoffSeq >= 0
+    ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+    : visibleMessages;
   const unsummarizedCount = unsummarizedMessages.length;
   const unsummarizedTokens = estimateChatMessagesTokens(
     unsummarizedMessages.map((m) => ({ role: m.role || "user", content: m.content || "" }))

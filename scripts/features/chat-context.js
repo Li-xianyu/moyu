@@ -1,5 +1,5 @@
 ﻿const DIRECTOR_RECENT_HISTORY_LIMIT = 8;
-const DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT = 4;
+const DIRECTOR_MANUAL_RECENT_HISTORY_LIMIT = 8;
 const DIRECTOR_AUTO_COMPRESS_THRESHOLD_DEFAULT = 1800;
 const DIRECTOR_AUTO_COMPRESS_MIN_UNSUMMARIZED = 6;
 const DIRECTOR_MEMORY_TARGET_MIN = 260;
@@ -105,6 +105,14 @@ function getCompressionSegments(session, kind) {
     .sort((a, b) => (Number(a.startSeq) || 0) - (Number(b.startSeq) || 0));
 }
 
+function getCompressedCutoffSeq(session, kind) {
+  if (Number.isFinite(session?.compressedUntilSequence)) {
+    return session.compressedUntilSequence;
+  }
+  const segments = typeof getCompressionSegments === "function" ? getCompressionSegments(session, kind) : [];
+  return Math.max(-1, ...segments.map((s) => Number(s.endSeq) || -1));
+}
+
 function buildCompressionSegmentsSystemMessages(session, kind = "director", options = {}) {
   const segments = getCompressionSegments(session, kind);
   if (!segments.length) return [];
@@ -181,21 +189,13 @@ function buildDirectorNpcRoster(session) {
 
 function getDirectorRecentMessages(session, recentLimit = DIRECTOR_RECENT_HISTORY_LIMIT) {
   const visibleMessages = getVisibleHistoryMessages(session);
-  if (!visibleMessages.length) {
-    return [];
-  }
+  if (!visibleMessages.length) return [];
+  if (visibleMessages.length <= recentLimit) return visibleMessages;
 
-  const cutoffIndex = session?.compressedUntilMessageId
-    ? visibleMessages.findIndex((message) => message.id === session.compressedUntilMessageId)
-    : -1;
-  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
-    ? session.compressedUntilSequence
-    : Math.max(-1, ...getCompressionSegments(session, "director").map((segment) => Number(segment.endSeq) || -1));
-  const unsummarized = cutoffIndex >= 0
-    ? visibleMessages.slice(cutoffIndex + 1)
-    : (cutoffSeq >= 0
-      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
-      : visibleMessages);
+  const cutoffSeq = getCompressedCutoffSeq(session, "director");
+  const unsummarized = cutoffSeq >= 0
+    ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+    : visibleMessages;
   return unsummarized.slice(-recentLimit);
 }
 
@@ -205,17 +205,10 @@ function getCompressibleDirectorMessages(session, recentLimit = DIRECTOR_RECENT_
     return [];
   }
 
-  const cutoffIndex = session?.compressedUntilMessageId
-    ? visibleMessages.findIndex((message) => message.id === session.compressedUntilMessageId)
-    : -1;
-  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
-    ? session.compressedUntilSequence
-    : Math.max(-1, ...getCompressionSegments(session, "director").map((segment) => Number(segment.endSeq) || -1));
-  const unsummarized = cutoffIndex >= 0
-    ? visibleMessages.slice(cutoffIndex + 1)
-    : (cutoffSeq >= 0
-      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
-      : visibleMessages);
+  const cutoffSeq = getCompressedCutoffSeq(session, "director");
+  const unsummarized = cutoffSeq >= 0
+    ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+    : visibleMessages;
   if (unsummarized.length === 0) {
     return [];
   }
@@ -354,17 +347,10 @@ function buildScopedNpcHistory(session, npc) {
     return [];
   }
 
-  const cutoffIndex = session?.compressedUntilMessageId
-    ? visibleMessages.findIndex((message) => message.id === session.compressedUntilMessageId)
-    : -1;
-  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
-    ? session.compressedUntilSequence
-    : Math.max(-1, ...getCompressionSegments(session, "chat").map((segment) => Number(segment.endSeq) || -1));
-  const compressedVisibleMessages = cutoffIndex >= 0
-    ? visibleMessages.slice(cutoffIndex + 1)
-    : (cutoffSeq >= 0
-      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
-      : visibleMessages);
+  const cutoffSeq = getCompressedCutoffSeq(session, "chat");
+  const compressedVisibleMessages = cutoffSeq >= 0
+    ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+    : visibleMessages;
   const scopedSourceMessages = session?.chatSummary ? compressedVisibleMessages : visibleMessages;
 
   let scopedMessages;
@@ -1332,18 +1318,11 @@ function buildDirectorContextTokenMetrics(session) {
 function buildChatContextTokenMetrics(session) {
   if (!session) return null;
   const visibleMessages = getVisibleHistoryMessages(session);
-  const cutoffIndex = session?.compressedUntilMessageId
-    ? visibleMessages.findIndex((m) => m.id === session.compressedUntilMessageId)
-    : -1;
-  const cutoffSeq = Number.isFinite(session?.compressedUntilSequence)
-    ? session.compressedUntilSequence
-    : Math.max(-1, ...(typeof getCompressionSegments === "function" ? getCompressionSegments(session, "chat").map((segment) => Number(segment.endSeq) || -1) : []));
+  const cutoffSeq = getCompressedCutoffSeq(session, "chat");
   const activeMessages = session?.chatSummary
-    ? (cutoffIndex >= 0
-      ? visibleMessages.slice(cutoffIndex + 1)
-      : (cutoffSeq >= 0
-        ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
-        : visibleMessages))
+    ? (cutoffSeq >= 0
+      ? visibleMessages.filter((message) => !Number.isFinite(message.sequence) || message.sequence > cutoffSeq)
+      : visibleMessages)
     : visibleMessages;
   const summaryTokens = estimateTokens(session?.chatSummary || "");
   const segmentTokens = estimateChatMessagesTokens(

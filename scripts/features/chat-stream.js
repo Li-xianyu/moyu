@@ -202,11 +202,11 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
   // precede the user's question to be considered during the reasoning phase.
   if (isSingleAIMode && window.__chatRetrieval) {
     const visibleForSearch = getVisibleHistoryMessages(session);
-    const cutoffForSearch = session?.compressedUntilMessageId
-      ? visibleForSearch.findIndex(function (m) { return m.id === session.compressedUntilMessageId; })
-      : -1;
-    const searchSourceMessages = session?.chatSummary && cutoffForSearch >= 0
-      ? visibleForSearch.slice(cutoffForSearch + 1)
+    const cutoffSeqForSearch = typeof getCompressedCutoffSeq === "function"
+      ? getCompressedCutoffSeq(session, "chat")
+      : (Number.isFinite(session?.compressedUntilSequence) ? session.compressedUntilSequence : -1);
+    const searchSourceMessages = session?.chatSummary && cutoffSeqForSearch >= 0
+      ? visibleForSearch.filter(function (m) { return !Number.isFinite(m.sequence) || m.sequence > cutoffSeqForSearch; })
       : visibleForSearch;
     const totalForSearch = visibleForSearch.length;
     const scopedForSearch = searchSourceMessages.slice(-30).length;

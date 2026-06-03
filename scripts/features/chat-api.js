@@ -61,7 +61,7 @@ function estimateTokens(text) {
   return Math.max(
     1,
     Math.round(
-      cjkMatches.length * 0.85 +
+      cjkMatches.length * 1.0 +
       asciiWordChars / 3.6 +
       punctuationChars * 0.35 +
       otherChars * 0.7
