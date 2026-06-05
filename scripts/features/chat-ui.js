@@ -1524,11 +1524,11 @@ function buildMessageTools(message) {
   return tools;
 }
 
-var TTS_CHUNK_MAX_LENGTH = 220;
-var TTS_KEEP_ALIVE_INTERVAL_MS = 5000;
+var TTS_CHUNK_MAX_LENGTH = 180;
+var TTS_KEEP_ALIVE_INTERVAL_MS = 4000;
 var TTS_STALL_THRESHOLD_MS = 25000;
 var TTS_CHUNK_GRACE_MS = 8000;
-var TTS_MAX_RESTARTS_PER_CHUNK = 0;
+var TTS_MAX_RESTARTS_PER_CHUNK = 2;
 var TTS_SPEECH_RATE = 1.0;
 var TTS_CHUNK_DELAY_MS = 320;
 var _ttsSession = null;
@@ -1687,7 +1687,8 @@ function stripMarkdownForTts(text) {
     return cleaned ? cleaned : "图片";
   });
   value = value.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
-  value = value.replace(/https?:\/\/\S+/g, "链接");
+  value = value.replace(/(?:https?|ftp):\/\/\S+/g, "链接");
+  value = value.replace(/\bwww\.[a-zA-Z0-9.-]+(?:[/\S]*)?/g, "链接");
   value = value.replace(/^#{1,6}\s*/gm, "");
   value = value.replace(/^\s{0,3}>\s?/gm, "");
   value = value.replace(/^\s*[-*+]\s+/gm, "");
@@ -1715,6 +1716,9 @@ function normalizeTtsText(text) {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
+    .replace(/[*_~`{}\[\]\\|]/g, "")
+    .replace(/ {2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
@@ -1837,7 +1841,7 @@ function queueNextTtsChunk(session, delayMs) {
   }, delayMs || 0);
 }
 
-function retryCurrentTtsChunk(session) {
+function retryCurrentTtsChunk(session, delayMs) {
   if (!session || session.cancelled) return false;
   if ((session.chunkRestartCount || 0) >= TTS_MAX_RESTARTS_PER_CHUNK) {
     return false;
@@ -1849,7 +1853,7 @@ function retryCurrentTtsChunk(session) {
   try {
     window.speechSynthesis.cancel();
   } catch (err) {}
-  queueNextTtsChunk(session, 80);
+  queueNextTtsChunk(session, delayMs != null ? delayMs : 80);
   return true;
 }
 
@@ -1929,6 +1933,9 @@ function speakTtsChunk(session) {
     finishTtsSession(session, false);
     return;
   }
+  if (session.currentUtterance) {
+    try { window.speechSynthesis.cancel(); } catch (err) {}
+  }
   var chunkToken = (session.chunkToken || 0) + 1;
   var chunkText = session.chunks[session.index];
   var utterance = new SpeechSynthesisUtterance(chunkText);
@@ -1962,12 +1969,10 @@ function speakTtsChunk(session) {
     }
     queueNextTtsChunk(session, TTS_CHUNK_DELAY_MS);
   };
-  utterance.onerror = function() {
+  utterance.onerror = function(err) {
     if (_ttsSession !== session || session.cancelled || session.chunkToken !== chunkToken || session.currentUtterance !== utterance) return;
     session.currentUtterance = null;
-    if (!retryCurrentTtsChunk(session)) {
-      finishTtsSession(session, true);
-    }
+    retryCurrentTtsChunk(session, 300);
   };
   session.currentUtterance = utterance;
   window.speechSynthesis.speak(utterance);
