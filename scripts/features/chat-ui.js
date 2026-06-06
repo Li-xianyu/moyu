@@ -1730,7 +1730,23 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
 
     if (skillData) {
       const existingCard = block.querySelector('.skill-card');
-      if (!existingCard) {
+      if (existingCard) {
+        // 更新现有卡片内容
+        const titleEl = existingCard.querySelector('.skill-card-title');
+        if (titleEl) {
+          const safeName = typeof escapeHtml === "function" ? escapeHtml(skillData.skill_name) : skillData.skill_name;
+          titleEl.textContent = safeName;
+        }
+        const progressEl = existingCard.querySelector('.skill-card-progress');
+        if (progressEl) {
+          progressEl.textContent = `(${skillData.step}/${skillData.total_steps})`;
+        }
+        const questionEl = existingCard.querySelector('.skill-card-question');
+        if (questionEl) {
+          questionEl.textContent = skillData.question;
+        }
+        existingCard.dataset.step = skillData.step;
+      } else {
         const card = typeof renderSkillCard === "function"
           ? renderSkillCard(skillData, message.id)
           : null;

@@ -15,12 +15,6 @@ function parseSkillFromResponse(content) {
   }
 }
 
-// 检查流程是否完成
-function isSkillComplete(content) {
-  if (!content || typeof content !== "string") return false;
-  return content.includes("[[SKILL_COMPLETE]]");
-}
-
 // 解析最终结果
 function parseSkillResult(content) {
   if (!content || typeof content !== "string") return null;
@@ -47,9 +41,10 @@ function renderSkillCard(skillData, messageId) {
   // 头部
   const header = document.createElement("div");
   header.className = "skill-card-header";
+  const safeName = typeof escapeHtml === "function" ? escapeHtml(skillData.skill_name) : skillData.skill_name;
   header.innerHTML = `
     <span class="skill-card-icon">📋</span>
-    <span class="skill-card-title">${escapeHtml(skillData.skill_name)}</span>
+    <span class="skill-card-title">${safeName}</span>
     <span class="skill-card-progress">(${skillData.step}/${skillData.total_steps})</span>
   `;
   card.appendChild(header);
@@ -86,6 +81,7 @@ function renderSkillCard(skillData, messageId) {
     customInput.type = "text";
     customInput.className = "skill-card-custom-input";
     customInput.placeholder = "自定义输入...";
+    customInput.maxLength = 500;
     
     const customBtn = document.createElement("button");
     customBtn.type = "button";
@@ -125,9 +121,10 @@ function renderSkillResult(skillResult) {
   // 头部
   const header = document.createElement("div");
   header.className = "skill-card-header";
+  const safeResultName = typeof escapeHtml === "function" ? escapeHtml(skillResult.skill_name) : skillResult.skill_name;
   header.innerHTML = `
     <span class="skill-card-icon">✅</span>
-    <span class="skill-card-title">${escapeHtml(skillResult.skill_name)} - 完成</span>
+    <span class="skill-card-title">${safeResultName} - 完成</span>
   `;
   card.appendChild(header);
   
@@ -137,7 +134,11 @@ function renderSkillResult(skillResult) {
   
   const summary = skillResult.summary || {};
   const summaryHtml = Object.entries(summary)
-    .map(([key, value]) => `<div class="skill-result-item"><strong>${escapeHtml(key)}:</strong> ${escapeHtml(String(value))}</div>`)
+    .map(([key, value]) => {
+      const safeKey = typeof escapeHtml === "function" ? escapeHtml(key) : key;
+      const safeValue = typeof escapeHtml === "function" ? escapeHtml(String(value)) : String(value);
+      return `<div class="skill-result-item"><strong>${safeKey}:</strong> ${safeValue}</div>`;
+    })
     .join("");
   
   content.innerHTML = summaryHtml || "<div>分析完成</div>";
