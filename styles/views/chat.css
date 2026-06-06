@@ -1065,6 +1065,26 @@
   word-break: normal;
   overflow-wrap: break-word;
 }
+
+.message-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.message-image {
+  max-width: 240px;
+  max-height: 180px;
+  border-radius: 8px;
+  object-fit: contain;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.message-image:hover {
+  transform: scale(1.02);
+}
 /* Work mode: agent messages without bubble (plain text like ChatGPT) */
 .message.agent.agent-plain {
   background: transparent;

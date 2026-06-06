@@ -561,7 +561,16 @@ function getNpcGroupDebugLabel(groups) {
 }
 
 function normalizeUserMessageDisplayText(value) {
+  if (Array.isArray(value)) {
+    var textParts = value.filter(function (p) { return p.type === "text"; }).map(function (p) { return p.text; });
+    return String(textParts.join("") || "").replace(/\n{3,}/g, "\n\n");
+  }
   return String(value || "").replace(/\n{3,}/g, "\n\n");
+}
+
+function extractImageAttachments(content) {
+  if (!Array.isArray(content)) return [];
+  return content.filter(function (p) { return p.type === "image_url"; });
 }
 
 function buildBubbleContent(message) {
@@ -589,6 +598,18 @@ function buildBubbleContent(message) {
   const content = message.role === "user"
     ? normalizeUserMessageDisplayText(message.content)
     : message.content;
+
+  if (message.role === "user") {
+    var images = extractImageAttachments(message.content);
+    if (images.length) {
+      html += '<div class="message-images">';
+      for (var i = 0; i < images.length; i++) {
+        html += '<img src="' + escapeHtml(images[i].image_url.url) + '" class="message-image" loading="lazy">';
+      }
+      html += '</div>';
+    }
+  }
+
   if (enableMd) {
     html += renderMarkdownContent(escapeHtml(content));
   } else if (message.role === "assistant" && sessionMode === SESSION_MODE_WORK) {
