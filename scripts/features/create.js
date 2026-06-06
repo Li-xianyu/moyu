@@ -722,6 +722,7 @@ function addNpcCard(prefill = {}, options = {}) {
   const promptInput = fragment.querySelector(".npc-prompt");
   const removeBtn = fragment.querySelector(".remove-npc-btn");
 
+  card.dataset.originalNpcName = String(prefill.name || "");
   nameInput.value = prefill.name || "";
   promptInput.value = prefill.prompt || "";
   syncNpcCardTitle(card, accordionName, nameInput.value);
@@ -1352,6 +1353,15 @@ async function saveSessionEdits(payload, activeConfig) {
 
   const isSingleNpc = payload.mode === SESSION_MODE_WORK && payload.npcs.length <= 1;
   const chaosMode = isChaosMode(payload.mode);
+  const originalNpcNames = new Set((session.npcs || []).map((npc) => npc.name));
+  const renameMap = new Map();
+  [...els.npcList.querySelectorAll(".npc-card")].forEach((card, index) => {
+    const oldName = String(card.dataset.originalNpcName || "").trim();
+    const newName = String(payload.npcs[index]?.name || "").trim();
+    if (oldName && newName && oldName !== newName && originalNpcNames.has(oldName)) {
+      renameMap.set(oldName, newName);
+    }
+  });
 
   if (!isSingleNpc && !chaosMode) {
     const directorConfig = getConfigById(payload.directorConfigId);
@@ -1377,6 +1387,27 @@ async function saveSessionEdits(payload, activeConfig) {
 
   session.globalPrompt = payload.globalPrompt;
   session.userRole = payload.userRole || "";
+  if (renameMap.size) {
+    (session.messages || []).forEach((message) => {
+      if (message?.role === "assistant" && renameMap.has(message.speaker)) {
+        message.speaker = renameMap.get(message.speaker);
+      }
+    });
+    if (session.agentParams) {
+      const migratedParams = {};
+      Object.keys(session.agentParams).forEach((key) => {
+        migratedParams[renameMap.get(key) || key] = session.agentParams[key];
+      });
+      session.agentParams = migratedParams;
+    }
+    if (window.__chatDB?.renameSessionSpeakers) {
+      try {
+        await window.__chatDB.renameSessionSpeakers(session.id, Object.fromEntries(renameMap));
+      } catch (error) {
+        debugWarn("[session-edit] NPC history rename failed", error);
+      }
+    }
+  }
   session.npcs = payload.npcs.map((npc) => ({ ...npc }));
   session.transientNpcs = (session.transientNpcs || []).filter((npc) => !session.npcs.some((baseNpc) => baseNpc.name === npc.name));
   // Clean up orphaned agentParams keys (NPCs renamed or removed)

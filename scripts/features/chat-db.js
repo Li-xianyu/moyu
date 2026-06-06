@@ -1305,6 +1305,37 @@
       });
     },
 
+    renameSessionSpeakers: function (sessionId, renameMap) {
+      if (!sessionId || !renameMap || typeof renameMap !== "object") {
+        return Promise.resolve(0);
+      }
+      return db().then(function (database) {
+        return new Promise(function (resolve, reject) {
+          var tx = database.transaction("messages", "readwrite");
+          var index = tx.objectStore("messages").index("sessionId");
+          var req = index.openCursor(IDBKeyRange.only(sessionId));
+          var updated = 0;
+
+          req.onsuccess = function () {
+            var cursor = req.result;
+            if (!cursor) return;
+            var record = cursor.value;
+            var nextSpeaker = record.role === "assistant" ? renameMap[record.speaker] : "";
+            if (nextSpeaker && nextSpeaker !== record.speaker) {
+              record.speaker = nextSpeaker;
+              cursor.update(record);
+              updated++;
+            }
+            cursor.continue();
+          };
+          req.onerror = function () { reject(req.error); };
+          tx.oncomplete = function () { resolve(updated); };
+          tx.onerror = function () { reject(tx.error); };
+          tx.onabort = function () { reject(tx.error || new Error("speaker rename aborted")); };
+        });
+      });
+    },
+
     estimateSessionTokens: function (sessionId) {
       if (!sessionId) return Promise.resolve(0);
       return db().then(function (database) {

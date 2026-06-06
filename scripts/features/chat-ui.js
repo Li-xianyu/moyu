@@ -940,7 +940,21 @@ function updateStreamingBubble(targetMessage) {
   }
 }
 
+var _streamingTailFadeTimers = new WeakMap();
+
+function clearStreamingTailFade(bubble) {
+  var timer = _streamingTailFadeTimers.get(bubble);
+  if (timer) clearTimeout(timer);
+  _streamingTailFadeTimers.delete(bubble);
+
+  bubble.querySelectorAll(".tail-wrap").forEach(function (wrap) {
+    wrap.replaceWith(document.createTextNode(wrap.textContent || ""));
+  });
+  bubble.normalize();
+}
+
 function applyStreamingTailFade(bubble, message) {
+  clearStreamingTailFade(bubble);
   if (!message.streaming) return;
   var session = getCurrentSession();
   if (!session || session.mode !== SESSION_MODE_WORK) return;
@@ -974,6 +988,16 @@ function applyStreamingTailFade(bubble, message) {
   wrap.textContent = tail;
   fragment.appendChild(wrap);
   lastNode.parentNode.replaceChild(fragment, lastNode);
+
+  // 网络停顿时也要恢复完整可读状态，不能依赖下一次流式重绘来清除遮罩。
+  var timer = setTimeout(function () {
+    if (wrap.isConnected) {
+      wrap.replaceWith(document.createTextNode(wrap.textContent || ""));
+      bubble.normalize();
+    }
+    _streamingTailFadeTimers.delete(bubble);
+  }, 240);
+  _streamingTailFadeTimers.set(bubble, timer);
 }
 
 function createStreamBatchController(targetMessage, revealFn, updateFn) {
