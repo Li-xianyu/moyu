@@ -1355,7 +1355,6 @@ async function saveSessionEdits(payload, activeConfig) {
 
   // 检测设定是否发生变化
   const originalGlobalPrompt = session.globalPrompt || "";
-  const originalNpcPrompts = (session.npcs || []).map((npc) => npc.prompt || "");
 
   const isSingleNpc = payload.mode === SESSION_MODE_WORK && payload.npcs.length <= 1;
   const chaosMode = isChaosMode(payload.mode);
@@ -1438,8 +1437,11 @@ async function saveSessionEdits(payload, activeConfig) {
   }
   // 比较新旧设定
   const globalPromptChanged = originalGlobalPrompt !== (payload.globalPrompt || "");
-  const npcPromptChanged = payload.npcs.some((newNpc, i) => {
-    const oldPrompt = originalNpcPrompts[i] || "";
+  const oldPromptMap = new Map(
+    (session.npcs || []).map((npc) => [npc.name, npc.prompt || ""])
+  );
+  const npcPromptChanged = payload.npcs.some((newNpc) => {
+    const oldPrompt = oldPromptMap.get(newNpc.name) || "";
     const newPrompt = newNpc.prompt || "";
     return oldPrompt !== newPrompt;
   });
