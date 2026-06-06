@@ -1,5 +1,85 @@
 "use strict";
 
+var hoveredAgentToolsMessageId = null;
+var hoveredAgentToolsCloseTimer = null;
+var AGENT_TOOLS_HOVER_CLOSE_DELAY_MS = 700;
+var openAssistantRetryMenuMessageId = null;
+
+function closeAssistantRetryMenu() {
+  if (!openAssistantRetryMenuMessageId) return;
+  const host = els.chatMessages?.querySelector(
+    `[data-message-id="${openAssistantRetryMenuMessageId}"]`
+  );
+  host?.classList.remove("retry-menu-open");
+  const trigger = host?.querySelector('[data-action="retry-assistant"]');
+  trigger?.setAttribute("aria-expanded", "false");
+  host?.querySelector(".message-retry-menu")?.classList.remove("open");
+  openAssistantRetryMenuMessageId = null;
+}
+
+function toggleAssistantRetryMenu(host, messageId) {
+  if (!host || !messageId) return;
+  const shouldOpen = openAssistantRetryMenuMessageId !== messageId;
+  closeAssistantRetryMenu();
+  if (!shouldOpen) return;
+
+  openAssistantRetryMenuMessageId = messageId;
+  host.classList.add("retry-menu-open");
+  host.querySelector('[data-action="retry-assistant"]')?.setAttribute("aria-expanded", "true");
+  host.querySelector(".message-retry-menu")?.classList.add("open");
+}
+
+document.addEventListener("pointerdown", (event) => {
+  if (openAssistantRetryMenuMessageId && !event.target.closest(".message-retry-control")) {
+    closeAssistantRetryMenu();
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeAssistantRetryMenu();
+});
+
+function supportsAgentToolsHoverLock() {
+  return Boolean(window.matchMedia?.("(hover: hover) and (pointer: fine)").matches);
+}
+
+function openAgentToolsHoverLock(block, messageId) {
+  if (!supportsAgentToolsHoverLock() || !block || !messageId) return;
+  if (hoveredAgentToolsCloseTimer) {
+    clearTimeout(hoveredAgentToolsCloseTimer);
+    hoveredAgentToolsCloseTimer = null;
+  }
+  if (hoveredAgentToolsMessageId && hoveredAgentToolsMessageId !== messageId) {
+    els.chatMessages
+      ?.querySelector(`[data-message-id="${hoveredAgentToolsMessageId}"]`)
+      ?.classList.remove("tools-hovering");
+  }
+  hoveredAgentToolsMessageId = messageId;
+  block.classList.add("tools-hovering");
+}
+
+function scheduleAgentToolsHoverUnlock(block, messageId) {
+  if (!supportsAgentToolsHoverLock() || !block || !messageId) return;
+  if (hoveredAgentToolsCloseTimer) clearTimeout(hoveredAgentToolsCloseTimer);
+  hoveredAgentToolsCloseTimer = setTimeout(() => {
+    hoveredAgentToolsCloseTimer = null;
+    if (block.matches(":hover")) return;
+    block.classList.remove("tools-hovering");
+    if (hoveredAgentToolsMessageId === messageId) {
+      hoveredAgentToolsMessageId = null;
+    }
+  }, AGENT_TOOLS_HOVER_CLOSE_DELAY_MS);
+}
+
+function bindAgentToolsHoverLock(block, message) {
+  if (!block || message?.role !== "assistant" || !message.id || block.dataset.toolsHoverBound === "1") {
+    return;
+  }
+  block.dataset.toolsHoverBound = "1";
+  block.addEventListener("pointerenter", () => openAgentToolsHoverLock(block, message.id));
+  block.addEventListener("pointermove", () => openAgentToolsHoverLock(block, message.id));
+  block.addEventListener("pointerleave", () => scheduleAgentToolsHoverUnlock(block, message.id));
+}
+
 function getChatScrollElement() {
   return els.chatMessages?.closest(".main") || els.chatMessages;
 }
@@ -1099,7 +1179,7 @@ function renderMessages(options = {}) {
     if (child.dataset?.messageId) oldNodes.set(child.dataset.messageId, child);
   }
 
-  const fragment = document.createDocumentFragment();
+  const desiredNodes = [];
 
   renderedMessages.forEach((message) => {
     // system-notice: no stable ID, always rebuild (rare, not worth diffing)
@@ -1107,7 +1187,7 @@ function renderMessages(options = {}) {
       const notice = document.createElement("div");
       notice.className = "system-notice";
       notice.innerHTML = escapeHtml(message.content).replace(/\n/g, "<br>");
-      fragment.appendChild(notice);
+      desiredNodes.push(notice);
       return;
     }
 
@@ -1116,10 +1196,10 @@ function renderMessages(options = {}) {
       if (existing) {
         oldNodes.delete(message.id);
         refreshNarrationNode(existing, message);
-        fragment.appendChild(existing);
+        desiredNodes.push(existing);
       } else {
         const node = buildNarrationNode(message);
-        if (node) fragment.appendChild(node);
+        if (node) desiredNodes.push(node);
       }
       return;
     }
@@ -1129,18 +1209,27 @@ function renderMessages(options = {}) {
     if (existing) {
       oldNodes.delete(message.id);
       refreshMessageBlock(existing, message, sessionMode, enableMd);
-      fragment.appendChild(existing);
+      desiredNodes.push(existing);
     } else {
       const block = buildMessageBlock(message, sessionMode, enableMd);
-      if (block) fragment.appendChild(block);
+      if (block) desiredNodes.push(block);
     }
   });
 
   // Remove stale nodes (truncated or replaced messages)
   for (const [, node] of oldNodes) node.remove();
 
-  // Replace children — existing nodes are MOVED, not destroyed
-  els.chatMessages.replaceChildren(fragment);
+  // Keep stable message nodes mounted so hover/focus is not lost during streaming refreshes.
+  desiredNodes.forEach((node, index) => {
+    const currentNode = els.chatMessages.childNodes[index] || null;
+    if (currentNode !== node) {
+      els.chatMessages.insertBefore(node, currentNode);
+    }
+  });
+  const desiredNodeSet = new Set(desiredNodes);
+  Array.from(els.chatMessages.childNodes).forEach((node) => {
+    if (!desiredNodeSet.has(node)) node.remove();
+  });
 
   if (preserveScrollOnPrepend) {
     const heightDelta = scrollEl.scrollHeight - previousScrollHeight;
@@ -1178,7 +1267,7 @@ function buildNarrationNode(message) {
   const narrationText = sanitizeNarrationText(message.content);
   const tokenLabel = buildMessageTokenLabel(message);
   const wrapper = document.createElement("article");
-  wrapper.className = `narration-block ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
+  wrapper.className = `narration-block ${state.openAgentTokenInfoId === message.id ? "token-open" : ""} ${openAssistantRetryMenuMessageId === message.id ? "retry-menu-open" : ""}`.trim();
   if (message.id) wrapper.dataset.messageId = message.id;
   const narration = document.createElement("div");
   const isSingleLine = !message.pending && narrationText && !/[\r\n]/.test(narrationText);
@@ -1198,6 +1287,8 @@ function buildNarrationNode(message) {
     tokenBar.className = `message-token-bar narration-token-bar ${tokenLabel ? "has-token" : ""}`.trim();
     tokenBar.textContent = tokenLabel;
     wrapper.appendChild(tokenBar);
+    const turnTools = buildNarrationTurnTools(message);
+    if (turnTools) wrapper.appendChild(turnTools);
   }
   return wrapper;
 }
@@ -1205,7 +1296,7 @@ function buildNarrationNode(message) {
 function refreshNarrationNode(wrapper, message) {
   const narrationText = sanitizeNarrationText(message.content);
   const tokenLabel = buildMessageTokenLabel(message);
-  wrapper.className = `narration-block ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
+  wrapper.className = `narration-block ${state.openAgentTokenInfoId === message.id ? "token-open" : ""} ${openAssistantRetryMenuMessageId === message.id ? "retry-menu-open" : ""}`.trim();
   const bubble = wrapper.querySelector('.narration');
   if (bubble) {
     const isSingleLine = !message.pending && narrationText && !/[\r\n]/.test(narrationText);
@@ -1218,6 +1309,17 @@ function refreshNarrationNode(wrapper, message) {
     tokenBar.className = `message-token-bar narration-token-bar ${tokenLabel ? "has-token" : ""}`.trim();
     tokenBar.textContent = tokenLabel;
   }
+  const existingTurnTools = wrapper.querySelector(".narration-turn-tools");
+  if (existingTurnTools) {
+    syncLatestTurnVariantNav(existingTurnTools, message);
+    syncAssistantRetryButton(existingTurnTools, message);
+    const actionGroup = existingTurnTools.querySelector(".message-tools-actions");
+    if (!actionGroup?.children.length) existingTurnTools.remove();
+  } else {
+    const nextTurnTools = buildNarrationTurnTools(message);
+    if (nextTurnTools) wrapper.appendChild(nextTurnTools);
+    lucide.createIcons();
+  }
 }
 
 /* ---- Message block helpers ---- */
@@ -1225,8 +1327,9 @@ function buildMessageBlock(message, sessionMode, enableMd) {
   const block = document.createElement("article");
   const isAgentPlainBlock = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
   const modeClass = sessionMode === SESSION_MODE_WORK ? "work-mode" : sessionMode === SESSION_MODE_CHAOS ? "chaos-mode" : "story-mode";
-  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${modeClass} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
+  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${modeClass} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""} ${hoveredAgentToolsMessageId === message.id ? "tools-hovering" : ""} ${openAssistantRetryMenuMessageId === message.id ? "retry-menu-open" : ""}`.trim();
   if (message.id) block.dataset.messageId = message.id;
+  bindAgentToolsHoverLock(block, message);
 
   if (message.role === "assistant" || message.role === "user") {
     const meta = document.createElement("div");
@@ -1406,7 +1509,8 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
   // 1. Update block-level className
   const isAgentPlainBlock = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
   const modeClass = sessionMode === SESSION_MODE_WORK ? "work-mode" : sessionMode === SESSION_MODE_CHAOS ? "chaos-mode" : "story-mode";
-  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${modeClass} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""}`.trim();
+  block.className = `message-block ${message.role === "user" ? "user" : message.role === "assistant" ? "agent" : "system"} ${isAgentPlainBlock ? "agent-plain-block" : ""} ${modeClass} ${state.openUserMessageToolsId === message.id || state.openAgentTokenInfoId === message.id ? "tools-open" : ""} ${state.openAgentTokenInfoId === message.id ? "token-open" : ""} ${hoveredAgentToolsMessageId === message.id ? "tools-hovering" : ""} ${openAssistantRetryMenuMessageId === message.id ? "retry-menu-open" : ""}`.trim();
+  bindAgentToolsHoverLock(block, message);
 
   // 2. Update bubble className + content
   const bubble = block.querySelector('.message');
@@ -1461,6 +1565,8 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
         existingTools.insertBefore(nextTokenSpan, actionGroup || existingTools.firstChild || null);
       }
       existingTools.classList.toggle("has-token", Boolean(tokenLabel));
+      syncLatestTurnVariantNav(existingTools, message);
+      syncAssistantRetryButton(existingTools, message);
     }
   } else if (existingTools && message.pending) {
     existingTools.remove();
@@ -1496,11 +1602,18 @@ function buildMessageTools(message) {
       toggleTts(message, ttsBtn);
     });
     actionGroup.appendChild(ttsBtn);
+
+    const variantNav = buildLatestTurnVariantNav(message);
+    if (variantNav) actionGroup.appendChild(variantNav);
+
+    const retryBtn = buildAssistantRetryButton(message);
+    if (retryBtn) actionGroup.appendChild(retryBtn);
   }
 
   const copyBtn = document.createElement("button");
   copyBtn.type = "button";
   copyBtn.className = "message-edit-btn";
+  copyBtn.dataset.action = "copy";
   copyBtn.title = t("chat.copy");
   copyBtn.innerHTML = `<i data-lucide="copy" class="message-edit-icon"></i>`;
   copyBtn.addEventListener("click", (e) => { e.stopPropagation(); copyMessageContent(message.id, copyBtn.querySelector(".message-edit-icon")); });
@@ -1513,19 +1626,221 @@ function buildMessageTools(message) {
     editBtn.innerHTML = `<i data-lucide="pencil" class="message-edit-icon"></i>`;
     editBtn.addEventListener("click", (e) => { e.stopPropagation(); beginUserMessageEdit(message.id); });
     actionGroup.appendChild(editBtn);
-
-    const retryBtn = document.createElement("button");
-    retryBtn.type = "button";
-    retryBtn.className = "message-edit-btn";
-    retryBtn.innerHTML = `<i data-lucide="rotate-ccw" class="message-edit-icon"></i>`;
-    retryBtn.addEventListener("click", (e) => { e.stopPropagation(); regenerateFromUserMessage(message.id); });
-    actionGroup.appendChild(retryBtn);
   }
 
   tools.appendChild(actionGroup);
 
   lucide.createIcons();
   return tools;
+}
+
+function getLatestTurnControlState(message) {
+  const session = getCurrentSession();
+  if (!session ||
+      session.mode === SESSION_MODE_CHAOS ||
+      message?.role !== "assistant" ||
+      (message.uiType && message.uiType !== "narration")) {
+    return null;
+  }
+
+  const latestUserIndex = getLatestUserMessageIndex(session);
+  const targetIndex = session.messages.indexOf(message);
+  if (latestUserIndex === -1 || targetIndex <= latestUserIndex) return null;
+
+  let anchorIndex = -1;
+  for (let index = session.messages.length - 1; index > latestUserIndex; index -= 1) {
+    const candidate = session.messages[index];
+    if (candidate?.role === "assistant" && !candidate.uiType && !candidate.pending) {
+      anchorIndex = index;
+      break;
+    }
+  }
+  if (anchorIndex === -1) {
+    for (let index = session.messages.length - 1; index > latestUserIndex; index -= 1) {
+      const candidate = session.messages[index];
+      if (candidate?.role === "assistant" && candidate.uiType === "narration" && !candidate.pending) {
+        anchorIndex = index;
+        break;
+      }
+    }
+  }
+  if (targetIndex !== anchorIndex) return null;
+
+  const userMessage = session.messages[latestUserIndex];
+  const versionState = typeof getLatestTurnVariantState === "function"
+    ? getLatestTurnVariantState(session)
+    : null;
+  return {
+    session,
+    userMessage,
+    versionState: versionState?.userMessageId === userMessage.id ? versionState : null,
+  };
+}
+
+function buildNarrationTurnTools(message) {
+  const variantNav = buildLatestTurnVariantNav(message);
+  const retryBtn = buildAssistantRetryButton(message);
+  if (!variantNav && !retryBtn) return null;
+
+  const tools = document.createElement("div");
+  tools.className = "narration-turn-tools";
+  const actionGroup = document.createElement("div");
+  actionGroup.className = "message-tools-actions";
+  if (variantNav) actionGroup.appendChild(variantNav);
+  if (retryBtn) actionGroup.appendChild(retryBtn);
+  tools.appendChild(actionGroup);
+  return tools;
+}
+
+function buildLatestTurnVariantNav(message) {
+  const controlState = getLatestTurnControlState(message);
+  const versionState = controlState?.versionState;
+  if (!versionState || versionState.variants.length <= 1) return null;
+
+  const nav = document.createElement("span");
+  nav.className = "message-variant-nav";
+  nav.dataset.action = "turn-variant-nav";
+
+  const previousBtn = document.createElement("button");
+  previousBtn.type = "button";
+  previousBtn.className = "message-edit-btn message-variant-btn";
+  previousBtn.dataset.variantDirection = "previous";
+  previousBtn.title = "上一版回复";
+  previousBtn.disabled = versionState.activeIndex <= 0;
+  previousBtn.innerHTML = `<i data-lucide="chevron-left" class="message-edit-icon"></i>`;
+  previousBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    const latestState = getLatestTurnControlState(message)?.versionState;
+    if (latestState) switchLatestTurnVariant(latestState.activeIndex - 1);
+  });
+
+  const label = document.createElement("span");
+  label.className = "message-variant-label";
+  label.textContent = `${versionState.activeIndex + 1}/${versionState.variants.length}`;
+
+  const nextBtn = document.createElement("button");
+  nextBtn.type = "button";
+  nextBtn.className = "message-edit-btn message-variant-btn";
+  nextBtn.dataset.variantDirection = "next";
+  nextBtn.title = "下一版回复";
+  nextBtn.disabled = versionState.activeIndex >= versionState.variants.length - 1;
+  nextBtn.innerHTML = `<i data-lucide="chevron-right" class="message-edit-icon"></i>`;
+  nextBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    const latestState = getLatestTurnControlState(message)?.versionState;
+    if (latestState) switchLatestTurnVariant(latestState.activeIndex + 1);
+  });
+
+  nav.append(previousBtn, label, nextBtn);
+  return nav;
+}
+
+function syncLatestTurnVariantNav(tools, message) {
+  const actionGroup = tools?.querySelector(".message-tools-actions");
+  if (!actionGroup) return;
+  const existing = actionGroup.querySelector('[data-action="turn-variant-nav"]');
+  const next = buildLatestTurnVariantNav(message);
+  if (!next && existing) {
+    existing.remove();
+  } else if (next && existing) {
+    const controlState = getLatestTurnControlState(message);
+    const versionState = controlState?.versionState;
+    const previousBtn = existing.querySelector('[data-variant-direction="previous"]');
+    const nextBtn = existing.querySelector('[data-variant-direction="next"]');
+    const label = existing.querySelector(".message-variant-label");
+    if (versionState && previousBtn && nextBtn && label) {
+      previousBtn.disabled = versionState.activeIndex <= 0;
+      nextBtn.disabled = versionState.activeIndex >= versionState.variants.length - 1;
+      label.textContent = `${versionState.activeIndex + 1}/${versionState.variants.length}`;
+    }
+  } else if (next) {
+    const retryBtn = actionGroup.querySelector('[data-action="retry-assistant-control"]');
+    const copyBtn = actionGroup.querySelector('[data-action="copy"]');
+    actionGroup.insertBefore(next, retryBtn || copyBtn || null);
+    lucide.createIcons();
+  }
+}
+
+function buildAssistantRetryButton(message) {
+  if (!canRegenerateAssistantMessage(message)) return null;
+  const control = document.createElement("span");
+  control.className = "message-retry-control";
+  control.dataset.action = "retry-assistant-control";
+
+  const retryBtn = document.createElement("button");
+  retryBtn.type = "button";
+  retryBtn.className = "message-edit-btn";
+  retryBtn.dataset.action = "retry-assistant";
+  retryBtn.title = "重新生成";
+  retryBtn.setAttribute("aria-haspopup", "menu");
+  retryBtn.setAttribute("aria-expanded", openAssistantRetryMenuMessageId === message.id ? "true" : "false");
+  retryBtn.innerHTML = `<i data-lucide="rotate-ccw" class="message-edit-icon"></i>`;
+  retryBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    const host = retryBtn.closest(".message-block, .narration-block");
+    toggleAssistantRetryMenu(host, message.id);
+  });
+
+  const menu = document.createElement("div");
+  menu.className = `message-retry-menu ${openAssistantRetryMenuMessageId === message.id ? "open" : ""}`.trim();
+  menu.setAttribute("role", "menu");
+
+  [
+    { mode: "concise", icon: "minimize-2", label: "更加简洁", hint: "压缩表达，保留重点" },
+    { mode: "detailed", icon: "align-left", label: "更加详细", hint: "补充过程与必要细节" },
+    { mode: "retry", icon: "rotate-ccw", label: "重试一次", hint: "重新生成另一版回复" },
+  ].forEach((item) => {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "message-retry-option";
+    option.dataset.regenerationMode = item.mode;
+    option.setAttribute("role", "menuitem");
+    option.innerHTML = `
+      <i data-lucide="${item.icon}" class="message-retry-option-icon"></i>
+      <span class="message-retry-option-copy">
+        <strong>${item.label}</strong>
+      </span>
+    `;
+    option.addEventListener("click", function(e) {
+      e.stopPropagation();
+      closeAssistantRetryMenu();
+      regenerateFromAssistantMessage(message.id, item.mode);
+    });
+    menu.appendChild(option);
+  });
+
+  control.append(retryBtn, menu);
+  return control;
+}
+
+function syncAssistantRetryButton(tools, message) {
+  const actionGroup = tools?.querySelector(".message-tools-actions");
+  if (!actionGroup) return;
+  const existing = actionGroup.querySelector('[data-action="retry-assistant-control"]');
+  const shouldShow = canRegenerateAssistantMessage(message);
+  if (!shouldShow && existing) {
+    if (openAssistantRetryMenuMessageId === message.id) closeAssistantRetryMenu();
+    existing.remove();
+  } else if (shouldShow && !existing) {
+    const retryBtn = buildAssistantRetryButton(message);
+    if (retryBtn) {
+      const copyBtn = actionGroup.querySelector('[data-action="copy"]');
+      actionGroup.insertBefore(retryBtn, copyBtn || null);
+      lucide.createIcons();
+    }
+  }
+}
+
+function canRegenerateAssistantMessage(message) {
+  const controlState = getLatestTurnControlState(message);
+  if (!controlState) return false;
+  const branchSequence = getMessageSequenceInSession(controlState.session, controlState.userMessage);
+  const compressedCutoff = typeof getCompressedCutoffSeq === "function"
+    ? getCompressedCutoffSeq(controlState.session)
+    : (Number.isFinite(controlState.session.compressedUntilSequence)
+        ? controlState.session.compressedUntilSequence
+        : -1);
+  return !Number.isFinite(compressedCutoff) || compressedCutoff < branchSequence;
 }
 
 var TTS_CHUNK_MAX_LENGTH = 180;
