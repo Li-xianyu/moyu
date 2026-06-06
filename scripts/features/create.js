@@ -1353,6 +1353,10 @@ async function saveSessionEdits(payload, activeConfig) {
     return;
   }
 
+  // 检测设定是否发生变化
+  const originalGlobalPrompt = session.globalPrompt || "";
+  const originalNpcPrompts = (session.npcs || []).map((npc) => npc.prompt || "");
+
   const isSingleNpc = payload.mode === SESSION_MODE_WORK && payload.npcs.length <= 1;
   const chaosMode = isChaosMode(payload.mode);
   const originalNpcNames = new Set((session.npcs || []).map((npc) => npc.name));
@@ -1432,10 +1436,22 @@ async function saveSessionEdits(payload, activeConfig) {
     });
     session.agentParams = cleaned;
   }
-  session.directorMemory = normalizeDirectorMemory(null);
-  session.directorSummary = "";
-  session.chatSummary = "";
-  session.compressedUntilMessageId = "";
+  // 比较新旧设定
+  const globalPromptChanged = originalGlobalPrompt !== (payload.globalPrompt || "");
+  const npcPromptChanged = payload.npcs.some((newNpc, i) => {
+    const oldPrompt = originalNpcPrompts[i] || "";
+    const newPrompt = newNpc.prompt || "";
+    return oldPrompt !== newPrompt;
+  });
+  const shouldClearSummary = globalPromptChanged || npcPromptChanged;
+  if (shouldClearSummary) {
+    session.directorMemory = normalizeDirectorMemory(null);
+    session.directorSummary = "";
+    session.chatSummary = "";
+    session.compressedUntilMessageId = "";
+    session.compressionSegments = [];
+    session.compressedUntilSequence = -1;
+  }
   session.suggestionGuide = "";
   session.latestTurnBaseState = null;
   session.latestTurnVariants = null;
