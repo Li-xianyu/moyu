@@ -78,6 +78,10 @@ async function regenerateFromUserMessage(messageId) {
     return;
   }
 
+  if (typeof window.__prepareAutoTtsTurn === "function") {
+    window.__prepareAutoTtsTurn();
+  }
+
   state.isSending = true;
   setInlineChatStatus(t("chat.statusProcessing"));
   if (els.thinkingPopover && !els.thinkingPopover.classList.contains("hidden")) {
