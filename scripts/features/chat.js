@@ -941,7 +941,7 @@ function updateThinkingDepthVisibility() {
   els.thinkingDepthWrap.classList.toggle("hidden", !supports);
   if (supports) {
     var depth = getSessionSetting(session, "modelThinkingDepth") || "medium";
-    els.thinkingDepthBtn.textContent = REASONING_DEPTH_LABELS[depth] || depth;
+    els.thinkingDepthBtn.textContent = t(REASONING_DEPTH_LABELS[depth]) || depth;
   }
 }
 
@@ -962,7 +962,7 @@ function initThinkingDepthSelector() {
       if (session) {
         setSessionSettingOverride(session, "modelThinkingDepth", depth);
       }
-      els.thinkingDepthBtn.textContent = REASONING_DEPTH_LABELS[depth] || depth;
+      els.thinkingDepthBtn.textContent = t(REASONING_DEPTH_LABELS[depth]) || depth;
       els.thinkingDepthDropdown.classList.add("hidden");
     });
   }

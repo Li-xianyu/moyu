@@ -152,7 +152,7 @@ function detectThinkingProvider(modelName) {
   return null;
 }
 
-var REASONING_DEPTH_LABELS = { low: "低", medium: "中", high: "高" };
+var REASONING_DEPTH_LABELS = { low: "chat.depthLow", medium: "chat.depthMedium", high: "chat.depthHigh" };
 
 function buildThinkingExtra(modelName, value, depth) {
   if (!supportsThinkingParam(modelName)) return {};
