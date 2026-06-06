@@ -345,7 +345,7 @@ function stopGeneration() {
 
 async function sendUserMessage() {
   const session = getCurrentSession();
-  if (!session) {
+  if (!session || state.isSwitchingTurnVariant) {
     return;
   }
   const isChaosSending = session.mode === SESSION_MODE_CHAOS && state.isSending;
@@ -381,16 +381,37 @@ async function sendUserMessage() {
 
   const editingUserMessageId = state.editingUserMessageId;
   if (editingUserMessageId) {
-    applyUserMessageEdit(session, state.editingUserMessageId, content);
+    finalizeLatestTurnVariants(session);
+    try {
+      await applyUserMessageEdit(session, state.editingUserMessageId, content);
+    } catch (error) {
+      state.isSending = false;
+      clearInlineChatStatus();
+      els.sendBtn.disabled = false;
+      els.chatInput.disabled = false;
+      els.chatInput.value = content;
+      autoResizeChatInput();
+      updateComposerMode();
+      setText(els.chatStatus, "修改失败：无法清理后续消息");
+      console.error("[chat] edit cleanup failed", error);
+      return;
+    }
+    const editedUserMessage = session.messages.find((message) =>
+      message?.id === editingUserMessageId && message.role === "user"
+    );
+    setLatestTurnBaseState(session, editedUserMessage);
     state.editingUserMessageId = null;
   } else {
-    session.messages.push({
+    finalizeLatestTurnVariants(session);
+    const nextUserMessage = {
       id: createMessageId("user"),
       role: "user",
       speaker: "你",
       content,
       createdAt: new Date().toISOString(),
-    });
+    };
+    session.messages.push(nextUserMessage);
+    setLatestTurnBaseState(session, nextUserMessage);
     if (session.mode === SESSION_MODE_CHAOS && session.chaosState && typeof session.chaosState === "object") {
       session.chaosState.autoplayStreak = 0;
     }

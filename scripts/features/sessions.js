@@ -759,6 +759,8 @@ async function restartSessionFromExisting(sessionId) {
     chatSummary: "",
     compressedUntilMessageId: "",
     suggestionGuide: "",
+    latestTurnBaseState: null,
+    latestTurnVariants: null,
     messages: [
       {
         role: "system",
@@ -1076,6 +1078,12 @@ function buildArchiveSessionMeta(session) {
     compressedUntilSequence: Number.isFinite(session.compressedUntilSequence) ? session.compressedUntilSequence : null,
     compressionSegments: Array.isArray(session.compressionSegments) ? session.compressionSegments.map((s) => ({ ...s })) : [],
     suggestionGuide: session.suggestionGuide || "",
+    latestTurnBaseState: session.latestTurnBaseState
+      ? JSON.parse(JSON.stringify(session.latestTurnBaseState))
+      : null,
+    latestTurnVariants: session.latestTurnVariants
+      ? JSON.parse(JSON.stringify(session.latestTurnVariants))
+      : null,
     chaosState: session.chaosState ? JSON.parse(JSON.stringify(session.chaosState)) : null,
     host: session.host || "",
     key: session.key || "",
@@ -1111,6 +1119,12 @@ function createImportedSessionShell(raw) {
     compressedUntilSequence: Number.isFinite(raw.compressedUntilSequence) ? raw.compressedUntilSequence : null,
     compressionSegments: Array.isArray(raw.compressionSegments) ? raw.compressionSegments.map((segment) => ({ ...segment })) : [],
     suggestionGuide: raw.suggestionGuide || "",
+    latestTurnBaseState: raw.latestTurnBaseState
+      ? JSON.parse(JSON.stringify(raw.latestTurnBaseState))
+      : null,
+    latestTurnVariants: raw.latestTurnVariants
+      ? JSON.parse(JSON.stringify(raw.latestTurnVariants))
+      : null,
     chaosState: raw.chaosState ? JSON.parse(JSON.stringify(raw.chaosState)) : null,
     host: raw.host || "",
     key: raw.key || "",
@@ -1666,6 +1680,12 @@ async function importSessionsFromFile(file) {
         compressedUntilSequence: Number.isFinite(raw.compressedUntilSequence) ? raw.compressedUntilSequence : null,
         compressionSegments: Array.isArray(raw.compressionSegments) ? raw.compressionSegments.map((s) => ({ ...s })) : [],
         suggestionGuide: raw.suggestionGuide || "",
+        latestTurnBaseState: raw.latestTurnBaseState
+          ? JSON.parse(JSON.stringify(raw.latestTurnBaseState))
+          : null,
+        latestTurnVariants: raw.latestTurnVariants
+          ? JSON.parse(JSON.stringify(raw.latestTurnVariants))
+          : null,
         host: raw.host || "",
         key: raw.key || "",
         agentParams: raw.agentParams ? JSON.parse(JSON.stringify(raw.agentParams)) : {},

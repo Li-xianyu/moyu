@@ -267,6 +267,8 @@
       compressionSegments: Array.isArray(session.compressionSegments) ? session.compressionSegments : [],
       settingsOverrides: normalizeSessionOverrides(session.settingsOverrides),
       suggestionGuide: session.suggestionGuide || "",
+      latestTurnBaseState: session.latestTurnBaseState || null,
+      latestTurnVariants: session.latestTurnVariants || null,
       messageCount: countSessionMessagesForSave(session),
       tags: extractTags(session),
     });
@@ -499,6 +501,8 @@
       compressionSegments: Array.isArray(rec.compressionSegments) ? rec.compressionSegments : [],
       settingsOverrides: normalizeSessionOverrides(rec.settingsOverrides),
       suggestionGuide: rec.suggestionGuide || "",
+      latestTurnBaseState: rec.latestTurnBaseState || null,
+      latestTurnVariants: rec.latestTurnVariants || null,
       messageCount: Number.isFinite(rec.messageCount) ? rec.messageCount : 0,
       messages: [],
       messagesHydrated: false,
@@ -875,6 +879,8 @@
         compressionSegments: Array.isArray(session.compressionSegments) ? session.compressionSegments : [],
         settingsOverrides: normalizeSessionOverrides(session.settingsOverrides),
         suggestionGuide: session.suggestionGuide || "",
+        latestTurnBaseState: session.latestTurnBaseState || null,
+        latestTurnVariants: session.latestTurnVariants || null,
         messageCount: countSessionMessagesForSave(session),
         tags: extractTags(session),
       };
@@ -898,6 +904,8 @@
         record.compressedUntilSequence = Number.isFinite(session.compressedUntilSequence) ? session.compressedUntilSequence : (Number.isFinite(record.compressedUntilSequence) ? record.compressedUntilSequence : null);
         record.compressionSegments = Array.isArray(session.compressionSegments) ? session.compressionSegments : (Array.isArray(record.compressionSegments) ? record.compressionSegments : []);
         record.settingsOverrides = normalizeSessionOverrides(session.settingsOverrides || record.settingsOverrides);
+        record.latestTurnBaseState = session.latestTurnBaseState || null;
+        record.latestTurnVariants = session.latestTurnVariants || null;
         if (!record.createdAt) record.createdAt = session.createdAt || new Date().toISOString();
         return doPut("sessions", record);
       });
@@ -1079,6 +1087,8 @@
                       compressionSegments: Array.isArray(rec.compressionSegments) ? rec.compressionSegments : [],
                       settingsOverrides: normalizeSessionOverrides(rec.settingsOverrides),
                       suggestionGuide: rec.suggestionGuide || "",
+                      latestTurnBaseState: rec.latestTurnBaseState || null,
+                      latestTurnVariants: rec.latestTurnVariants || null,
                       messages: msgs,
                     };
                     loadedSessions.push(session);
@@ -1134,6 +1144,8 @@
               compressionSegments: Array.isArray(s.compressionSegments) ? s.compressionSegments : [],
               settingsOverrides: normalizeSessionOverrides(s.settingsOverrides),
               suggestionGuide: s.suggestionGuide || "",
+              latestTurnBaseState: s.latestTurnBaseState || null,
+              latestTurnVariants: s.latestTurnVariants || null,
               messageCount: countSessionMessagesForSave(s),
               tags: extractTags(s),
             });

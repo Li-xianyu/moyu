@@ -170,6 +170,25 @@ function buildDirectorContextMessages(session) {
   return contextMessages;
 }
 
+function injectRegenerationInstruction(messages, session) {
+  const instruction = String(session?.regenerationInstruction || "").trim();
+  if (!instruction) return Array.isArray(messages) ? messages : [];
+
+  const result = Array.isArray(messages) ? messages.slice() : [];
+  let lastUserIndex = -1;
+  for (let index = result.length - 1; index >= 0; index -= 1) {
+    if (result[index]?.role === "user") {
+      lastUserIndex = index;
+      break;
+    }
+  }
+  result.splice(lastUserIndex >= 0 ? lastUserIndex : result.length, 0, {
+    role: "system",
+    content: `[REGENERATION_INSTRUCTION]\n${instruction}\n[/REGENERATION_INSTRUCTION]`,
+  });
+  return result;
+}
+
 function buildDirectorNpcRoster(session) {
   const fixedRoster = (session?.npcs || []).map((npc) => ({
     name: npc.name || "",

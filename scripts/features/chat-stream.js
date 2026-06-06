@@ -311,6 +311,8 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
     messages.splice(insertAt, 0, { role: "system", content: "直接输出，不要输出思考过程。" });
   }
 
+  messages = injectRegenerationInstruction(messages, session);
+
   // ── 调试：输出当前构建的上下文概览 ──
   debugLog("npc", "上下文概览", {
     total: messages.length,
@@ -811,7 +813,6 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   persistSessions();
   renderMessages({ stickToBottom: true });
 }
-
 
 
 

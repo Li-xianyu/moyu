@@ -415,7 +415,10 @@
     line-height: 1.2;
   }
 
-  .message-block.user .message-tools,
+  .message-block.user .message-tools {
+    height: 36px;
+  }
+
   .message-token-bar {
     height: 24px;
     padding-top: 2px;
@@ -625,7 +628,10 @@
     line-height: 1.18;
   }
 
-  .message-block.user .message-tools,
+  .message-block.user .message-tools {
+    height: 36px;
+  }
+
   .message-token-bar {
     height: 24px;
     padding-top: 2px;

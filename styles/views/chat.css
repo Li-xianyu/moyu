@@ -784,10 +784,10 @@
   justify-content: flex-end;
   align-items: center;
   gap: 6px;
-  height: 24px;
+  height: 36px;
   opacity: 0;
   pointer-events: none;
-  overflow: hidden;
+  overflow: visible;
   transition: opacity 0.15s ease;
 }
 
@@ -802,10 +802,8 @@
   justify-content: flex-start;
   align-items: center;
   gap: 6px;
-  height: 24px;
-  box-sizing: content-box;
-  margin-top: -12px;
-  padding-top: 12px;
+  height: 36px;
+  padding-top: 4px;
   position: relative;
   opacity: 0;
   pointer-events: auto;
@@ -835,12 +833,13 @@
   z-index: 24;
   width: 160px;
   padding: 6px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--theme-border-subtle);
   border-radius: 12px;
   display: grid;
   gap: 3px;
-  background: var(--panel-strong);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
+  background: var(--theme-floating-surface);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--theme-shadow-lg);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -909,18 +908,23 @@
 .message-variant-nav {
   height: 22px;
   padding: 0 2px;
-  border: 1px solid var(--line);
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   gap: 1px;
   color: var(--muted);
-  background: var(--panel-strong);
 }
 
 .message-variant-nav .message-variant-btn {
   width: 18px;
   height: 20px;
+  background: transparent;
+  border-radius: 0;
+}
+
+.message-variant-nav .message-variant-btn:hover {
+  background: transparent;
+  border-radius: 0;
 }
 
 .message-variant-label {
@@ -1997,6 +2001,8 @@ html[data-theme="light"] .thinking-content {
 .message-edit-btn:hover,
 .message-edit-btn.active {
   color: var(--theme-text-primary);
+  background: var(--theme-bg-hover);
+  border-radius: 6px;
 }
 
 .message-edit-btn:disabled {
@@ -2098,6 +2104,11 @@ html[data-theme="light"] .thinking-content {
   overflow: visible;
   box-shadow: none;
   transition: none;
+  pointer-events: none;
+}
+
+.composer-shell > * {
+  pointer-events: auto;
 }
 
 .composer-status-bar {

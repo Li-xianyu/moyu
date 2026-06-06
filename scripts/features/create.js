@@ -564,6 +564,8 @@ function bindCreateFlow() {
       chatSummary: "",
       compressedUntilMessageId: "",
       suggestionGuide: "",
+      latestTurnBaseState: null,
+      latestTurnVariants: null,
       userRole: payload.userRole || "",
       chaosState: null,
       messages: [
@@ -1255,6 +1257,8 @@ async function saveSessionEdits(payload, activeConfig) {
   session.chatSummary = "";
   session.compressedUntilMessageId = "";
   session.suggestionGuide = "";
+  session.latestTurnBaseState = null;
+  session.latestTurnVariants = null;
   session.chaosState = null;
   touchSession(session);
   persistSessions();

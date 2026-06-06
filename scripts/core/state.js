@@ -276,6 +276,14 @@ function migrateLegacySessions() {
     directorSummary: typeof session.directorSummary === "string" ? session.directorSummary : "",
     compressedUntilMessageId: session.compressedUntilMessageId || "",
     suggestionGuide: session.suggestionGuide || "",
+    latestTurnBaseState: session.latestTurnBaseState &&
+      session.latestTurnBaseState.userMessageId
+        ? session.latestTurnBaseState
+        : null,
+    latestTurnVariants: session.latestTurnVariants &&
+      Array.isArray(session.latestTurnVariants.variants)
+        ? session.latestTurnVariants
+        : null,
     userRole: session.userRole || "",
     messageCount: Number.isFinite(session.messageCount)
       ? session.messageCount

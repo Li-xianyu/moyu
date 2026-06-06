@@ -1413,6 +1413,7 @@ async function callDirector(session) {
   if (directorRetrievalRule) {
     messages = insertSystemMessageBeforeLastUser(messages, directorRetrievalRule);
   }
+  messages = injectRegenerationInstruction(messages, session);
 
   const retryInstruction = buildDirectorRetryInstruction();
   let retrievalMessages = [];
@@ -2040,7 +2041,7 @@ function scheduleAutoCompressAfterTurn(session) {
 }
 
 async function tryAutoCompressSession(session) {
-  if (!session || state.isSending || _autoCompressPending) return;
+  if (!session || state.isSending || _autoCompressPending || session.latestTurnVariants) return;
 
   const isSingleAi = session.mode === SESSION_MODE_WORK && !session.directorModel && session.npcs.length === 1;
 
@@ -2177,6 +2178,10 @@ async function triggerManualDirectorCompression() {
     debugLog("compress", t("debug.msg.compressionAborted"), {
       reason: !session ? "missing-session" : "sending-in-progress",
     });
+    return;
+  }
+  if (session.latestTurnVariants) {
+    setText(els.chatStatus, "当前回复还有多个版本，继续对话锁定后再压缩");
     return;
   }
 
