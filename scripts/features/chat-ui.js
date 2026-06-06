@@ -1599,6 +1599,10 @@ function buildMessageBlock(message, sessionMode, enableMd) {
           ? renderSkillResult(skillResult)
           : null;
       if (card) block.appendChild(card);
+      const transcript = typeof renderSkillAnswerTranscript === "function"
+        ? renderSkillAnswerTranscript(message._skillAnswer)
+        : null;
+      if (transcript) block.appendChild(transcript);
 
       bindInlineMetaToggles(block, message);
       if (message.id && !message.pending) block.appendChild(buildMessageTools(message));
@@ -1755,6 +1759,11 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
             ? renderSkillResult(skillState.skillResult)
             : null;
         if (card) block.appendChild(card);
+      }
+      const existingTranscript = block.querySelector(".skill-answer-transcript");
+      if (!existingTranscript && typeof renderSkillAnswerTranscript === "function") {
+        const transcript = renderSkillAnswerTranscript(message._skillAnswer);
+        if (transcript) block.appendChild(transcript);
       }
       syncMessageModelProviderIcon(block, message);
       syncMessageThinkingIcon(block, message);
@@ -2545,9 +2554,12 @@ function startNextAutoTtsMessage() {
 
 function prepareAutoTtsTurn() {
   cancelTtsSession();
-  _ttsAutoTurnArmed = true;
+  const session = typeof getCurrentSession === "function" ? getCurrentSession() : null;
+  _ttsAutoTurnArmed = typeof getSessionSetting === "function"
+    && getSessionSetting(session, "autoTts") === true;
   _ttsAutoQueue = [];
   _ttsAutoQueuedIds.clear();
+  if (!_ttsAutoTurnArmed) return;
   try {
     refreshTtsVoiceCache();
     window.speechSynthesis?.resume();
@@ -2558,6 +2570,8 @@ window.__prepareAutoTtsTurn = prepareAutoTtsTurn;
 window.__cancelAutoTtsTurn = cancelTtsSession;
 
 function syncStreamingTtsForMessage(message) {
+  const currentSession = typeof getCurrentSession === "function" ? getCurrentSession() : null;
+  if (typeof getSessionSetting === "function" && getSessionSetting(currentSession, "autoTts") !== true) return;
   if (typeof isSkillMessage === "function" && message?.content && isSkillMessage(message.content)) return;
   var session = _ttsSession;
   if (!message || message.role !== "assistant") {

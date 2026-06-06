@@ -169,6 +169,18 @@ function bindSettings() {
     });
   }
 
+  const autoTtsToggle = document.getElementById("autoTtsToggle");
+  if (autoTtsToggle) {
+    autoTtsToggle.addEventListener("change", () => {
+      state.settings.session = state.settings.session || {};
+      state.settings.session.autoTts = Boolean(autoTtsToggle.checked);
+      persistSettings();
+      if (!autoTtsToggle.checked && typeof window.__cancelAutoTtsTurn === "function") {
+        window.__cancelAutoTtsTurn();
+      }
+    });
+  }
+
   els.addConfigBtn.addEventListener("click", () => {
     const config = createEmptyConfig();
     state.settings.configs.unshift(config);
@@ -378,6 +390,10 @@ function hydrateSettingsInputs() {
   const showLineNumbersToggle = document.getElementById("showLineNumbersToggle");
   if (showLineNumbersToggle) {
     showLineNumbersToggle.checked = state.settings?.session?.showLineNumbers === true;
+  }
+  const autoTtsToggle = document.getElementById("autoTtsToggle");
+  if (autoTtsToggle) {
+    autoTtsToggle.checked = state.settings?.session?.autoTts === true;
   }
   els.configNameInput.value = activeConfig?.name || "";
   els.apiHostInput.value = activeConfig?.host || "";

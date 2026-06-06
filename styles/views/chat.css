@@ -771,6 +771,23 @@
   margin-top: -14px;
 }
 
+.skill-answer-transcript {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 10px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.skill-answer-question {
+  color: var(--text-muted);
+}
+
+.skill-answer-response {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
 .message-meta {
   display: flex;
   gap: 8px;

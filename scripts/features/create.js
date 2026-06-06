@@ -201,6 +201,7 @@ const SESSION_OVERRIDE_KEYS = [
   "showTokenDisplay",
   "markdownRender",
   "showLineNumbers",
+  "autoTts",
   "showModelProviderIcon",
 ];
 
@@ -278,7 +279,7 @@ function commitSessionOverrideChange(key, nextValue, options = {}) {
   persistSessions();
   renderSessionOverrideControls();
   if (state.currentSessionId === session.id) {
-    if (key === "showTokenDisplay" || key === "markdownRender" || key === "showLineNumbers" || key === "showModelProviderIcon") {
+    if (key === "showTokenDisplay" || key === "markdownRender" || key === "showLineNumbers" || key === "showModelProviderIcon" || key === "autoTts") {
       if (typeof renderMessages === "function") {
         renderMessages({ keepWindow: true });
       }
@@ -465,6 +466,7 @@ function bindCreateEditNavigation() {
       updateCreateViewMode();
       renderSession();
       switchView("chat");
+      restoreChatPositionAfterSessionEdit();
       return;
     }
 
@@ -1216,6 +1218,7 @@ function openSessionEditor(sessionId) {
   if (!session) {
     return;
   }
+  state.sessionEditReturnToBottom = typeof isChatNearBottom === "function" ? isChatNearBottom() : true;
 
   state.currentSessionId = session.id;
   persistSessions();
@@ -1255,6 +1258,19 @@ function openSessionEditor(sessionId) {
   updateEntityTerms();
   switchView("create");
   setCreateStatus(t("create.statusEditing"), "");
+}
+
+function restoreChatPositionAfterSessionEdit() {
+  const shouldReturnToBottom = state.sessionEditReturnToBottom !== false;
+  state.sessionEditReturnToBottom = null;
+  if (!shouldReturnToBottom) return;
+  requestAnimationFrame(() => {
+    if (typeof settleChatBottomAfterViewportShift === "function") {
+      settleChatBottomAfterViewportShift();
+    } else if (typeof scrollChatToBottom === "function") {
+      scrollChatToBottom();
+    }
+  });
 }
 
 function prepareCreateViewForNewSession(options = {}) {
@@ -1477,6 +1493,7 @@ async function saveSessionEdits(payload, activeConfig) {
   persistSessions();
   renderSession();
   switchView("chat");
+  restoreChatPositionAfterSessionEdit();
   setCreateStatus(t("create.statusSaved"), "success");
   setText(els.chatStatus, state.isSending ? t("create.statusProcessing") : t("chat.readyAfterCreate"));
 }

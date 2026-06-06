@@ -412,6 +412,7 @@
     if (m.thinkingExpanded) msg.thinkingExpanded = true;
     if (m._noBubble) msg._noBubble = true;
     if (m._skillContinuationOf) msg._skillContinuationOf = m._skillContinuationOf;
+    if (m._skillAnswer) msg._skillAnswer = { ...m._skillAnswer };
     return msg;
   }
 
@@ -433,6 +434,7 @@
       thinkingExpanded: Boolean(msg.thinkingExpanded),
       _noBubble: Boolean(msg._noBubble),
       _skillContinuationOf: msg._skillContinuationOf || "",
+      _skillAnswer: msg._skillAnswer ? { ...msg._skillAnswer } : null,
     };
   }
 
@@ -1212,6 +1214,7 @@
         thinkingExpanded: Boolean(msg.thinkingExpanded),
         _noBubble: Boolean(msg._noBubble),
         _skillContinuationOf: msg._skillContinuationOf || "",
+        _skillAnswer: msg._skillAnswer ? { ...msg._skillAnswer } : null,
       };
       return doPut("messages", record).then(function () {
         return indexMessage(record);

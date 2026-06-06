@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "2026.6.6.56";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.6.6.58";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -1022,6 +1022,14 @@
                       <input id="showLineNumbersToggle" class="settings-toggle-input" type="checkbox">
                       <span class="settings-toggle-ui" aria-hidden="true"></span>
                     </label>
+                    <label class="settings-toggle-row" for="autoTtsToggle">
+                      <div class="settings-toggle-copy">
+                        <span data-i18n="settings.autoTtsLabel">自动播放 TTS</span>
+                        <small class="hint-text" data-i18n="settings.autoTtsHint">AI 回复时自动朗读；默认关闭，仍可手动播放。</small>
+                      </div>
+                      <input id="autoTtsToggle" class="settings-toggle-input" type="checkbox">
+                      <span class="settings-toggle-ui" aria-hidden="true"></span>
+                    </label>
                   </div>
                 </section>
 
@@ -1436,6 +1444,21 @@
                         <div class="session-override-footer">
                           <span class="session-override-source" data-session-override-source="showLineNumbers"></span>
                           <button class="session-override-reset-btn" data-session-override-reset="showLineNumbers" type="button" data-i18n="create.overrideReset">跟随全局</button>
+                        </div>
+                      </div>
+
+                      <div class="session-override-block">
+                        <label class="settings-toggle-row" for="sessionOverrideAutoTtsToggle">
+                          <div class="settings-toggle-copy">
+                            <span data-i18n="settings.autoTtsLabel">自动播放 TTS</span>
+                            <small class="hint-text" data-i18n="settings.autoTtsHint">AI 回复时自动朗读；默认关闭，仍可手动播放。</small>
+                          </div>
+                          <input id="sessionOverrideAutoTtsToggle" data-session-setting="autoTts" class="settings-toggle-input" type="checkbox">
+                          <span class="settings-toggle-ui" aria-hidden="true"></span>
+                        </label>
+                        <div class="session-override-footer">
+                          <span class="session-override-source" data-session-override-source="autoTts"></span>
+                          <button class="session-override-reset-btn" data-session-override-reset="autoTts" type="button" data-i18n="create.overrideReset">跟随全局</button>
                         </div>
                       </div>
 

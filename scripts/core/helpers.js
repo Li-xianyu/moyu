@@ -72,6 +72,7 @@ const SESSION_SETTING_DEFAULTS = Object.freeze({
   directorDispatchOnly: false,
   markdownRender: true,
   showLineNumbers: false,
+  autoTts: false,
   showModelProviderIcon: null,
   modelThinking: "disabled",
 });
@@ -90,6 +91,7 @@ function normalizeSessionSettingValue(key, value) {
     case "directorDispatchOnly":
     case "markdownRender":
     case "showLineNumbers":
+    case "autoTts":
     case "showModelProviderIcon":
       return Boolean(value);
     case "modelThinking":
@@ -407,6 +409,7 @@ function normalizeSettings(raw) {
       directorDispatchOnly: normalizeSessionSettingValue("directorDispatchOnly", raw?.session?.directorDispatchOnly),
       markdownRender: normalizeSessionSettingValue("markdownRender", raw?.session?.markdownRender !== false),
       showLineNumbers: normalizeSessionSettingValue("showLineNumbers", raw?.session?.showLineNumbers),
+      autoTts: normalizeSessionSettingValue("autoTts", raw?.session?.autoTts),
       modelThinking: normalizeSessionSettingValue("modelThinking", raw?.session?.modelThinking),
     },
   };

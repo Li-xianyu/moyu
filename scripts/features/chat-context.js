@@ -114,6 +114,7 @@ function getCompressedCutoffSeq(session, kind) {
 }
 
 function buildCompressionSegmentsSystemMessages(session, kind = "director", options = {}) {
+  if (kind === "chat" && String(session?.chatSummary || "").trim()) return [];
   const segments = getCompressionSegments(session, kind);
   if (!segments.length) return [];
 

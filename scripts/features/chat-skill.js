@@ -312,20 +312,35 @@ function renderSkillCard(skillData, messageId) {
     const optBtn = document.createElement("button");
     optBtn.type = "button"; optBtn.className = "skill-bubble-opt";
     optBtn.textContent = option.text;
-    optBtn.addEventListener("click", function() { handleSkillAnswer(skillData.skill_name, skillData.step, option.id, option.text, null, messageId); });
+    optBtn.addEventListener("click", function() { handleSkillAnswer(skillData.skill_name, skillData.step, option.id, option.text, null, messageId, skillData.question); });
     optionsContainer.appendChild(optBtn);
   });
   if (skillData.allow_custom) {
     const customRow = document.createElement("div"); customRow.className = "skill-bubble-custom";
     const input = document.createElement("input"); input.type = "text"; input.className = "skill-bubble-custom-input"; input.placeholder = "自定义输入..."; input.maxLength = 500;
     const sendBtn = document.createElement("button"); sendBtn.type = "button"; sendBtn.className = "skill-bubble-custom-btn"; sendBtn.textContent = "发送";
-    const doSend = function() { var text = input.value.trim(); if (text) handleSkillAnswer(skillData.skill_name, skillData.step, "custom", text, text, messageId); };
+    const doSend = function() { var text = input.value.trim(); if (text) handleSkillAnswer(skillData.skill_name, skillData.step, "custom", text, text, messageId, skillData.question); };
     sendBtn.addEventListener("click", doSend);
     input.addEventListener("keydown", function(e) { if (e.key === "Enter") doSend(); });
     customRow.appendChild(input); customRow.appendChild(sendBtn); optionsContainer.appendChild(customRow);
   }
   card.appendChild(optionsContainer);
   return card;
+}
+
+function renderSkillAnswerTranscript(answer) {
+  if (!answer?.question || !answer?.answer) return null;
+  const transcript = document.createElement("div");
+  transcript.className = "skill-answer-transcript";
+  const question = document.createElement("div");
+  question.className = "skill-answer-question";
+  question.textContent = answer.question;
+  const response = document.createElement("div");
+  response.className = "skill-answer-response";
+  response.textContent = answer.answer;
+  transcript.appendChild(question);
+  transcript.appendChild(response);
+  return transcript;
 }
 
 function renderSkillResult(skillResult) {
@@ -339,7 +354,7 @@ function renderSkillResult(skillResult) {
   return card;
 }
 
-function handleSkillAnswer(skillName, step, optionId, optionText, customText, messageId) {
+function handleSkillAnswer(skillName, step, optionId, optionText, customText, messageId, question) {
   const label = optionId === "custom" ? customText : optionText;
   const text = "[技能回答] " + skillName + " 第" + step + "步: " + label;
 
@@ -353,6 +368,19 @@ function handleSkillAnswer(skillName, step, optionId, optionText, customText, me
   const sourceMessage = (session.messages || []).find(function(message) {
     return message?.id === messageId && message.role === "assistant";
   });
+  if (sourceMessage) {
+    sourceMessage._skillAnswer = {
+      question: String(question || "").trim(),
+      answer: String(label || "").trim(),
+      step,
+    };
+    const card = document.querySelector('.skill-bubble[data-message-id="' + messageId + '"]');
+    const block = card?.closest(".message-block");
+    if (block && !block.querySelector(".skill-answer-transcript")) {
+      const transcript = renderSkillAnswerTranscript(sourceMessage._skillAnswer);
+      if (transcript) block.appendChild(transcript);
+    }
+  }
   session._skillContinuation = {
     sourceMessageId: messageId,
     speaker: sourceMessage?.speaker || "",
@@ -378,6 +406,7 @@ function handleSkillAnswer(skillName, step, optionId, optionText, customText, me
     _noBubble: true,
   };
   session.messages.push(msg);
+  if (typeof persistSessions === "function") persistSessions();
 
   // 触发 AI 响应
   runSessionTurn(session);

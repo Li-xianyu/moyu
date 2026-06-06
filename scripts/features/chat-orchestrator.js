@@ -2008,9 +2008,10 @@ function appendCompressionSegment(session, kind, messages, summary) {
     segments.push(segment);
   }
   segments.sort((a, b) => (Number(a.startSeq) || 0) - (Number(b.startSeq) || 0));
-  session.compressionSegments = segments.slice(-30);
+  session.compressionSegments = segments;
   session.compressedUntilSequence = Math.max(Number(session.compressedUntilSequence) || -1, endSeq);
   mergeAdjacentSmallSegments(session, kind);
+  pruneCompressionSegments(session);
   return segment;
 }
 
@@ -2038,6 +2039,23 @@ function mergeAdjacentSmallSegments(session, kind) {
       break;
     }
   }
+  const otherKinds = segments.filter((segment) => !segment || segment.kind !== kind);
+  session.compressionSegments = otherKinds.concat(sameKind)
+    .sort((a, b) => (Number(a?.startSeq) || 0) - (Number(b?.startSeq) || 0));
+}
+
+function pruneCompressionSegments(session) {
+  const segments = Array.isArray(session?.compressionSegments) ? session.compressionSegments : [];
+  const MAX_SEGMENTS_PER_KIND = 6;
+  const kept = [];
+  ["chat", "director"].forEach((kind) => {
+    kept.push(...segments
+      .filter((segment) => segment?.kind === kind)
+      .sort((a, b) => (Number(a.startSeq) || 0) - (Number(b.startSeq) || 0))
+      .slice(-MAX_SEGMENTS_PER_KIND));
+  });
+  session.compressionSegments = kept
+    .sort((a, b) => (Number(a.startSeq) || 0) - (Number(b.startSeq) || 0));
 }
 
 function scheduleAutoCompressAfterTurn(session) {
