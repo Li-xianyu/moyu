@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "2026.6.6.51";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.6.6.56";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -177,11 +177,20 @@
       overflow: hidden;
     }
     .view.active { display: block; }
-    #chatView {
-      min-height: 100%;
-      overflow: visible;
+    .image-lightbox[aria-hidden="true"],
+    .text-preview[aria-hidden="true"],
+    .image-lightbox[hidden],
+    .text-preview[hidden] {
+      display: none !important;
+    }
+    #chatView.active {
       display: flex;
       flex-direction: row;
+      min-height: 100%;
+      overflow: visible;
+    }
+    #chatView:not(.active) {
+      display: none;
     }
     .chat-stage {
       display: flex;
@@ -387,13 +396,15 @@
       margin-bottom: 0;
     }
 
-    /* 技能气泡（AI 消息风格） */
+    /* 技能气泡 — 与 AI 消息风格一致，支持日夜双主题 */
     .skill-bubble {
-      background: var(--msg-bg, #2a2a2a);
-      border: 1px solid var(--border, #333);
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
       border-radius: 12px;
       padding: 12px 16px;
       margin: 4px 0;
+      max-width: min(100%, 720px);
+      width: 100%;
     }
     .skill-bubble-header {
       display: flex;
@@ -401,20 +412,20 @@
       gap: 8px;
       margin-bottom: 8px;
       font-size: 13px;
-      color: var(--text-secondary, #888);
+      color: var(--muted);
     }
     .skill-bubble-name {
       font-weight: 600;
-      color: var(--accent, #4a9eff);
+      color: var(--accent);
     }
     .skill-bubble-step {
-      color: var(--text-tertiary, #666);
+      color: var(--muted);
     }
     .skill-bubble-question {
       font-size: 15px;
       line-height: 1.5;
       margin-bottom: 12px;
-      color: var(--text-primary, #fff);
+      color: var(--text);
     }
     .skill-bubble-options {
       display: flex;
@@ -422,22 +433,22 @@
       gap: 6px;
     }
     .skill-bubble-opt {
-      background: var(--card-bg, #1e1e1e);
-      border: 1px solid var(--border, #333);
+      background: var(--bg);
+      border: 1px solid var(--line);
       border-radius: 8px;
       padding: 10px 14px;
       text-align: left;
       font-size: 14px;
-      color: var(--text-primary, #fff);
+      color: var(--text);
       cursor: pointer;
       transition: all 0.15s ease;
     }
     .skill-bubble-opt:hover:not(:disabled) {
-      border-color: var(--accent, #4a9eff);
-      background: var(--hover-bg, #333);
+      border-color: var(--accent);
+      background: var(--theme-bg-hover);
     }
     .skill-bubble-opt:disabled {
-      opacity: 0.4;
+      opacity: 0.35;
       cursor: not-allowed;
     }
     .skill-bubble-custom {
@@ -447,22 +458,22 @@
     }
     .skill-bubble-custom-input {
       flex: 1;
-      background: var(--card-bg, #1e1e1e);
-      border: 1px solid var(--border, #333);
+      background: var(--input);
+      border: 1px solid var(--line);
       border-radius: 8px;
       padding: 10px 14px;
       font-size: 14px;
-      color: var(--text-primary, #fff);
+      color: var(--text);
       outline: none;
     }
     .skill-bubble-custom-input:focus {
-      border-color: var(--accent, #4a9eff);
+      border-color: var(--accent);
     }
     .skill-bubble-custom-input:disabled {
-      opacity: 0.4;
+      opacity: 0.35;
     }
     .skill-bubble-custom-btn {
-      background: var(--accent, #4a9eff);
+      background: var(--accent);
       border: none;
       border-radius: 8px;
       padding: 10px 16px;
@@ -476,86 +487,29 @@
       opacity: 0.85;
     }
     .skill-bubble-custom-btn:disabled {
-      opacity: 0.4;
+      opacity: 0.35;
       cursor: not-allowed;
     }
     .skill-bubble-locked {
-      opacity: 0.6;
+      opacity: 0.55;
       pointer-events: none;
     }
+    .skill-bubble-answered {
+      display: none;
+    }
     .skill-bubble-result {
-      border-color: var(--success, #4caf50);
+      border-color: var(--theme-success);
     }
     .skill-bubble-body {
       font-size: 14px;
       line-height: 1.6;
-      color: var(--text-primary, #fff);
+      color: var(--text);
     }
     .skill-result-line {
       margin-bottom: 6px;
     }
     .skill-result-line:last-child {
       margin-bottom: 0;
-    }
-
-    /* 二级侧栏（技能面板） */
-    .chat-skill-sidebar {
-      display: flex;
-      flex-direction: column;
-      width: 240px;
-      min-width: 240px;
-      background: var(--sidebar, #111111);
-      border-right: 1px solid var(--border, #333);
-      overflow-y: auto;
-    }
-    .chat-skill-sidebar.hidden {
-      display: none;
-    }
-    .chat-skill-sidebar .settings-list-head {
-      padding: 16px;
-      border-bottom: 1px solid var(--border, #333);
-    }
-    .chat-skill-sidebar .settings-list-head h3 {
-      font-size: 14px;
-      font-weight: 600;
-      margin: 0 0 4px 0;
-      color: var(--text-primary, #fff);
-    }
-    .chat-skill-sidebar .settings-list-head p {
-      margin: 0;
-    }
-    .chat-skill-list {
-      padding: 8px;
-    }
-    .chat-skill-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-      padding: 10px 12px;
-      border: none;
-      border-radius: 8px;
-      background: transparent;
-      color: var(--text-primary, #fff);
-      font-size: 14px;
-      cursor: pointer;
-      text-align: left;
-      transition: background 0.15s ease;
-    }
-    .chat-skill-item:hover {
-      background: var(--hover-bg, #333);
-    }
-    .chat-skill-item.active {
-      background: var(--accent-bg, rgba(74, 158, 255, 0.15));
-      color: var(--accent, #4a9eff);
-    }
-    .skill-detail-panel {
-      flex: 1;
-      padding: 24px;
-      overflow-y: auto;
-    }
-    .skill-detail-panel.hidden {
-      display: none;
     }
   </style>
   <script>
@@ -585,6 +539,7 @@
       var formHrefs = ["./styles/base/forms.css"];
       var settingsHrefs = ["./styles/views/settings.css"];
       var rolesHrefs = ["./styles/views/roles.css"];
+      var skillsHrefs = ["./styles/views/skills.css"];
       var ambientHrefs = ["./styles/base/scrollbars.css", "./styles/base/drop-overlay.css"];
       var styleLoads = {};
       function loadStylesheet(href, blocking) {
@@ -627,6 +582,9 @@
       window.__moyuRolesStylesReady = function() {
         return Promise.all([loadStyleList(formHrefs, false), loadStyleList(rolesHrefs, false)]);
       };
+      window.__moyuSkillsStylesReady = function() {
+        return Promise.all([loadStyleList(formHrefs, false), loadStyleList(skillsHrefs, false)]);
+      };
       window.__moyuHighlightStyleReady = function() { return loadStyleList([hljsTheme], false); };
       window.__moyuDeferredStylesReady = function() {
         return Promise.all([
@@ -634,6 +592,7 @@
           window.__moyuCreateStylesReady(),
           window.__moyuSettingsStylesReady(),
           window.__moyuRolesStylesReady(),
+          window.__moyuSkillsStylesReady(),
           loadStyleList(ambientHrefs, false)
         ]);
       };
@@ -786,7 +745,7 @@
           <span data-i18n="nav.userRoleLibrary">角色设定</span>
         </button>
 
-        <button class="nav-btn nav-btn-skills" id="skillsToggleBtn" type="button">
+        <button class="nav-btn nav-btn-skills" data-view="skills" type="button">
           <span class="nav-btn-icon" aria-hidden="true">
             <i data-lucide="wand-2" class="nav-icon-svg"></i>
           </span>
@@ -1219,6 +1178,36 @@
         </div>
       </section>
 
+      <!-- ── 技能 ── -->
+      <section id="skillsView" class="view view-with-shell-offset">
+        <div class="settings-stage">
+          <section class="settings-list-panel">
+            <div class="settings-list-head">
+              <div class="settings-list-head-copy">
+                <h3 data-i18n="nav.skills">技能</h3>
+                <p class="hint-text" data-i18n="skills.subtitle">模型驱动的结构化提问技能，帮助你分析问题、梳理思路。</p>
+              </div>
+            </div>
+            <div class="settings-section-nav" id="skillListHeader">
+              <span class="settings-section-label" data-i18n="skills.availableSkills">可用技能场景</span>
+            </div>
+            <div id="skillList" class="skill-library-list"></div>
+          </section>
+
+          <section class="settings-main-panel">
+            <div id="skillDetailPanel" class="skill-detail-panel">
+              <div class="settings-page-grid" id="skillDetailContent">
+                <!-- 由 initSkillsView 动态填充 -->
+              </div>
+            </div>
+
+            <div id="skillEmptyState" class="skill-empty-state">
+              <div class="hint-text">选择一个技能查看详情。</div>
+            </div>
+          </section>
+        </div>
+      </section>
+
       <section id="createView" class="view view-with-shell-offset">
         <div class="panel">
           <div id="sessionEditTopbar" class="session-edit-topbar hidden">
@@ -1495,18 +1484,6 @@
       </section>
 
       <section id="chatView" class="view active empty-state">
-        <div id="chatSkillSidebar" class="chat-skill-sidebar hidden">
-          <div class="settings-list-head">
-            <h3 data-i18n="nav.skills">技能</h3>
-            <p class="hint-text" data-i18n="skills.subtitle">结构化提问，帮你理清思路。</p>
-          </div>
-          <div class="chat-skill-list">
-            <button class="chat-skill-item" data-skill="questionnaire">
-              <i data-lucide="clipboard-list" class="nav-icon-svg"></i>
-              <span data-i18n="skills.questionnaire">问卷式交互</span>
-            </button>
-          </div>
-        </div>
         <div id="chatStage" class="chat-stage empty-state">
           <div id="chatWelcome" class="chat-welcome">
             <div class="chat-welcome-copy">
@@ -1566,19 +1543,6 @@
 <button id="sendBtn" class="primary-btn send-inside-btn" disabled aria-label="发送"><i data-lucide="arrow-up"></i></button>
               </div>
             </div>
-          </div>
-        </div>
-
-        <div id="chatSkillDetail" class="skill-detail-panel hidden">
-          <div class="settings-page-grid">
-            <section class="settings-card">
-              <div class="settings-card-head">
-                <h3 data-i18n="skills.howToUse">如何使用</h3>
-              </div>
-              <div class="settings-card-body">
-                <p class="hint-text" data-i18n="skills.usageHint">在工作模式聊天中，模型会根据对话自动判断是否需要使用结构化提问。你也可以手动输入 <code>/skill</code> 触发。模型会通过交互式卡片逐步引导你回答问题，最多 5 个问题，每个问题提供 3 个选项和自定义输入。</p>
-              </div>
-            </section>
           </div>
         </div>
       </section>

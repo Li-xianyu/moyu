@@ -214,6 +214,26 @@ function finalizeLatestTurnVariants(session) {
   return true;
 }
 
+function resetSessionDerivedMemoryAfterBranch(session) {
+  if (!session) return;
+  session.chatSummary = "";
+  session.directorSummary = "";
+  session.compressedUntilMessageId = "";
+  session.compressedUntilSequence = -1;
+  session.compressionSegments = [];
+  session.directorMemory = {
+    scene: "",
+    relationships: [],
+    facts: [],
+    tensions: [],
+    openLoops: [],
+    npcState: [],
+    synopsis: "",
+  };
+  session.chaosSummary = "";
+  session.chaosSummaryUntilSeq = -1;
+}
+
 async function replaceLatestTurnWithVariant(session, targetIndex, options = {}) {
   const versionState = getLatestTurnVariantState(session);
   if (!versionState || (!options.force && state.isSending)) return false;
@@ -350,13 +370,7 @@ async function regenerateFromUserMessage(messageId, options = {}) {
   }
 
   const baseTransientNpcs = getLatestTurnBaseTransientNpcs(session, target);
-  let keepLatestTurnVariants = false;
-  try {
-    keepLatestTurnVariants = await prepareLatestTurnRegeneration(session, target);
-  } catch (error) {
-    console.error("[chat] prepare turn version failed", error);
-    finalizeLatestTurnVariants(session);
-  }
+  finalizeLatestTurnVariants(session);
 
   if (typeof window.__prepareAutoTtsTurn === "function") {
     window.__prepareAutoTtsTurn();
@@ -376,18 +390,9 @@ async function regenerateFromUserMessage(messageId, options = {}) {
   try {
     await applyUserMessageEdit(session, messageId, target.content || "", {
       touchTarget: false,
-      preserveLatestTurnVariants: keepLatestTurnVariants,
-      baseTransientNpcs: keepLatestTurnVariants
-        ? getLatestTurnVariantState(session)?.baseTransientNpcs
-        : baseTransientNpcs,
+      baseTransientNpcs,
     });
   } catch (error) {
-    if (keepLatestTurnVariants) {
-      finalizeLatestTurnVariants(session);
-      try {
-        await saveLatestTurnVariantState(session);
-      } catch {}
-    }
     state.isSending = false;
     state.abortController = null;
     clearInlineChatStatus();
@@ -416,14 +421,6 @@ async function regenerateFromUserMessage(messageId, options = {}) {
     await runSessionTurn(session);
   } finally {
     session.regenerationInstruction = "";
-  }
-  if (keepLatestTurnVariants) {
-    try {
-      await finishLatestTurnRegeneration(session, messageId);
-    } catch (error) {
-      console.error("[chat] finish turn version failed", error);
-      setText(els.chatStatus, "回复已生成，但版本记录保存失败");
-    }
   }
 }
 
@@ -469,10 +466,15 @@ async function applyUserMessageEdit(session, messageId, content, options = {}) {
   const target = session.messages[targetIndex];
   const branchPointAt = new Date(target.createdAt || 0).getTime();
   const removedMsgs = session.messages.slice(targetIndex + 1);
-  if (removedMsgs.length && window.__chatDB) {
-    await Promise.all(removedMsgs
-      .filter((message) => message?.id)
-      .map((message) => window.__chatDB.deleteMessage(message.id)));
+  if (window.__chatDB) {
+    const targetSequence = getMessageSequenceInSession(session, target);
+    if (window.__chatDB.deleteSessionMessagesAfter && Number.isFinite(targetSequence)) {
+      await window.__chatDB.deleteSessionMessagesAfter(session.id, targetSequence);
+    } else if (removedMsgs.length) {
+      await Promise.all(removedMsgs
+        .filter((message) => message?.id)
+        .map((message) => window.__chatDB.deleteMessage(message.id)));
+    }
   }
 
   if (options.touchTarget !== false) {
@@ -481,6 +483,7 @@ async function applyUserMessageEdit(session, messageId, content, options = {}) {
   }
 
   session.messages = session.messages.slice(0, targetIndex + 1);
+  resetSessionDerivedMemoryAfterBranch(session);
   session.transientNpcs = Array.isArray(options.baseTransientNpcs)
     ? cloneLatestTurnVariantValue(options.baseTransientNpcs, [])
     : (session.transientNpcs || []).filter((npc) => {

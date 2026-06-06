@@ -1,6 +1,11 @@
-﻿#chatView {
+﻿#chatView.active {
+  display: flex;
+  flex-direction: row;
   min-height: 100%;
   overflow: visible;
+}
+#chatView:not(.active) {
+  display: none;
 }
 .chat-stage {
   display: flex;
@@ -762,6 +767,10 @@
   z-index: 2;
 }
 
+.message-block.agent.skill-continuation {
+  margin-top: -14px;
+}
+
 .message-meta {
   display: flex;
   gap: 8px;
@@ -1189,6 +1198,11 @@
 .image-lightbox.open {
   opacity: 1;
   visibility: visible;
+}
+
+.image-lightbox[hidden],
+.text-preview[hidden] {
+  display: none !important;
 }
 
 .image-lightbox-preview {

@@ -410,6 +410,8 @@
     if (m.toolTrace) msg.toolTrace = m.toolTrace;
     if (m.toolTraceExpanded) msg.toolTraceExpanded = true;
     if (m.thinkingExpanded) msg.thinkingExpanded = true;
+    if (m._noBubble) msg._noBubble = true;
+    if (m._skillContinuationOf) msg._skillContinuationOf = m._skillContinuationOf;
     return msg;
   }
 
@@ -429,6 +431,8 @@
       toolTrace: msg.toolTrace || null,
       toolTraceExpanded: Boolean(msg.toolTraceExpanded),
       thinkingExpanded: Boolean(msg.thinkingExpanded),
+      _noBubble: Boolean(msg._noBubble),
+      _skillContinuationOf: msg._skillContinuationOf || "",
     };
   }
 
@@ -1206,6 +1210,8 @@
         toolTrace: msg.toolTrace || null,
         toolTraceExpanded: Boolean(msg.toolTraceExpanded),
         thinkingExpanded: Boolean(msg.thinkingExpanded),
+        _noBubble: Boolean(msg._noBubble),
+        _skillContinuationOf: msg._skillContinuationOf || "",
       };
       return doPut("messages", record).then(function () {
         return indexMessage(record);
@@ -1451,6 +1457,23 @@
       if (!messageId) return Promise.resolve();
       return deleteFTSByMessageId(messageId).then(function () {
         return doDelete("messages", messageId);
+      });
+    },
+
+    deleteSessionMessagesAfter: function (sessionId, sequence) {
+      if (!sessionId || !Number.isFinite(Number(sequence))) return Promise.resolve(0);
+      return doGetByIndex(
+        "messages",
+        "session_seq",
+        IDBKeyRange.bound([sessionId, Number(sequence) + 1], [sessionId, Infinity]),
+        { limit: Infinity, dir: "next" }
+      ).then(function (records) {
+        records = records || [];
+        return Promise.all(records.map(function (record) {
+          return record && record.id ? ChatDB.deleteMessage(record.id) : Promise.resolve();
+        })).then(function () {
+          return records.length;
+        });
       });
     },
 

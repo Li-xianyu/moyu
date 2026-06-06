@@ -1019,6 +1019,7 @@ function closeImageLightbox() {
   if (!lightbox || !lightbox.classList.contains("open")) return;
   lightbox.classList.remove("open");
   lightbox.setAttribute("aria-hidden", "true");
+  lightbox.hidden = true;
   document.querySelector(".main")?.classList.remove("image-lightbox-open");
   cancelAnimationFrame(_imageLightboxPositionFrame);
   _imageLightboxPositionFrame = 0;
@@ -1037,6 +1038,7 @@ function openImageLightbox(image) {
   _imageLightboxReturnFocus = image;
   preview.src = image.currentSrc || image.src;
   preview.alt = image.alt || "图片预览";
+  lightbox.hidden = false;
   lightbox.classList.add("open");
   lightbox.setAttribute("aria-hidden", "false");
   document.querySelector(".main")?.classList.add("image-lightbox-open");
@@ -1095,6 +1097,7 @@ function closeTextPreview() {
   if (!preview || !preview.classList.contains("open")) return;
   preview.classList.remove("open");
   preview.setAttribute("aria-hidden", "true");
+  preview.hidden = true;
   document.querySelector(".main")?.classList.remove("image-lightbox-open");
   cancelAnimationFrame(_textPreviewPositionFrame);
   _textPreviewPositionFrame = 0;
@@ -1118,6 +1121,7 @@ function openTextPreview(trigger) {
   preview.querySelector(".text-preview-content").value = String(file.content || "");
   preview.querySelector(".text-preview-search").value = "";
   preview.querySelector(".text-preview-search-count").textContent = "";
+  preview.hidden = false;
   preview.classList.add("open");
   preview.setAttribute("aria-hidden", "false");
   document.querySelector(".main")?.classList.add("image-lightbox-open");
@@ -1136,6 +1140,7 @@ function initTextPreview() {
   preview.setAttribute("aria-modal", "true");
   preview.setAttribute("aria-label", "TXT 文件预览");
   preview.setAttribute("aria-hidden", "true");
+  preview.hidden = true;
   preview.innerHTML = [
     '<section class="text-preview-panel">',
     '<header class="text-preview-head">',
@@ -1224,6 +1229,7 @@ function initImageLightbox() {
   lightbox.setAttribute("aria-modal", "true");
   lightbox.setAttribute("aria-label", "图片预览");
   lightbox.setAttribute("aria-hidden", "true");
+  lightbox.hidden = true;
   lightbox.innerHTML = [
     '<button class="image-lightbox-close" type="button" aria-label="关闭图片预览" title="关闭">',
     '<i data-lucide="x"></i>',

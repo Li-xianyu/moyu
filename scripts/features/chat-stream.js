@@ -54,6 +54,7 @@ function createCombinedSignal(signals) {
 const NPC_RESPONSE_TIMEOUT_MS = 8000;
 
 async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = []) {
+  const skillContinuation = session._skillContinuation;
   const targetMessage = {
     id: `msg-${npc.name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role: "assistant",
@@ -63,7 +64,14 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
     createdAt: new Date().toISOString(),
     pending: true,
     streaming: false,
+    _skillContinuationOf: skillContinuation
+      && (!skillContinuation.speaker || skillContinuation.speaker === npc.name)
+      ? skillContinuation.sourceMessageId
+      : "",
   };
+  if (targetMessage._skillContinuationOf) {
+    session._skillContinuation = null;
+  }
   session.messages.push(targetMessage);
   syncLoadedSessionMessageCount(session);
   touchSession(session);
@@ -176,8 +184,10 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
     ...(session.mode === SESSION_MODE_WORK
       ? [{ role: "system", content: `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}` }]
       : []),
-    // work 模式注入结构化提问技能说明
+    // 只让当前有效分支中正在进行或刚触发的问卷继续注入技能说明。
     ...(session.mode === SESSION_MODE_WORK
+      && typeof isQuestionnaireActive === "function"
+      && isQuestionnaireActive(session)
       ? [{ role: "system", content: WORK_MODE_STRUCTURED_QUESTION_SKILL }]
       : []),
     // 多 NPC 模式下告知在场角色（单 AI 模式下模型已知自己是谁）
@@ -931,6 +941,4 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   persistSessions();
   renderMessages({ stickToBottom: true });
 }
-
-
 

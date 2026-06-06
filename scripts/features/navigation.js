@@ -214,6 +214,12 @@ function ensureRolesStylesLoaded() {
     : Promise.resolve();
 }
 
+function ensureSkillsStylesLoaded() {
+  return typeof window.__moyuSkillsStylesReady === "function"
+    ? window.__moyuSkillsStylesReady()
+    : Promise.resolve();
+}
+
 function warmSettingsRuntime(options = {}) {
   var preload = function() {
     ensureSettingsRuntimeLoaded()
@@ -367,6 +373,10 @@ async function restoreViewFromHistory(entry) {
     await _loadScript("./scripts/features/roles.js");
     initRolesView();
     switchView("roles");
+  } else if (entry.view === "skills") {
+    await ensureSkillsStylesLoaded();
+    if (typeof initSkillsView === "function") initSkillsView();
+    switchView("skills");
   }
 }
 
@@ -451,6 +461,9 @@ function bindNav() {
         await ensureRolesStylesLoaded();
         await _loadScript("./scripts/features/roles.js");
         initRolesView();
+      } else if (view === "skills") {
+        await ensureSkillsStylesLoaded();
+        if (typeof initSkillsView === "function") initSkillsView();
       }
       if (view) switchView(view);
     });
@@ -460,16 +473,6 @@ function bindNav() {
       });
     }
   });
-
-  // 技能二级侧栏切换
-  const skillsToggleBtn = document.getElementById("skillsToggleBtn");
-  if (skillsToggleBtn) {
-    skillsToggleBtn.addEventListener("click", () => {
-      if (typeof toggleSkillSidebar === "function") {
-        toggleSkillSidebar();
-      }
-    });
-  }
 
   applySidebarState();
 }
