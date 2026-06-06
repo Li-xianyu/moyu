@@ -97,10 +97,57 @@ function getComposerShellHeight() {
 function getModelProviderIcon(session, speakerName) {
   if (!session || !speakerName) return null;
   const allNpcs = getSceneNpcs(session);
-  const npc = allNpcs.find((n) => n.name === speakerName);
+  const resolvedName = resolveNpcSpeakerName(session, speakerName);
+  const npc = allNpcs.find((n) => n.name === resolvedName);
   if (!npc?.model) return null;
   const provider = detectModelProvider(npc.model);
   return provider ? provider.icon : null;
+}
+
+function resolveNpcSpeakerName(session, speakerName) {
+  const speaker = String(speakerName || "");
+  if (!session || !speaker) return speaker;
+  const allNpcs = getSceneNpcs(session);
+  if (allNpcs.some((npc) => npc.name === speaker)) return speaker;
+
+  const aliases = session.npcNameAliases || {};
+  let resolved = speaker;
+  const visited = new Set();
+  while (aliases[resolved] && !visited.has(resolved)) {
+    visited.add(resolved);
+    resolved = aliases[resolved];
+  }
+  if (allNpcs.some((npc) => npc.name === resolved)) return resolved;
+
+  const currentNames = new Set(allNpcs.map((npc) => npc.name));
+  const unmatchedSpeakers = [...new Set((session.messages || [])
+    .filter((message) => message?.role === "assistant" && message.speaker && message.speaker !== "导演 AI")
+    .map((message) => message.speaker)
+    .filter((name) => !currentNames.has(name)))];
+  const matchedCurrentNames = new Set((session.messages || [])
+    .filter((message) => message?.role === "assistant" && currentNames.has(message.speaker))
+    .map((message) => message.speaker));
+  const unmatchedNpcs = allNpcs.filter((npc) => !matchedCurrentNames.has(npc.name));
+  if (unmatchedSpeakers.length === 1 && unmatchedNpcs.length === 1 && unmatchedSpeakers[0] === speaker) {
+    const inferredName = unmatchedNpcs[0].name;
+    session.npcNameAliases = { ...(session.npcNameAliases || {}), [speaker]: inferredName };
+    (session.messages || []).forEach((message) => {
+      if (message?.role === "assistant" && message.speaker === speaker) {
+        message.speaker = inferredName;
+      }
+    });
+    if (!session._npcAliasRepairPending && window.__chatDB?.renameSessionSpeakers) {
+      session._npcAliasRepairPending = true;
+      window.__chatDB.renameSessionSpeakers(session.id, { [speaker]: inferredName })
+        .catch((error) => debugWarn("[chat-ui] NPC alias repair failed", error))
+        .finally(() => {
+          session._npcAliasRepairPending = false;
+          persistSessions();
+        });
+    }
+    return inferredName;
+  }
+  return speaker;
 }
 
 function getTopFloatingChromeHeight() {
@@ -1383,9 +1430,12 @@ function buildMessageBlock(message, sessionMode, enableMd) {
   if (message.role === "assistant" || message.role === "user") {
     const meta = document.createElement("div");
     meta.className = "message-meta";
-    let metaHtml = `\n        <strong>${escapeHtml(message.speaker)}</strong>`;
+    const session = getCurrentSession();
+    const displaySpeaker = message.role === "assistant"
+      ? resolveNpcSpeakerName(session, message.speaker)
+      : message.speaker;
+    let metaHtml = `\n        <strong>${escapeHtml(displaySpeaker)}</strong>`;
     if (message.role === "assistant") {
-      const session = getCurrentSession();
       const iconUrl = getModelProviderIcon(session, message.speaker);
       if (iconUrl && getSessionSetting(session, "showModelProviderIcon") !== false) {
         metaHtml = `\n        <img class="model-provider-icon" src="${iconUrl}" alt="">${metaHtml}`;
@@ -1518,6 +1568,11 @@ function syncMessageModelProviderIcon(block, message, session = getCurrentSessio
   if (!block || message?.role !== "assistant") return;
   const meta = block.querySelector('.message-meta');
   if (!meta) return;
+  const speakerNode = meta.querySelector("strong");
+  const displaySpeaker = resolveNpcSpeakerName(session, message.speaker);
+  if (speakerNode && speakerNode.textContent !== displaySpeaker) {
+    speakerNode.textContent = displaySpeaker;
+  }
   const iconUrl = getModelProviderIcon(session, message.speaker);
   const showIcon = iconUrl && getSessionSetting(session, "showModelProviderIcon") !== false;
   const existingIcon = meta.querySelector('.model-provider-icon');

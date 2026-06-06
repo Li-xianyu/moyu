@@ -277,6 +277,9 @@ function migrateLegacySessions() {
     mode: session.mode || SESSION_MODE_STORY,
     title: session.title || buildFallbackTitle(session),
     titleSource: session.titleSource || "auto",
+    npcNameAliases: session.npcNameAliases && typeof session.npcNameAliases === "object"
+      ? session.npcNameAliases
+      : {},
     transientNpcs: Array.isArray(session.transientNpcs) ? session.transientNpcs : [],
     directorMemory: resolveDirectorMemory(session.directorMemory, session.directorSummary),
     directorSummary: typeof session.directorSummary === "string" ? session.directorSummary : "",

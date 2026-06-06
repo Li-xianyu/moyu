@@ -557,7 +557,8 @@ function bindCreateFlow() {
       directorConfigId: payload.directorConfigId || "",
       settingsOverrides: {},
       agentParams: {},
-      npcs: payload.npcs,
+      npcs: payload.npcs.map(({ originalName, ...npc }) => ({ ...npc })),
+      npcNameAliases: {},
       transientNpcs: [],
       directorMemory: normalizeDirectorMemory(null),
       directorSummary: "",
@@ -1181,6 +1182,7 @@ function collectSessionDraft() {
     const prompt = card.querySelector(".npc-prompt").value.trim();
     return {
       name,
+      originalName: String(card.dataset.originalNpcName || "").trim(),
       model: modelSelection.model,
       configId: modelSelection.configId,
       prompt,
@@ -1356,7 +1358,7 @@ async function saveSessionEdits(payload, activeConfig) {
   const originalNpcNames = new Set((session.npcs || []).map((npc) => npc.name));
   const renameMap = new Map();
   [...els.npcList.querySelectorAll(".npc-card")].forEach((card, index) => {
-    const oldName = String(card.dataset.originalNpcName || "").trim();
+    const oldName = String(payload.npcs[index]?.originalName || card.dataset.originalNpcName || "").trim();
     const newName = String(payload.npcs[index]?.name || "").trim();
     if (oldName && newName && oldName !== newName && originalNpcNames.has(oldName)) {
       renameMap.set(oldName, newName);
@@ -1388,6 +1390,16 @@ async function saveSessionEdits(payload, activeConfig) {
   session.globalPrompt = payload.globalPrompt;
   session.userRole = payload.userRole || "";
   if (renameMap.size) {
+    const aliases = { ...(session.npcNameAliases || {}) };
+    Object.keys(aliases).forEach((oldName) => {
+      if (renameMap.has(aliases[oldName])) {
+        aliases[oldName] = renameMap.get(aliases[oldName]);
+      }
+    });
+    renameMap.forEach((newName, oldName) => {
+      aliases[oldName] = newName;
+    });
+    session.npcNameAliases = aliases;
     (session.messages || []).forEach((message) => {
       if (message?.role === "assistant" && renameMap.has(message.speaker)) {
         message.speaker = renameMap.get(message.speaker);
@@ -1408,7 +1420,7 @@ async function saveSessionEdits(payload, activeConfig) {
       }
     }
   }
-  session.npcs = payload.npcs.map((npc) => ({ ...npc }));
+  session.npcs = payload.npcs.map(({ originalName, ...npc }) => ({ ...npc }));
   session.transientNpcs = (session.transientNpcs || []).filter((npc) => !session.npcs.some((baseNpc) => baseNpc.name === npc.name));
   // Clean up orphaned agentParams keys (NPCs renamed or removed)
   if (session.agentParams) {

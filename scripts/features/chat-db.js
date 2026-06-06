@@ -258,6 +258,7 @@
       directorModel: session.directorModel || "",
       directorConfigId: session.directorConfigId || "",
       npcs: session.npcs || [],
+      npcNameAliases: session.npcNameAliases || {},
       transientNpcs: session.transientNpcs || [],
       directorMemory: session.directorMemory || null,
       directorSummary: session.directorSummary || "",
@@ -492,6 +493,7 @@
       directorModel: rec.directorModel || "",
       directorConfigId: rec.directorConfigId || "",
       npcs: rec.npcs || [],
+      npcNameAliases: rec.npcNameAliases || {},
       transientNpcs: rec.transientNpcs || [],
       directorMemory: rec.directorMemory || null,
       directorSummary: rec.directorSummary || "",
@@ -870,6 +872,7 @@
         directorModel: session.directorModel || "",
         directorConfigId: session.directorConfigId || "",
         npcs: session.npcs || [],
+        npcNameAliases: session.npcNameAliases || {},
         transientNpcs: session.transientNpcs || [],
         directorMemory: session.directorMemory || null,
         directorSummary: session.directorSummary || "",
@@ -897,6 +900,7 @@
         record.messageCount = countSessionMessagesForSave(session);
         record.tags = extractTags(session);
         record.host = session.host || record.host || "";
+        record.npcNameAliases = session.npcNameAliases || record.npcNameAliases || {};
         record.directorMemory = session.directorMemory || record.directorMemory || null;
         record.directorSummary = session.directorSummary || record.directorSummary || "";
         record.chatSummary = session.chatSummary || record.chatSummary || "";
@@ -1078,6 +1082,7 @@
                       directorModel: rec.directorModel || "",
                       directorConfigId: rec.directorConfigId || "",
                       npcs: rec.npcs || [],
+                      npcNameAliases: rec.npcNameAliases || {},
                       transientNpcs: rec.transientNpcs || [],
                       directorMemory: rec.directorMemory || null,
                       directorSummary: rec.directorSummary || "",
@@ -1135,6 +1140,7 @@
               directorModel: s.directorModel || "",
               directorConfigId: s.directorConfigId || "",
               npcs: s.npcs || [],
+              npcNameAliases: s.npcNameAliases || {},
               transientNpcs: s.transientNpcs || [],
               directorMemory: s.directorMemory || null,
               directorSummary: s.directorSummary || "",
