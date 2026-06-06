@@ -508,6 +508,26 @@ function getNpcResponseTemperature(session, model) {
 }
 
 
+function filterUnsupportedMedia(messages, modelName) {
+  if (!window.getModelCapabilities) return messages;
+  var caps = window.getModelCapabilities(modelName);
+  if (caps.input.image) return messages;
+
+  return messages.map(function (msg) {
+    if (msg.role !== "user" || !Array.isArray(msg.content)) return msg;
+
+    var filtered = msg.content.map(function (part) {
+      if (part.type === "image_url" || (part.type === "file" && part.mediaType && part.mediaType.startsWith("image/"))) {
+        return { type: "text", text: "⚠️ 当前模型不支持图片输入，已忽略该图片。" };
+      }
+      return part;
+    });
+
+    return Object.assign({}, msg, { content: filtered });
+  });
+}
+
+
 async function streamChatCompletion(session, speaker, model, messages, configId = "", extraSignal = null, onStreamStarted = null) {
   const targetMessage = findLatestAssistantMessage(session, speaker);
   if (!targetMessage) {
@@ -541,7 +561,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   const buildStreamBody = (withUsage, withTemp = true) => {
     const body = {
       model,
-      messages,
+      messages: filterUnsupportedMedia(messages, model),
       stream: true,
     };
     if (withTemp) {
