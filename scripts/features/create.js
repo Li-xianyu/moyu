@@ -1424,7 +1424,10 @@ async function saveSessionEdits(payload, activeConfig) {
     }
   }
   const oldPromptMap = new Map(
-    (session.npcs || []).map((npc) => [npc.name, npc.prompt || ""])
+    (session.npcs || []).map((npc) => {
+      const newName = renameMap.get(npc.name) || npc.name;
+      return [newName, npc.prompt || ""];
+    })
   );
   session.npcs = payload.npcs.map(({ originalName, ...npc }) => ({ ...npc }));
   session.transientNpcs = (session.transientNpcs || []).filter((npc) => !session.npcs.some((baseNpc) => baseNpc.name === npc.name));
