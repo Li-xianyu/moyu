@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "2026.6.6.50";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.6.6.51";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -192,6 +192,7 @@
       margin: 0 auto;
       position: relative;
     }
+    .chat-stage.hidden { display: none; }
     .chat-stage.empty-state { justify-content: center; }
     .chat-welcome {
       display: none;
@@ -499,27 +500,34 @@
 
     /* 二级侧栏（技能面板） */
     .chat-skill-sidebar {
-      width: 240px;
-      background: var(--sidebar, #111111);
-      border-right: 1px solid var(--border, #333);
       display: flex;
       flex-direction: column;
+      width: 240px;
+      min-width: 240px;
+      background: var(--sidebar, #111111);
+      border-right: 1px solid var(--border, #333);
       overflow-y: auto;
-      flex-shrink: 0;
     }
-    .chat-skill-sidebar-head {
+    .chat-skill-sidebar.hidden {
+      display: none;
+    }
+    .chat-skill-sidebar .settings-list-head {
       padding: 16px;
       border-bottom: 1px solid var(--border, #333);
     }
-    .chat-skill-sidebar-head .sidebar-sub-title {
+    .chat-skill-sidebar .settings-list-head h3 {
       font-size: 14px;
       font-weight: 600;
+      margin: 0 0 4px 0;
       color: var(--text-primary, #fff);
     }
-    .chat-skill-sidebar-list {
+    .chat-skill-sidebar .settings-list-head p {
+      margin: 0;
+    }
+    .chat-skill-list {
       padding: 8px;
     }
-    .chat-skill-sidebar-item {
+    .chat-skill-item {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -534,36 +542,20 @@
       text-align: left;
       transition: background 0.15s ease;
     }
-    .chat-skill-sidebar-item:hover {
+    .chat-skill-item:hover {
       background: var(--hover-bg, #333);
     }
-    .chat-skill-sidebar-item.active {
+    .chat-skill-item.active {
       background: var(--accent-bg, rgba(74, 158, 255, 0.15));
       color: var(--accent, #4a9eff);
     }
-    .chat-skill-sidebar-detail {
-      padding: 16px;
-      border-top: 1px solid var(--border, #333);
+    .skill-detail-panel {
       flex: 1;
+      padding: 24px;
       overflow-y: auto;
     }
-    .chat-skill-sidebar-detail h4 {
-      font-size: 14px;
-      font-weight: 600;
-      margin: 0 0 8px 0;
-      color: var(--text-primary, #fff);
-    }
-    .chat-skill-sidebar-detail p {
-      font-size: 13px;
-      line-height: 1.6;
-      color: var(--text-secondary, #888);
-    }
-    .chat-skill-sidebar-detail code {
-      background: var(--tag-bg, #2a2a2a);
-      padding: 1px 5px;
-      border-radius: 3px;
-      font-size: 12px;
-      color: var(--accent, #4a9eff);
+    .skill-detail-panel.hidden {
+      display: none;
     }
   </style>
   <script>
@@ -1504,18 +1496,15 @@
 
       <section id="chatView" class="view active empty-state">
         <div id="chatSkillSidebar" class="chat-skill-sidebar hidden">
-          <div class="chat-skill-sidebar-head">
-            <span class="sidebar-sub-title" data-i18n="nav.skills">技能</span>
+          <div class="settings-list-head">
+            <h3 data-i18n="nav.skills">技能</h3>
+            <p class="hint-text" data-i18n="skills.subtitle">结构化提问，帮你理清思路。</p>
           </div>
-          <div class="chat-skill-sidebar-list">
-            <button class="chat-skill-sidebar-item" data-skill="questionnaire">
+          <div class="chat-skill-list">
+            <button class="chat-skill-item" data-skill="questionnaire">
               <i data-lucide="clipboard-list" class="nav-icon-svg"></i>
               <span data-i18n="skills.questionnaire">问卷式交互</span>
             </button>
-          </div>
-          <div class="chat-skill-sidebar-detail" id="chatSkillDetail">
-            <h4 data-i18n="skills.howToUse">如何使用</h4>
-            <p class="hint-text" data-i18n="skills.usageHint">在工作模式聊天中，模型会根据对话自动判断是否需要使用结构化提问。你也可以手动输入 <code>/skill</code> 触发。模型会通过交互式卡片逐步引导你回答问题，最多 5 个问题，每个问题提供 3 个选项和自定义输入。</p>
           </div>
         </div>
         <div id="chatStage" class="chat-stage empty-state">
@@ -1577,6 +1566,19 @@
 <button id="sendBtn" class="primary-btn send-inside-btn" disabled aria-label="发送"><i data-lucide="arrow-up"></i></button>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div id="chatSkillDetail" class="skill-detail-panel hidden">
+          <div class="settings-page-grid">
+            <section class="settings-card">
+              <div class="settings-card-head">
+                <h3 data-i18n="skills.howToUse">如何使用</h3>
+              </div>
+              <div class="settings-card-body">
+                <p class="hint-text" data-i18n="skills.usageHint">在工作模式聊天中，模型会根据对话自动判断是否需要使用结构化提问。你也可以手动输入 <code>/skill</code> 触发。模型会通过交互式卡片逐步引导你回答问题，最多 5 个问题，每个问题提供 3 个选项和自定义输入。</p>
+              </div>
+            </section>
           </div>
         </div>
       </section>

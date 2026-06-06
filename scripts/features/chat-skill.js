@@ -4,8 +4,19 @@
 
 function toggleSkillSidebar() {
   const sidebar = document.getElementById("chatSkillSidebar");
+  const stage = document.getElementById("chatStage");
+  const detail = document.getElementById("chatSkillDetail");
   if (!sidebar) return;
+
+  const isOpen = !sidebar.classList.contains("hidden");
   sidebar.classList.toggle("hidden");
+
+  if (isOpen) {
+    // 关闭技能侧栏 → 恢复聊天
+    if (stage) stage.classList.remove("hidden");
+    if (detail) detail.classList.add("hidden");
+    document.querySelectorAll(".chat-skill-item").forEach((b) => b.classList.remove("active"));
+  }
   if (typeof lucide !== "undefined" && lucide.createIcons) {
     lucide.createIcons();
   }
@@ -13,13 +24,14 @@ function toggleSkillSidebar() {
 
 // 初始化技能面板（绑定二级侧栏内的 item 点击）
 function initSkillsView() {
-  const items = document.querySelectorAll(".chat-skill-sidebar-item");
+  const items = document.querySelectorAll(".chat-skill-item");
   items.forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".chat-skill-sidebar-item").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".chat-skill-item").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      // 显示详情（静态区域已存在）
+      const stage = document.getElementById("chatStage");
       const detail = document.getElementById("chatSkillDetail");
+      if (stage) stage.classList.add("hidden");
       if (detail) detail.classList.remove("hidden");
     });
   });
