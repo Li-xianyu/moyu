@@ -10,6 +10,7 @@ const CHAT_FEATURE_SCRIPTS = [
   "./scripts/features/chat-ui.js",
   "./scripts/features/chat-edit.js",
   "./scripts/features/chat.js",
+  "./scripts/features/chat-skill.js",
   "./scripts/features/filedrop.js",
 ];
 const CHAT_RUNTIME_SCRIPTS = [

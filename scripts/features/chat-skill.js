@@ -160,8 +160,8 @@ function handleSkillAnswer(skillName, step, optionId, customText, messageId) {
   const answerMessage = `[[SKILL_ANSWER]]\n${JSON.stringify(answerData, null, 2)}\n[[SKILL_ANSWER_END]]`;
   
   // 发送给模型
-  if (typeof sendMessage === "function") {
-    sendMessage(answerMessage);
+  if (typeof sendUserMessage === "function") {
+    sendUserMessage(answerMessage);
   }
   
   // 锁定当前卡片
@@ -180,8 +180,5 @@ function lockSkillCard(messageId) {
     el.disabled = true;
   });
   
-  // 显示选择标记
-  card.querySelectorAll(".skill-card-option").forEach((el) => {
-    el.addEventListener("click", (e) => e.preventDefault());
-  });
+
 }
