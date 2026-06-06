@@ -161,7 +161,8 @@ function handleSkillAnswer(skillName, step, optionId, customText, messageId) {
   
   // 发送给模型
   if (typeof sendUserMessage === "function") {
-    sendUserMessage(answerMessage);
+    els.chatInput.value = answerMessage;
+    sendUserMessage();
   }
   
   // 锁定当前卡片
