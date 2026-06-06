@@ -72,12 +72,12 @@
 
   function flattenCatalog(raw) {
     var flat = {};
-    Object.keys(raw).forEach(function (provider) {
-      var entry = raw[provider];
-      if (!entry || !entry.models) return;
-      Object.keys(entry.models).forEach(function (modelId) {
-        flat[provider + "/" + modelId] = entry.models[modelId];
-      });
+    Object.keys(raw).forEach(function (key) {
+      var entry = raw[key];
+      if (!entry || typeof entry !== "object") return;
+      if (entry.modalities || entry.attachment !== undefined) {
+        flat[key] = entry;
+      }
     });
     return flat;
   }
