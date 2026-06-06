@@ -182,5 +182,13 @@ function lockSkillCard(messageId) {
     el.disabled = true;
   });
   
+}
 
+// 初始化技能面板视图
+function initSkillsView() {
+  // 技能面板是静态内容，只需确保视图切换正确
+  // lucide 图标在 DOM 变更后重新创建
+  if (typeof lucide !== "undefined" && lucide.createIcons) {
+    lucide.createIcons();
+  }
 }

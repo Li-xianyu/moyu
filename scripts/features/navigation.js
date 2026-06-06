@@ -451,6 +451,13 @@ function bindNav() {
         await ensureRolesStylesLoaded();
         await _loadScript("./scripts/features/roles.js");
         initRolesView();
+      } else if (view === "skills") {
+        if (typeof initSkillsView !== "function") {
+          await _loadScript("./scripts/features/chat-skill.js");
+        }
+        if (typeof initSkillsView === "function") {
+          initSkillsView();
+        }
       }
       switchView(view);
     });
