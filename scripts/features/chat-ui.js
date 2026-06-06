@@ -1553,6 +1553,49 @@ function buildMessageBlock(message, sessionMode, enableMd) {
       block.classList.toggle("token-open", !wasOpen);
     });
   }
+  // 在渲染 assistant 消息时检查是否包含技能
+  if (message.role === "assistant" && !message.uiType && !message.pending) {
+    const skillData = typeof parseSkillFromResponse === "function"
+      ? parseSkillFromResponse(message.content)
+      : null;
+
+    if (skillData) {
+      const card = typeof renderSkillCard === "function"
+        ? renderSkillCard(skillData, message.id)
+        : null;
+      if (card) {
+        block.appendChild(card);
+        block.appendChild(bubble);
+        bubble.style.display = "none";
+        bindInlineMetaToggles(block, message);
+        if (message.id && !message.pending) {
+          block.appendChild(buildMessageTools(message));
+        }
+        return block;
+      }
+    }
+
+    const skillResult = typeof parseSkillResult === "function"
+      ? parseSkillResult(message.content)
+      : null;
+
+    if (skillResult) {
+      const resultCard = typeof renderSkillResult === "function"
+        ? renderSkillResult(skillResult)
+        : null;
+      if (resultCard) {
+        block.appendChild(resultCard);
+        block.appendChild(bubble);
+        bubble.style.display = "none";
+        bindInlineMetaToggles(block, message);
+        if (message.id && !message.pending) {
+          block.appendChild(buildMessageTools(message));
+        }
+        return block;
+      }
+    }
+  }
+
   block.appendChild(bubble);
 
   bindInlineMetaToggles(block, message);
@@ -1678,6 +1721,53 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
   // 2. Update bubble className + content
   const bubble = block.querySelector('.message');
   if (!bubble) return;
+
+  // 在刷新 assistant 消息时检查是否包含技能
+  if (message.role === "assistant" && !message.uiType && !message.pending) {
+    const skillData = typeof parseSkillFromResponse === "function"
+      ? parseSkillFromResponse(message.content)
+      : null;
+
+    if (skillData) {
+      const existingCard = block.querySelector('.skill-card');
+      if (!existingCard) {
+        const card = typeof renderSkillCard === "function"
+          ? renderSkillCard(skillData, message.id)
+          : null;
+        if (card) {
+          block.insertBefore(card, bubble);
+          bubble.style.display = "none";
+        }
+      }
+      syncMessageModelProviderIcon(block, message);
+      syncMessageThinkingIcon(block, message);
+      bindInlineMetaToggles(block, message);
+      syncStreamingTtsForMessage(message);
+      return;
+    }
+
+    const skillResult = typeof parseSkillResult === "function"
+      ? parseSkillResult(message.content)
+      : null;
+
+    if (skillResult) {
+      const existingCard = block.querySelector('.skill-card');
+      if (!existingCard) {
+        const resultCard = typeof renderSkillResult === "function"
+          ? renderSkillResult(skillResult)
+          : null;
+        if (resultCard) {
+          block.insertBefore(resultCard, bubble);
+          bubble.style.display = "none";
+        }
+      }
+      syncMessageModelProviderIcon(block, message);
+      syncMessageThinkingIcon(block, message);
+      bindInlineMetaToggles(block, message);
+      syncStreamingTtsForMessage(message);
+      return;
+    }
+  }
 
   const isSingleLineMessage = !message.pending && !/[\r\n]/.test(message.content || "");
   const isWorkAgent = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
