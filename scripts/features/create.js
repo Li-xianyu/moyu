@@ -957,6 +957,98 @@ function populateModelSelect(select, preferredValue = "") {
   });
 
   select.dispatchEvent(new Event("change", { bubbles: true }));
+  buildCustomModelDropdown(select);
+}
+
+function buildModelCapabilityIcons(modelName) {
+  if (!window.getModelCapabilities) return "";
+  var caps = window.getModelCapabilities(modelName);
+  var icons = "";
+  if (caps.input.image) icons += '<i data-lucide="eye" class="model-cap-icon cap-vision"></i>';
+  if (caps.tool_call) icons += '<i data-lucide="wrench" class="model-cap-icon cap-tool"></i>';
+  if (caps.reasoning) icons += '<i data-lucide="brain" class="model-cap-icon cap-reason"></i>';
+  return icons;
+}
+
+function buildCustomModelDropdown(select) {
+  var existing = select.parentNode.querySelector(".cs-model-wrap");
+  if (existing) existing.remove();
+
+  select.style.display = "none";
+
+  var wrap = document.createElement("div");
+  wrap.className = "cs-model-wrap";
+
+  var trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "cs-model-trigger";
+
+  var panel = document.createElement("div");
+  panel.className = "cs-model-panel hidden";
+
+  function getSelectedModelName() {
+    var opt = select.options[select.selectedIndex];
+    if (!opt || !opt.value) return null;
+    var parts = opt.value.split(":::");
+    return parts[0] || null;
+  }
+
+  function renderTrigger() {
+    var opt = select.options[select.selectedIndex];
+    var name = getSelectedModelName();
+    var text = opt ? opt.text : "";
+    var icons = name ? buildModelCapabilityIcons(name) : "";
+    trigger.innerHTML = '<span class="cs-model-text">' + escapeHtml(text) + '</span><span class="cs-model-icons">' + icons + '</span><i data-lucide="chevron-down" class="cs-model-arrow"></i>';
+    lucide.createIcons({ nodes: [trigger] });
+  }
+
+  function renderPanel() {
+    panel.innerHTML = "";
+    for (var i = 0; i < select.options.length; i++) {
+      var opt = select.options[i];
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cs-model-opt" + (opt.value === select.value ? " cs-model-opt-sel" : "");
+      var name = null;
+      if (opt.value) {
+        var parts = opt.value.split(":::");
+        name = parts[0] || null;
+      }
+      var icons = name ? buildModelCapabilityIcons(name) : "";
+      btn.innerHTML = '<span class="cs-model-text">' + escapeHtml(opt.text) + '</span><span class="cs-model-icons">' + icons + '</span>';
+      btn.dataset.value = opt.value;
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        select.value = this.dataset.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        renderTrigger();
+        panel.classList.add("hidden");
+      });
+      panel.appendChild(btn);
+    }
+    lucide.createIcons({ nodes: [panel] });
+  }
+
+  trigger.addEventListener("click", function (e) {
+    e.stopPropagation();
+    var isOpen = !panel.classList.contains("hidden");
+    document.querySelectorAll(".cs-model-panel").forEach(function (p) { p.classList.add("hidden"); });
+    if (!isOpen) {
+      renderPanel();
+      panel.classList.remove("hidden");
+    }
+  });
+
+  document.addEventListener("click", function () {
+    panel.classList.add("hidden");
+  });
+
+  wrap.appendChild(trigger);
+  wrap.appendChild(panel);
+  select.parentNode.insertBefore(wrap, select.nextSibling);
+
+  renderTrigger();
+  lucide.createIcons({ nodes: [wrap] });
 }
 
 function getAllWorkModels() {

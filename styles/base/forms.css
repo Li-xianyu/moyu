@@ -89,6 +89,99 @@ select:focus {
   border-color: var(--accent);
 }
 
+/* Custom model dropdown */
+.cs-model-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.cs-model-trigger {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input);
+  padding: 10px 12px;
+  color: var(--text);
+  outline: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  text-align: left;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.cs-model-trigger:hover {
+  border-color: var(--accent);
+}
+
+.cs-model-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cs-model-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.cs-model-icons .model-cap-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.cs-model-arrow {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.cs-model-panel {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.cs-model-opt {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 8px 12px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  font-size: inherit;
+  font-family: inherit;
+  transition: background 0.12s ease;
+}
+
+.cs-model-opt:hover {
+  background: var(--theme-bg-active);
+}
+
+.cs-model-opt-sel {
+  background: var(--theme-bg-active-strong);
+  color: var(--accent);
+}
+
 textarea {
   resize: none;
 }

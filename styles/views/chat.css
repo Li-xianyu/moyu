@@ -1070,15 +1070,17 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 6px;
+  justify-content: flex-end;
+  margin-bottom: 4px;
 }
 
 .message-image {
-  max-width: 240px;
-  max-height: 180px;
-  border-radius: 8px;
-  object-fit: contain;
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 10px;
+  object-fit: cover;
   cursor: pointer;
+  border: 1px solid var(--theme-border-subtle);
   transition: transform 0.15s ease;
 }
 

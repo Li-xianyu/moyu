@@ -599,17 +599,6 @@ function buildBubbleContent(message) {
     ? normalizeUserMessageDisplayText(message.content)
     : message.content;
 
-  if (message.role === "user") {
-    var images = extractImageAttachments(message.content);
-    if (images.length) {
-      html += '<div class="message-images">';
-      for (var i = 0; i < images.length; i++) {
-        html += '<img src="' + escapeHtml(images[i].image_url.url) + '" class="message-image" loading="lazy">';
-      }
-      html += '</div>';
-    }
-  }
-
   if (enableMd) {
     html += renderMarkdownContent(escapeHtml(content));
   } else if (message.role === "assistant" && sessionMode === SESSION_MODE_WORK) {
@@ -1367,6 +1356,22 @@ function buildMessageBlock(message, sessionMode, enableMd) {
     meta.innerHTML = metaHtml;
     block.appendChild(meta);
     syncMessageThinkingIcon(block, message);
+  }
+
+  if (message.role === "user" && Array.isArray(message.content)) {
+    var images = extractImageAttachments(message.content);
+    if (images.length) {
+      var imgWrap = document.createElement("div");
+      imgWrap.className = "message-images";
+      images.forEach(function (img) {
+        var imgEl = document.createElement("img");
+        imgEl.className = "message-image";
+        imgEl.src = img.image_url.url;
+        imgEl.loading = "lazy";
+        imgWrap.appendChild(imgEl);
+      });
+      block.appendChild(imgWrap);
+    }
   }
 
   const isSingleLineMessage = !message.pending && !/[\r\n]/.test(message.content || "");
