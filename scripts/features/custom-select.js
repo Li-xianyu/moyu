@@ -5,6 +5,7 @@
 
   const REFRESH_QUEUE = new Set();
   const INSTANCES = new Set();
+  const INSTANCE_BY_SELECT = new WeakMap();
   let refreshScheduled = false;
   let CUSTOM_SELECT_SEQ = 0;
 
@@ -39,6 +40,7 @@
       this._build();
       this._sync();
       INSTANCES.add(this);
+      INSTANCE_BY_SELECT.set(this.el, this);
 
       /* auto-refresh when select options change */
       /* split into two observers so attributeFilter can't suppress childList */
@@ -54,6 +56,10 @@
       this._obsChild?.disconnect();
       this._obsAttr?.disconnect();
       INSTANCES.delete(this);
+      INSTANCE_BY_SELECT.delete(this.el);
+      if (this.wrap.parentNode) {
+        this.wrap.parentNode.insertBefore(this.el, this.wrap);
+      }
       this.wrap.remove();
       /* if panel was orphaned on body, remove it */
       if (this.panel.parentNode !== this.wrap) this.panel.remove();
@@ -390,5 +396,9 @@
     INSTANCES.forEach((instance) => scheduleRefresh(instance));
   }
 
-  window.__customSelect = { CustomSelect, initCustomSelects, refreshAll };
+  function destroy(selectEl) {
+    INSTANCE_BY_SELECT.get(selectEl)?.destroy();
+  }
+
+  window.__customSelect = { CustomSelect, initCustomSelects, refreshAll, destroy };
 })();

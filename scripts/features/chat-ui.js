@@ -573,6 +573,21 @@ function extractImageAttachments(content) {
   return content.filter(function (p) { return p.type === "image_url"; });
 }
 
+function extractTextAttachments(content) {
+  if (!Array.isArray(content)) return [];
+  return content.filter(function (part) { return part?.type === "file_text"; });
+}
+
+function formatAttachmentSize(bytes) {
+  var size = Math.max(0, Number(bytes || 0));
+  var exactBytes = Math.round(size).toLocaleString("zh-CN") + " B";
+  if (size < 1024) return exactBytes;
+  if (size < 1024 * 1024) {
+    return (size / 1024).toFixed(2).replace(/\.?0+$/, "") + " KB (" + exactBytes + ")";
+  }
+  return (size / 1024 / 1024).toFixed(2).replace(/\.?0+$/, "") + " MB (" + exactBytes + ")";
+}
+
 function buildBubbleContent(message) {
   const session = getCurrentSession();
   const sessionMode = session?.mode || SESSION_MODE_STORY;
@@ -1367,10 +1382,46 @@ function buildMessageBlock(message, sessionMode, enableMd) {
         var imgEl = document.createElement("img");
         imgEl.className = "message-image";
         imgEl.src = img.image_url.url;
+        imgEl.alt = "会话图片";
+        imgEl.title = "点击查看大图";
+        imgEl.setAttribute("role", "button");
+        imgEl.tabIndex = 0;
         imgEl.loading = "lazy";
         imgWrap.appendChild(imgEl);
       });
       block.appendChild(imgWrap);
+    }
+
+    var textFiles = extractTextAttachments(message.content);
+    if (textFiles.length) {
+      var fileWrap = document.createElement("div");
+      fileWrap.className = "message-files";
+      textFiles.forEach(function (part) {
+        var file = part.file_text || {};
+        var card = document.createElement("div");
+        card.className = "message-file-card";
+        card._textFile = file;
+        card.setAttribute("role", "button");
+        card.setAttribute("aria-label", "预览 TXT 文件 " + String(file.name || "附件.txt"));
+        card.title = "点击预览 TXT 文件";
+        card.tabIndex = 0;
+
+        var icon = document.createElement("i");
+        icon.setAttribute("data-lucide", "file-text");
+        icon.className = "message-file-icon";
+
+        var copy = document.createElement("span");
+        copy.className = "message-file-copy";
+        var name = document.createElement("strong");
+        name.textContent = String(file.name || "附件.txt");
+        var meta = document.createElement("small");
+        meta.textContent = "TXT · " + formatAttachmentSize(file.size);
+        copy.append(name, meta);
+
+        card.append(icon, copy);
+        fileWrap.appendChild(card);
+      });
+      block.appendChild(fileWrap);
     }
   }
 
@@ -1383,6 +1434,13 @@ function buildMessageBlock(message, sessionMode, enableMd) {
     bubble.innerHTML = `<span class="typing-row"><span></span><span></span><span></span></span>`;
   } else {
     bubble.innerHTML = buildBubbleContent(message);
+    bubble.querySelectorAll("img").forEach(function (image) {
+      image.classList.add("chat-content-image");
+      image.alt = image.alt || "会话图片";
+      image.title = "点击查看大图";
+      image.setAttribute("role", "button");
+      image.tabIndex = 0;
+    });
     if (typeof hljs !== 'undefined' && enableMd) {
       bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
       wrapCodeLines(bubble);

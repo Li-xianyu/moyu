@@ -79,7 +79,20 @@ function estimateChatMessagesTokens(messages) {
     total += 4;
     total += estimateTokens(message?.role || "");
     total += estimateTokens(message?.name || "");
-    total += estimateTokens(message?.content || "");
+    if (Array.isArray(message?.content)) {
+      message.content.forEach(function (part) {
+        if (part?.type === "text") {
+          total += estimateTokens(part.text || "");
+        } else if (part?.type === "file_text") {
+          total += estimateTokens(part.file_text?.name || "");
+          total += estimateTokens(part.file_text?.content || "");
+        } else if (part?.type === "image_url") {
+          total += 85;
+        }
+      });
+    } else {
+      total += estimateTokens(message?.content || "");
+    }
   });
 
   return Math.max(1, total + 2);
@@ -206,6 +219,7 @@ async function createChatCompletion(host, key, model, messages, stream = false, 
 }
 
 async function createChatCompletionPayload(host, key, model, messages, stream = false, temperature = 0.7, extraBody = {}) {
+  const requestMessages = normalizeChatMessagesForRequest(messages);
   const doPayloadFetch = (withTemp) => fetch(`${host}/chat/completions`, {
     method: "POST",
     headers: {
@@ -214,7 +228,7 @@ async function createChatCompletionPayload(host, key, model, messages, stream = 
     },
     body: JSON.stringify({
       model,
-      messages,
+      messages: requestMessages,
       ...(withTemp ? { temperature, stream } : { stream }),
       ...extraBody,
     }),
@@ -315,16 +329,79 @@ function imageFileToBase64(file) {
   });
 }
 
+function textFileToString(file) {
+  return new Promise(function (resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function () { resolve(String(reader.result || "").replace(/^\uFEFF/, "")); };
+    reader.onerror = function () { reject(reader.error); };
+    reader.readAsText(file);
+  });
+}
+
+function normalizeChatMessagesForRequest(messages) {
+  return (messages || []).map(function (message) {
+    if (!Array.isArray(message?.content)) return message;
+    var content = message.content.map(function (part) {
+      if (part?.type !== "file_text") return part;
+      var file = part.file_text || {};
+      var name = String(file.name || "附件.txt").replace(/[\r\n]+/g, " ");
+      return {
+        type: "text",
+        text: [
+          "",
+          "[TXT 文件：" + name + "]",
+          String(file.content || ""),
+          "[TXT 文件结束]",
+        ].join("\n"),
+      };
+    });
+    return Object.assign({}, message, { content: content });
+  });
+}
+
+function getUserContentContextText(content) {
+  if (!Array.isArray(content)) return String(content || "");
+  return content.map(function (part) {
+    if (part?.type === "text") return String(part.text || "");
+    if (part?.type === "image_url") return "[图片附件]";
+    if (part?.type === "file_text") {
+      var file = part.file_text || {};
+      return [
+        "[TXT 文件：" + String(file.name || "附件.txt") + "]",
+        String(file.content || ""),
+        "[TXT 文件结束]",
+      ].join("\n");
+    }
+    return "";
+  }).filter(Boolean).join("\n");
+}
+
 function buildImageContent(attachments, textContent) {
   var parts = [];
   if (textContent && textContent.trim()) {
     parts.push({ type: "text", text: textContent });
   }
   for (var i = 0; i < attachments.length; i++) {
-    parts.push({
-      type: "image_url",
-      image_url: { url: attachments[i].dataUrl },
-    });
+    var attachment = attachments[i];
+    if (attachment.kind === "text") {
+      parts.push({
+        type: "file_text",
+        file_text: {
+          name: attachment.name,
+          content: attachment.content,
+          size: attachment.size,
+          mediaType: attachment.type || "text/plain",
+        },
+      });
+    } else {
+      parts.push({
+        type: "image_url",
+        image_url: {
+          url: attachment.dataUrl,
+          detail: "auto",
+        },
+      });
+    }
   }
   if (parts.length === 1 && parts[0].type === "text") {
     return parts[0].text;

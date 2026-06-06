@@ -128,13 +128,18 @@ select:focus {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  margin-left: auto;
   flex-shrink: 0;
 }
 
 .cs-model-icons .model-cap-icon {
   width: 12px;
   height: 12px;
+  stroke-width: 1.8;
 }
+.cs-model-icons .cap-vision { color: #8b5cf6; }
+.cs-model-icons .cap-tool { color: #f59e0b; }
+.cs-model-icons .cap-reason { color: #06b6d4; }
 
 .cs-model-arrow {
   width: 14px;
@@ -144,12 +149,8 @@ select:focus {
 }
 
 .cs-model-panel {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  z-index: 30;
-  max-height: 240px;
+  z-index: 300;
+  max-height: 300px;
   overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: 8px;

@@ -19,8 +19,7 @@ function beginUserMessageEdit(messageId) {
   state.openUserMessageToolsId = null;
   els.chatInput.disabled = false;
   els.sendBtn.disabled = false;
-  els.chatInput.value = target.content || "";
-  autoResizeChatInput();
+  restoreComposerContent(target.content);
   updateComposerMode();
   queueMicrotask(() => {
     els.chatInput.focus();
@@ -32,6 +31,7 @@ function beginUserMessageEdit(messageId) {
 function clearUserMessageEdit() {
   state.editingUserMessageId = null;
   state.openUserMessageToolsId = null;
+  clearPendingAttachments();
   if (!state.isSending) {
     els.chatInput.value = "";
     autoResizeChatInput();
@@ -64,7 +64,10 @@ function copyMessageContent(messageId, iconEl) {
     }
   };
 
-  copyToClipboard(message.content, showCopied);
+  const copyContent = message.role === "user"
+    ? getUserContentText(message.content)
+    : String(message.content || "");
+  copyToClipboard(copyContent, showCopied);
 }
 
 function cloneLatestTurnVariantValue(value, fallback) {

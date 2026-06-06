@@ -432,7 +432,7 @@ function formatHistoryLine(message) {
   }
 
   if (message.role === "user") {
-    return "{user} " + message.content;
+    return "{user} " + getUserContentContextText(message.content);
   }
   const speaker = String(message.speaker || "NPC").trim();
   return `{npc:${speaker}} ${message.content}`;

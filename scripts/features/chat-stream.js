@@ -509,15 +509,15 @@ function getNpcResponseTemperature(session, model) {
 
 
 function filterUnsupportedMedia(messages, modelName) {
-  if (!window.getModelCapabilities) return messages;
-  var caps = window.getModelCapabilities(modelName);
-  if (caps.input.image) return messages;
+  var caps = window.getModelCapabilities ? window.getModelCapabilities(modelName) : null;
+  var shouldFilterImages = Boolean(caps && caps.known !== false && !caps.input.image && !caps.attachment);
 
-  return messages.map(function (msg) {
+  var filteredMessages = messages.map(function (msg) {
     if (msg.role !== "user" || !Array.isArray(msg.content)) return msg;
 
     var filtered = msg.content.map(function (part) {
-      if (part.type === "image_url" || (part.type === "file" && part.mediaType && part.mediaType.startsWith("image/"))) {
+      if (shouldFilterImages &&
+          (part.type === "image_url" || (part.type === "file" && part.mediaType && part.mediaType.startsWith("image/")))) {
         return { type: "text", text: "⚠️ 当前模型不支持图片输入，已忽略该图片。" };
       }
       return part;
@@ -525,6 +525,54 @@ function filterUnsupportedMedia(messages, modelName) {
 
     return Object.assign({}, msg, { content: filtered });
   });
+
+  return normalizeChatMessagesForRequest(filteredMessages);
+}
+
+function buildChatRequestSummary(model, messages, host) {
+  var images = [];
+  var lastUserParts = [];
+  var lastUserIndex = -1;
+
+  messages.forEach(function (message, messageIndex) {
+    if (message?.role === "user") lastUserIndex = messageIndex;
+    if (!Array.isArray(message?.content)) return;
+    message.content.forEach(function (part) {
+      if (part?.type !== "image_url") return;
+      var url = String(part.image_url?.url || "");
+      var match = url.match(/^data:([^;,]+);base64,(.*)$/s);
+      images.push({
+        messageIndex: messageIndex,
+        mime: match?.[1] || (url.startsWith("http") ? "url" : "unknown"),
+        bytes: match?.[2] ? Math.floor(match[2].length * 3 / 4) : null,
+        detail: part.image_url?.detail || "auto",
+      });
+    });
+  });
+
+  if (lastUserIndex >= 0) {
+    var lastContent = messages[lastUserIndex].content;
+    lastUserParts = Array.isArray(lastContent)
+      ? lastContent.map(function (part) { return part?.type || "unknown"; })
+      : ["text"];
+  }
+
+  return {
+    model: model,
+    endpoint: String(host || "").replace(/\/+$/, "") + "/chat/completions",
+    messageCount: messages.length,
+    imageCount: images.length,
+    images: images,
+    lastUserIndex: lastUserIndex,
+    lastUserParts: lastUserParts,
+  };
+}
+
+function isSameModelSnapshot(requestedModel, responseModel) {
+  var requested = String(requestedModel || "").toLowerCase();
+  var response = String(responseModel || "").toLowerCase();
+  if (requested === response) return true;
+  return response.startsWith(requested + "-20");
 }
 
 
@@ -535,6 +583,31 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   }
 
   const targetConfig = resolveModelConfig(configId, model, session.configId);
+  const hasImageContent = messages.some(function (message) {
+    return Array.isArray(message?.content) && message.content.some(function (part) {
+      return part?.type === "image_url"
+        || (part?.type === "file" && String(part.mediaType || "").startsWith("image/"));
+    });
+  });
+  if (hasImageContent && typeof window.modelCapabilitiesReady === "function") {
+    await Promise.race([
+      window.modelCapabilitiesReady(),
+      new Promise(function (resolve) { setTimeout(resolve, 800); }),
+    ]);
+  }
+  if (hasImageContent) {
+    var lastUserIndex = -1;
+    for (var messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+      if (messages[messageIndex]?.role === "user") {
+        lastUserIndex = messageIndex;
+        break;
+      }
+    }
+    messages.splice(lastUserIndex >= 0 ? lastUserIndex : messages.length, 0, {
+      role: "system",
+      content: "当前用户消息包含图片输入。请直接查看并分析图片内容，不要声称未收到附件。",
+    });
+  }
 
   // Defer reveal: buffer initial stream content, show meta + first chunk together
   let streamRevealed = false;
@@ -559,9 +632,10 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   const shouldTrackUsage = getSessionSetting(session, "showTokenDisplay") !== false;
 
   const buildStreamBody = (withUsage, withTemp = true) => {
+    const filteredMessages = filterUnsupportedMedia(messages, model);
     const body = {
       model,
-      messages: filterUnsupportedMedia(messages, model),
+      messages: filteredMessages,
       stream: true,
     };
     if (withTemp) {
@@ -577,6 +651,8 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
     if (thinkingExtra.thinking) {
       body.thinking = thinkingExtra.thinking;
     }
+    window.__lastChatRequestSummary = buildChatRequestSummary(model, filteredMessages, targetConfig.host);
+    debugLog("npc", "最终请求结构", window.__lastChatRequestSummary);
     return body;
   };
 
@@ -677,6 +753,19 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
 
         try {
           const data = JSON.parse(payload);
+          if (data?.model) {
+            window.__lastChatRequestSummary.responseModel = data.model;
+            if (
+              window.__lastChatRequestSummary.imageCount > 0
+              && !isSameModelSnapshot(model, data.model)
+            ) {
+              window.__lastChatRequestSummary.modelRemapped = true;
+              debugWarn("[MOYU] 图片请求的返回模型与请求模型不同", {
+                requestedModel: model,
+                responseModel: data.model,
+              });
+            }
+          }
           const usage = normalizeUsage(data?.usage);
           if (usage) {
             targetMessage.usage = usage;
@@ -769,6 +858,11 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
             if (!payload || payload === "[DONE]") continue;
             try {
               const data = JSON.parse(payload);
+              if (data?.model) {
+                window.__lastChatRequestSummary.responseModel = data.model;
+                window.__lastChatRequestSummary.modelRemapped =
+                  !isSameModelSnapshot(model, data.model);
+              }
               const usage = normalizeUsage(data?.usage);
               if (usage) {
                 targetMessage.usage = usage;
@@ -833,13 +927,6 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   persistSessions();
   renderMessages({ stickToBottom: true });
 }
-
-
-
-
-
-
-
 
 
 

@@ -971,6 +971,12 @@ function buildModelCapabilityIcons(modelName) {
 }
 
 function buildCustomModelDropdown(select) {
+  if (typeof select.__modelDropdownCleanup === "function") {
+    select.__modelDropdownCleanup();
+  }
+  window.__customSelect?.destroy?.(select);
+  select.dataset.csEnhanced = "true";
+
   var existing = select.parentNode.querySelector(".cs-model-wrap");
   if (existing) existing.remove();
 
@@ -985,12 +991,33 @@ function buildCustomModelDropdown(select) {
 
   var panel = document.createElement("div");
   panel.className = "cs-model-panel hidden";
+  panel.__closeModelPanel = closePanel;
+
+  function positionPanel() {
+    var rect = trigger.getBoundingClientRect();
+    var viewportWidth = document.documentElement.clientWidth;
+    var viewportHeight = document.documentElement.clientHeight;
+    var gap = 4;
+    var edge = 8;
+    var spaceBelow = viewportHeight - rect.bottom - gap - edge;
+    var spaceAbove = rect.top - gap - edge;
+    var openUpward = spaceBelow < 160 && spaceAbove > spaceBelow;
+    var maxHeight = Math.max(80, Math.min(300, openUpward ? spaceAbove : spaceBelow));
+    var width = Math.min(rect.width, viewportWidth - edge * 2);
+    var left = Math.min(Math.max(edge, rect.left), viewportWidth - width - edge);
+    var top = openUpward ? rect.top - gap - maxHeight : rect.bottom + gap;
+    panel.style.position = "fixed";
+    panel.style.top = top + "px";
+    panel.style.left = left + "px";
+    panel.style.width = width + "px";
+    panel.style.maxHeight = maxHeight + "px";
+    panel.style.bottom = "auto";
+  }
 
   function getSelectedModelName() {
     var opt = select.options[select.selectedIndex];
     if (!opt || !opt.value) return null;
-    var parts = opt.value.split(":::");
-    return parts[0] || null;
+    return parseModelOptionValue(opt.value).model || null;
   }
 
   function renderTrigger() {
@@ -1009,11 +1036,7 @@ function buildCustomModelDropdown(select) {
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "cs-model-opt" + (opt.value === select.value ? " cs-model-opt-sel" : "");
-      var name = null;
-      if (opt.value) {
-        var parts = opt.value.split(":::");
-        name = parts[0] || null;
-      }
+      var name = opt.value ? parseModelOptionValue(opt.value).model : null;
       var icons = name ? buildModelCapabilityIcons(name) : "";
       btn.innerHTML = '<span class="cs-model-text">' + escapeHtml(opt.text) + '</span><span class="cs-model-icons">' + icons + '</span>';
       btn.dataset.value = opt.value;
@@ -1022,30 +1045,52 @@ function buildCustomModelDropdown(select) {
         select.value = this.dataset.value;
         select.dispatchEvent(new Event("change", { bubbles: true }));
         renderTrigger();
-        panel.classList.add("hidden");
+        closePanel();
       });
       panel.appendChild(btn);
     }
-    lucide.createIcons({ nodes: [panel] });
   }
 
   trigger.addEventListener("click", function (e) {
     e.stopPropagation();
     var isOpen = !panel.classList.contains("hidden");
-    document.querySelectorAll(".cs-model-panel").forEach(function (p) { p.classList.add("hidden"); });
+    document.querySelectorAll(".cs-model-panel").forEach(function (p) {
+      if (p !== panel) p.__closeModelPanel?.();
+    });
     if (!isOpen) {
+      document.body.appendChild(panel);
       renderPanel();
+      positionPanel();
       panel.classList.remove("hidden");
+      lucide.createIcons({ nodes: [panel] });
+      window.addEventListener("scroll", positionPanel, true);
+      window.addEventListener("resize", positionPanel);
+      window.visualViewport?.addEventListener("scroll", positionPanel);
+      window.visualViewport?.addEventListener("resize", positionPanel);
     }
   });
 
-  document.addEventListener("click", function () {
+  function closePanel() {
     panel.classList.add("hidden");
-  });
+    window.removeEventListener("scroll", positionPanel, true);
+    window.removeEventListener("resize", positionPanel);
+    window.visualViewport?.removeEventListener("scroll", positionPanel);
+    window.visualViewport?.removeEventListener("resize", positionPanel);
+  }
+
+  document.addEventListener("click", closePanel);
 
   wrap.appendChild(trigger);
   wrap.appendChild(panel);
   select.parentNode.insertBefore(wrap, select.nextSibling);
+
+  select.__modelDropdownCleanup = function () {
+    closePanel();
+    document.removeEventListener("click", closePanel);
+    panel.remove();
+    wrap.remove();
+    delete select.__modelDropdownCleanup;
+  };
 
   renderTrigger();
   lucide.createIcons({ nodes: [wrap] });

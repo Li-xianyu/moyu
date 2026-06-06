@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "2026.6.6.27";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.6.6.29";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -1240,7 +1240,7 @@
                       </span>
                     </span>
                   </button>
-                  <button id="attachImageBtn" class="attach-image-btn" type="button" aria-label="附加图片" data-i18n-aria-label="chat.attachImage" data-i18n-title="chat.attachImage"><i data-lucide="paperclip"></i></button>
+                  <button id="attachImageBtn" class="attach-image-btn" type="button" aria-label="附加图片或 TXT 文件" data-i18n-aria-label="chat.attachImage" data-i18n-title="chat.attachImage"><i data-lucide="paperclip"></i></button>
                   <button id="thinkingToggleBtn" class="thinking-toggle-btn" type="button" data-i18n="chat.thinkingSettings">思考设置</button>
                   <div id="thinkingDepthWrap" class="thinking-depth-wrap hidden">
                     <button id="thinkingDepthBtn" class="thinking-depth-btn" type="button">中</button>
@@ -1429,6 +1429,6 @@
     })();
   </script>
   <div id="toastContainer" class="toast-container"></div>
-  <input type="file" id="imageFileInput" accept="image/*" multiple hidden>
+  <input type="file" id="imageFileInput" accept="image/png,image/jpeg,image/webp,image/gif,text/plain,.txt" multiple hidden>
 </body>
 </html>

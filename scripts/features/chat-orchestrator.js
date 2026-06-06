@@ -1038,13 +1038,23 @@ async function runSessionTurn(session) {
     const userMsgs = session.messages.filter((m) => m.role === "user");
     const lastUser = userMsgs[userMsgs.length - 1];
     if (lastUser) {
-        const mention = resolveDirectMentionTarget(session, lastUser.content);
+      const lastUserText = getUserContentText(lastUser.content);
+      const mention = resolveDirectMentionTarget(session, lastUserText);
       if (mention?.npc) {
         const targetNpc = mention.npc;
-        const before = lastUser.content.slice(0, mention.atPos);
-        const after = lastUser.content.slice(mention.endPos);
+        const before = lastUserText.slice(0, mention.atPos);
+        const after = lastUserText.slice(mention.endPos);
         const strippedContent = `${before} ${after}`.replace(/\s+/g, " ").trim();
-        lastUser.content = strippedContent || lastUser.content;
+        if (Array.isArray(lastUser.content)) {
+          var textPart = lastUser.content.find(function (part) { return part?.type === "text"; });
+          if (textPart) {
+            textPart.text = strippedContent;
+          } else if (strippedContent) {
+            lastUser.content.unshift({ type: "text", text: strippedContent });
+          }
+        } else {
+          lastUser.content = strippedContent || lastUser.content;
+        }
         try {
           setInlineChatStatus(`${targetNpc.name} 正在回复...`);
           await callNpc(session, targetNpc, {});
@@ -2265,7 +2275,7 @@ function getLatestUserMessageText(session) {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     const message = messages[i];
     if (message && message.role === "user" && message.content) {
-      return String(message.content || "");
+      return getUserContentText(message.content);
     }
   }
   return "";

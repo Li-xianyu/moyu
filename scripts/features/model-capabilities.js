@@ -2,6 +2,7 @@
 
 (function () {
   var CACHE_KEY = "moyu_model_capabilities";
+  var CACHE_VERSION = 2;
   var CACHE_TTL = 24 * 60 * 60 * 1000;
   var API_URL = "https://models.dev/api.json";
 
@@ -43,6 +44,7 @@
     input.text = true;
     output.text = true;
     return {
+      known: false,
       attachment: false,
       reasoning: false,
       tool_call: false,
@@ -61,6 +63,7 @@
       (raw.modalities.output || []).forEach(function (k) { if (output.hasOwnProperty(k)) output[k] = true; });
     }
     return {
+      known: true,
       attachment: Boolean(raw.attachment),
       reasoning: Boolean(raw.reasoning),
       tool_call: Boolean(raw.tool_call),
@@ -72,11 +75,23 @@
 
   function flattenCatalog(raw) {
     var flat = {};
-    Object.keys(raw).forEach(function (key) {
-      var entry = raw[key];
+    Object.keys(raw).forEach(function (providerId) {
+      var entry = raw[providerId];
       if (!entry || typeof entry !== "object") return;
+      // Top-level model entry (flat format)
       if (entry.modalities || entry.attachment !== undefined) {
-        flat[key] = entry;
+        flat[providerId] = entry;
+        return;
+      }
+      // Provider entry with nested models: { id, models: { modelId: data } }
+      if (entry.models && typeof entry.models === "object") {
+        Object.keys(entry.models).forEach(function (modelId) {
+          var model = entry.models[modelId];
+          if (model && typeof model === "object" && (model.modalities || model.attachment !== undefined)) {
+            flat[modelId] = model;
+            flat[providerId + "/" + modelId] = model;
+          }
+        });
       }
     });
     return flat;
@@ -87,7 +102,7 @@
       var raw = localStorage.getItem(CACHE_KEY);
       if (!raw) return null;
       var cached = JSON.parse(raw);
-      if (Date.now() - cached.ts > CACHE_TTL) {
+      if (cached.version !== CACHE_VERSION || Date.now() - cached.ts > CACHE_TTL) {
         localStorage.removeItem(CACHE_KEY);
         return null;
       }
@@ -99,7 +114,7 @@
 
   function saveCache(data) {
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: data }));
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ version: CACHE_VERSION, ts: Date.now(), data: data }));
     } catch (_) {}
   }
 
@@ -111,7 +126,10 @@
       return Promise.resolve(_catalog);
     }
     _fetchPromise = fetch(API_URL)
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
       .then(function (raw) {
         _catalog = flattenCatalog(raw);
         saveCache(_catalog);
@@ -128,14 +146,22 @@
 
   function resolveModel(modelName) {
     if (!_catalog) return null;
-    if (_catalog[modelName]) return _catalog[modelName];
-    if (ALIASES[modelName] && _catalog[ALIASES[modelName]]) {
-      return _catalog[ALIASES[modelName]];
+    var name = String(modelName || "").trim();
+    if (!name) return null;
+    if (_catalog[name]) return _catalog[name];
+    if (ALIASES[name] && _catalog[ALIASES[name]]) {
+      return _catalog[ALIASES[name]];
     }
-    var suffix = "/" + modelName;
+    var bareName = name.includes("/") ? name.slice(name.lastIndexOf("/") + 1) : name;
+    if (_catalog[bareName]) return _catalog[bareName];
+    var lowerName = name.toLowerCase();
+    var lowerBareName = bareName.toLowerCase();
     var keys = Object.keys(_catalog);
     for (var i = 0; i < keys.length; i++) {
-      if (keys[i].endsWith(suffix)) return _catalog[keys[i]];
+      var lowerKey = keys[i].toLowerCase();
+      if (lowerKey === lowerName || lowerKey === lowerBareName || lowerKey.endsWith("/" + lowerBareName)) {
+        return _catalog[keys[i]];
+      }
     }
     return null;
   }
@@ -149,6 +175,14 @@
   window.modelSupportsImage = function (modelName) {
     var caps = window.getModelCapabilities(modelName);
     return caps.input.image || caps.attachment;
+  };
+
+  window.isModelCapabilityKnown = function (modelName) {
+    return Boolean(resolveModel(modelName));
+  };
+
+  window.modelCapabilitiesReady = function () {
+    return fetchCatalog();
   };
 
   window.modelSupportsToolCall = function (modelName) {

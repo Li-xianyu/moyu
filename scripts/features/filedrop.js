@@ -67,6 +67,10 @@ function handleDroppedFile(file) {
 }
 
 function getDropContext() {
+  const chatView = document.getElementById("chatView");
+  if (chatView?.classList.contains("active") && getCurrentSession()) {
+    return "chat";
+  }
   const settingsView = document.getElementById("settingsView");
   if (settingsView?.classList.contains("active")) {
     if (state.currentSettingsSection === "global") return "global";
@@ -88,7 +92,13 @@ function bindFileDrop() {
     dragCounter++;
     if (dragCounter === 1) {
       const context = getDropContext();
-      const key = context === "global" ? "drop.overlayGlobal" : context === "session" ? "drop.overlaySession" : "drop.overlayAuto";
+      const key = context === "chat"
+        ? "drop.overlayChatAttachment"
+        : context === "global"
+          ? "drop.overlayGlobal"
+          : context === "session"
+            ? "drop.overlaySession"
+            : "drop.overlayAuto";
       if (els.dropOverlayText) {
         els.dropOverlayText.textContent = t(key);
       }
@@ -125,6 +135,19 @@ function bindFileDrop() {
 
     const files = event.dataTransfer?.files;
     if (!files?.length) return;
+
+    if (getDropContext() === "chat") {
+      const attachments = Array.from(files).filter(isSupportedChatAttachment);
+      if (!attachments.length) {
+        setText(els.chatStatus, "仅支持 PNG、JPEG、WEBP、GIF 图片或 TXT 文件");
+        return;
+      }
+      addAttachments(attachments);
+      if (attachments.length < files.length) {
+        setText(els.chatStatus, "已添加支持的附件，其余文件已忽略");
+      }
+      return;
+    }
 
     const file = files[0];
     const name = file.name.toLowerCase();
