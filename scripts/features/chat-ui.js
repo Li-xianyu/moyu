@@ -1729,23 +1729,20 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
       : null;
 
     if (skillData) {
-      const existingCard = block.querySelector('.skill-card');
+      const existingCard = block.querySelector('.skill-bubble');
       if (existingCard) {
-        // 更新现有卡片内容
-        const titleEl = existingCard.querySelector('.skill-card-title');
+        const titleEl = existingCard.querySelector('.skill-bubble-name');
         if (titleEl) {
-          const safeName = typeof escapeHtml === "function" ? escapeHtml(skillData.skill_name) : skillData.skill_name;
-          titleEl.textContent = safeName;
+          titleEl.textContent = typeof escapeHtml === "function" ? escapeHtml(skillData.skill_name) : skillData.skill_name;
         }
-        const progressEl = existingCard.querySelector('.skill-card-progress');
-        if (progressEl) {
-          progressEl.textContent = `(${skillData.step}/${skillData.total_steps})`;
+        const stepEl = existingCard.querySelector('.skill-bubble-step');
+        if (stepEl) {
+          stepEl.textContent = `(${skillData.step}/${skillData.total_steps})`;
         }
-        const questionEl = existingCard.querySelector('.skill-card-question');
+        const questionEl = existingCard.querySelector('.skill-bubble-question');
         if (questionEl) {
           questionEl.textContent = skillData.question;
         }
-        existingCard.dataset.step = skillData.step;
       } else {
         const card = typeof renderSkillCard === "function"
           ? renderSkillCard(skillData, message.id)
@@ -1767,7 +1764,7 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
       : null;
 
     if (skillResult) {
-      const existingCard = block.querySelector('.skill-card');
+      const existingCard = block.querySelector('.skill-bubble.skill-bubble-result');
       if (!existingCard) {
         const resultCard = typeof renderSkillResult === "function"
           ? renderSkillResult(skillResult)
@@ -2579,6 +2576,7 @@ window.__prepareAutoTtsTurn = prepareAutoTtsTurn;
 window.__cancelAutoTtsTurn = cancelTtsSession;
 
 function syncStreamingTtsForMessage(message) {
+  if (typeof isSkillMessage === "function" && message?.content && isSkillMessage(message.content)) return;
   var session = _ttsSession;
   if (!message || message.role !== "assistant") {
     return;

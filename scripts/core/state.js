@@ -89,7 +89,6 @@ const els = {
     create: document.getElementById("createView"),
     chat: document.getElementById("chatView"),
     roles: document.getElementById("rolesView"),
-    skills: document.getElementById("skillsView"),
   },
   globalSettingsTabBtn: document.getElementById("globalSettingsTabBtn"),
   assistantSettingsTabBtn: document.getElementById("assistantSettingsTabBtn"),

@@ -451,15 +451,8 @@ function bindNav() {
         await ensureRolesStylesLoaded();
         await _loadScript("./scripts/features/roles.js");
         initRolesView();
-      } else if (view === "skills") {
-        if (typeof initSkillsView !== "function") {
-          await _loadScript("./scripts/features/chat-skill.js");
-        }
-        if (typeof initSkillsView === "function") {
-          initSkillsView();
-        }
       }
-      switchView(view);
+      if (view) switchView(view);
     });
     if (button.dataset.view === "settings") {
       ["pointerenter", "focus", "touchstart"].forEach((eventName) => {
@@ -467,6 +460,16 @@ function bindNav() {
       });
     }
   });
+
+  // 技能二级侧栏切换
+  const skillsToggleBtn = document.getElementById("skillsToggleBtn");
+  if (skillsToggleBtn) {
+    skillsToggleBtn.addEventListener("click", () => {
+      if (typeof toggleSkillSidebar === "function") {
+        toggleSkillSidebar();
+      }
+    });
+  }
 
   applySidebarState();
 }
