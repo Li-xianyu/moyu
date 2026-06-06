@@ -1071,6 +1071,9 @@
                       if (m.toolTrace) msg.toolTrace = m.toolTrace;
                       if (m.toolTraceExpanded) msg.toolTraceExpanded = true;
                       if (m.thinkingExpanded) msg.thinkingExpanded = true;
+                      if (m._noBubble) msg._noBubble = true;
+                      if (m._skillContinuationOf) msg._skillContinuationOf = m._skillContinuationOf;
+                      if (m._skillAnswer) msg._skillAnswer = { ...m._skillAnswer };
                       msgs[i] = msg;
                     }
                     // 重建完整 session 对象
@@ -1183,6 +1186,9 @@
                 toolTrace: m.toolTrace || null,
                 toolTraceExpanded: Boolean(m.toolTraceExpanded),
                 thinkingExpanded: Boolean(m.thinkingExpanded),
+                _noBubble: Boolean(m._noBubble),
+                _skillContinuationOf: m._skillContinuationOf || "",
+                _skillAnswer: m._skillAnswer ? { ...m._skillAnswer } : null,
               });
             }
             count++;

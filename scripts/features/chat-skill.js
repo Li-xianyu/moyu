@@ -354,7 +354,7 @@ function renderSkillResult(skillResult) {
   return card;
 }
 
-function handleSkillAnswer(skillName, step, optionId, optionText, customText, messageId, question) {
+async function handleSkillAnswer(skillName, step, optionId, optionText, customText, messageId, question) {
   const label = optionId === "custom" ? customText : optionText;
   const text = "[技能回答] " + skillName + " 第" + step + "步: " + label;
 
@@ -406,6 +406,35 @@ function handleSkillAnswer(skillName, step, optionId, optionText, customText, me
     _noBubble: true,
   };
   session.messages.push(msg);
+  if (window.__chatDB) {
+    try {
+      if (sourceMessage && window.__chatDB.updateMessage) {
+        await window.__chatDB.updateMessage(
+          session.id,
+          sourceMessage,
+          typeof getMessageSequenceInSession === "function"
+            ? getMessageSequenceInSession(session, sourceMessage)
+            : 0
+        );
+      }
+      if (window.__chatDB.appendMessage) {
+        await window.__chatDB.appendMessage(session.id, msg);
+      } else if (window.__chatDB.saveMessage) {
+        await window.__chatDB.saveMessage(
+          session.id,
+          msg,
+          typeof getMessageSequenceInSession === "function"
+            ? getMessageSequenceInSession(session, msg)
+            : Math.max(0, session.messages.length - 1)
+        );
+      }
+      if (window.__chatDB.updateSessionMeta) {
+        await window.__chatDB.updateSessionMeta(session);
+      }
+    } catch (error) {
+      debugWarn("[skill] save answer failed", error);
+    }
+  }
   if (typeof persistSessions === "function") persistSessions();
 
   // 触发 AI 响应

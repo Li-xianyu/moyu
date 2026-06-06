@@ -1444,6 +1444,11 @@ function refreshNarrationNode(wrapper, message) {
 }
 
 /* ---- Message block helpers ---- */
+function shouldHideSkillGroupTools(message, session = getCurrentSession()) {
+  if (!message?.id || !Array.isArray(session?.messages)) return false;
+  return session.messages.some((candidate) => candidate?._skillContinuationOf === message.id);
+}
+
 function buildMessageBlock(message, sessionMode, enableMd) {
   const block = document.createElement("article");
   const isAgentPlainBlock = sessionMode === SESSION_MODE_WORK && message.role === "assistant";
@@ -1605,7 +1610,9 @@ function buildMessageBlock(message, sessionMode, enableMd) {
       if (transcript) block.appendChild(transcript);
 
       bindInlineMetaToggles(block, message);
-      if (message.id && !message.pending) block.appendChild(buildMessageTools(message));
+      if (message.id && !message.pending && !shouldHideSkillGroupTools(message)) {
+        block.appendChild(buildMessageTools(message));
+      }
       return block;
     }
   }
@@ -1614,7 +1621,7 @@ function buildMessageBlock(message, sessionMode, enableMd) {
 
   bindInlineMetaToggles(block, message);
 
-  if (message.id && !message.pending) {
+  if (message.id && !message.pending && !shouldHideSkillGroupTools(message)) {
     block.appendChild(buildMessageTools(message));
   }
 
@@ -1801,7 +1808,10 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
 
   // 4. Build tools section if it doesn't exist yet (pending → done transition)
   const existingTools = block.querySelector('.message-tools');
-  if (message.id && !message.pending) {
+  const hideSkillGroupTools = shouldHideSkillGroupTools(message);
+  if (hideSkillGroupTools && existingTools) {
+    existingTools.remove();
+  } else if (!hideSkillGroupTools && message.id && !message.pending) {
     if (!existingTools) {
       const tools = buildMessageTools(message);
       block.appendChild(tools);

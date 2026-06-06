@@ -773,19 +773,30 @@
 
 .skill-answer-transcript {
   display: grid;
-  gap: 4px;
-  margin: 4px 0 10px;
+  justify-items: start;
+  width: 100%;
+  max-width: min(100%, 720px);
+  gap: 6px;
+  margin: 6px 0 12px;
   line-height: 1.55;
+  text-align: left;
   white-space: pre-wrap;
 }
 
 .skill-answer-question {
-  color: var(--text-muted);
+  width: 100%;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
 }
 
 .skill-answer-response {
-  color: var(--text-primary);
-  font-weight: 500;
+  width: 100%;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
 }
 
 .message-meta {
