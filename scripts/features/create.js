@@ -1423,6 +1423,9 @@ async function saveSessionEdits(payload, activeConfig) {
       }
     }
   }
+  const oldPromptMap = new Map(
+    (session.npcs || []).map((npc) => [npc.name, npc.prompt || ""])
+  );
   session.npcs = payload.npcs.map(({ originalName, ...npc }) => ({ ...npc }));
   session.transientNpcs = (session.transientNpcs || []).filter((npc) => !session.npcs.some((baseNpc) => baseNpc.name === npc.name));
   // Clean up orphaned agentParams keys (NPCs renamed or removed)
@@ -1437,9 +1440,6 @@ async function saveSessionEdits(payload, activeConfig) {
   }
   // 比较新旧设定
   const globalPromptChanged = originalGlobalPrompt !== (payload.globalPrompt || "");
-  const oldPromptMap = new Map(
-    (session.npcs || []).map((npc) => [npc.name, npc.prompt || ""])
-  );
   const npcPromptChanged = payload.npcs.some((newNpc) => {
     const oldPrompt = oldPromptMap.get(newNpc.name) || "";
     const newPrompt = newNpc.prompt || "";
