@@ -553,7 +553,14 @@ function renderModelCache() {
   filteredModels.forEach((model) => {
     const item = document.createElement("li");
     item.className = `model-list-item ${selected.has(model) ? "selected" : ""}`.trim();
-    item.textContent = model;
+    const caps = window.getModelCapabilities ? window.getModelCapabilities(model) : null;
+    let icons = '';
+    if (caps) {
+      if (caps.input.image) icons += '<i data-lucide="eye" class="model-cap-icon cap-vision"></i>';
+      if (caps.tool_call) icons += '<i data-lucide="wrench" class="model-cap-icon cap-tool"></i>';
+      if (caps.reasoning) icons += '<i data-lucide="brain" class="model-cap-icon cap-reason"></i>';
+    }
+    item.innerHTML = `<span class="model-list-name">${escapeHtml(model)}</span><span class="model-cap-icons">${icons}</span>`;
     item.addEventListener("click", () => {
       if (!activeConfig) {
         return;
@@ -572,6 +579,7 @@ function renderModelCache() {
     });
     els.modelList.appendChild(item);
   });
+  lucide.createIcons();
 }
 
 function renderWorkModels() {
@@ -613,13 +621,13 @@ function renderWorkModels() {
       const item = document.createElement("div");
       item.className = "work-model-item";
       const caps = window.getModelCapabilities ? window.getModelCapabilities(model) : null;
-      let tags = "";
+      let icons = "";
       if (caps) {
-        if (caps.input.image) tags += `<span class="model-cap-tag" title="支持图片">📷</span>`;
-        if (caps.tool_call) tags += `<span class="model-cap-tag" title="工具调用">🔧</span>`;
-        if (caps.reasoning) tags += `<span class="model-cap-tag" title="推理模式">🧠</span>`;
+        if (caps.input.image) icons += `<i data-lucide="eye" class="model-cap-icon cap-vision"></i>`;
+        if (caps.tool_call) icons += `<i data-lucide="wrench" class="model-cap-icon cap-tool"></i>`;
+        if (caps.reasoning) icons += `<i data-lucide="brain" class="model-cap-icon cap-reason"></i>`;
       }
-      item.innerHTML = `<span class="work-model-name">${escapeHtml(model)}</span>${tags}`;
+      item.innerHTML = `<span class="work-model-name">${escapeHtml(model)}</span><span class="model-cap-icons">${icons}</span>`;
       item.addEventListener("click", () => {
         config.workModels = (config.workModels || []).filter((name) => name !== model);
         persistSettings();
@@ -632,6 +640,7 @@ function renderWorkModels() {
 
     els.workModelList.appendChild(group);
   });
+  lucide.createIcons();
 }
 
 function getActiveConfigModels() {

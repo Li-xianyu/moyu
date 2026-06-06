@@ -904,6 +904,8 @@ html[data-theme="light"] .settings-danger-btn:hover {
 }
 
 .model-list-item {
+  display: flex;
+  align-items: center;
   cursor: pointer;
   user-select: none;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
@@ -1268,10 +1270,29 @@ html[data-theme="light"] .settings-danger-btn:hover {
   }
 }
 
-.model-cap-tag {
+.model-cap-icons {
   display: inline-flex;
   align-items: center;
-  font-size: 10px;
-  margin-left: 4px;
-  opacity: 0.6;
+  gap: 3px;
+  margin-left: auto;
+  padding-left: 8px;
+  flex-shrink: 0;
+}
+
+.model-cap-icon {
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.8;
+}
+
+.model-cap-icon.cap-vision {
+  color: #8b5cf6;
+}
+
+.model-cap-icon.cap-tool {
+  color: #f59e0b;
+}
+
+.model-cap-icon.cap-reason {
+  color: #06b6d4;
 }
