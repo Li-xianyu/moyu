@@ -109,6 +109,7 @@ function bindChat() {
       touchSession(session);
       persistSessions();
       updateModelThinkingBtn();
+      updateThinkingDepthVisibility();
     });
   }
   updateModelThinkingBtn();
@@ -153,6 +154,7 @@ function bindChat() {
       }
     }
   });
+  initThinkingDepthSelector();
   els.chatInput.addEventListener("keydown", (event) => {
     // @mention popup navigation takes priority
     if (mentionState) {
@@ -897,14 +899,19 @@ function updateThinkingToggleMode() {
     els.thinkingPopover.classList.remove("visible");
     els.thinkingToggleBtn.classList.remove("active");
   }
+  updateThinkingDepthVisibility();
 }
 
 function getModelThinkingState() {
   return getSessionSetting("modelThinking") || "disabled";
 }
 
+function getModelThinkingDepth() {
+  return getSessionSetting("modelThinkingDepth") || "medium";
+}
+
 function buildModelThinkingExtra(modelName) {
-  return buildThinkingExtra(modelName, getModelThinkingState());
+  return buildThinkingExtra(modelName, getModelThinkingState(), getModelThinkingDepth());
 }
 
 function shouldRenderThinkingForModel(modelName) {
@@ -913,6 +920,55 @@ function shouldRenderThinkingForModel(modelName) {
     return false;
   }
   return true;
+}
+
+function getActiveWorkModel() {
+  var session = getCurrentSession();
+  if (!session) return null;
+  if (session.directorModel) return session.directorModel;
+  var npcs = session.npcs || [];
+  if (npcs.length === 1) return npcs[0].model;
+  return null;
+}
+
+function updateThinkingDepthVisibility() {
+  if (!els.thinkingDepthWrap) return;
+  var session = getCurrentSession();
+  var singleModel = isSingleModelWorkSession(session);
+  var enabled = getSessionSetting(session, "modelThinking") === "enabled";
+  var model = getActiveWorkModel();
+  var supports = singleModel && enabled && model && typeof modelSupportsReasoningDepth === "function" && modelSupportsReasoningDepth(model);
+  els.thinkingDepthWrap.classList.toggle("hidden", !supports);
+  if (supports) {
+    var depth = getSessionSetting(session, "modelThinkingDepth") || "medium";
+    els.thinkingDepthBtn.textContent = REASONING_DEPTH_LABELS[depth] || depth;
+  }
+}
+
+function initThinkingDepthSelector() {
+  if (!els.thinkingDepthBtn) return;
+  els.thinkingDepthBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (!els.thinkingDepthDropdown) return;
+    els.thinkingDepthDropdown.classList.toggle("hidden");
+  });
+  if (els.thinkingDepthDropdown) {
+    els.thinkingDepthDropdown.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var option = e.target.closest(".thinking-depth-option");
+      if (!option) return;
+      var depth = option.dataset.depth;
+      var session = getCurrentSession();
+      if (session) {
+        setSessionSettingOverride(session, "modelThinkingDepth", depth);
+      }
+      els.thinkingDepthBtn.textContent = REASONING_DEPTH_LABELS[depth] || depth;
+      els.thinkingDepthDropdown.classList.add("hidden");
+    });
+  }
+  document.addEventListener("click", function () {
+    if (els.thinkingDepthDropdown) els.thinkingDepthDropdown.classList.add("hidden");
+  });
 }
 
 // 移动端会话消息区底部超拖弹性效果

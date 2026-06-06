@@ -126,9 +126,10 @@ function buildMessageTokenLabel(message) {
 
 function supportsThinkingParam(modelName) {
   const name = (modelName || "").toLowerCase();
-  // nothinking 系列模型明确不支持 thinking 参数
   if (name.includes("nothinking")) return false;
-  return name.includes("deepseek") || name.includes("claude") || name.includes("doubao") || name.includes("chatgpt");
+  return name.includes("deepseek") || name.includes("claude") || name.includes("doubao") || name.includes("chatgpt")
+    || name.includes("o1") || name.includes("o3") || name.includes("o4")
+    || name.includes("gemini");
 }
 
 function isClaudeAdaptiveThinkingModel(modelName) {
@@ -136,26 +137,67 @@ function isClaudeAdaptiveThinkingModel(modelName) {
   return (
     name.includes("claude-opus-4-6") ||
     name.includes("claude-opus-4-7") ||
+    name.includes("claude-opus-4-8") ||
     name.includes("claude-sonnet-4-6")
   );
 }
 
-function buildThinkingExtra(modelName, value) {
+function detectThinkingProvider(modelName) {
+  const name = (modelName || "").toLowerCase();
+  if (name.includes("deepseek")) return "deepseek";
+  if (name.includes("claude") || name.includes("anthropic")) return "claude";
+  if (name.includes("doubao") || name.includes("volc") || name.includes("ark")) return "doubao";
+  if (name.includes("gemini") || name.includes("google")) return "google";
+  if (name.includes("o1") || name.includes("o3") || name.includes("o4") || name.includes("gpt") || name.includes("chatgpt") || name.includes("openai")) return "openai";
+  return null;
+}
+
+var REASONING_DEPTH_LABELS = { low: "低", medium: "中", high: "高" };
+
+function buildThinkingExtra(modelName, value, depth) {
   if (!supportsThinkingParam(modelName)) return {};
-  // value can be boolean (director: true/false) or string (model: "auto"/"enabled"/"disabled")
   let type = "disabled";
   if (value === true || value === "enabled") type = "enabled";
   else if (value === "auto") type = "auto";
-  if (type !== "disabled" && isClaudeAdaptiveThinkingModel(modelName)) {
-    return {
-      thinking: {
-        type: "adaptive",
-        effort: type === "enabled" ? "medium" : "minimal",
-        display: "summarized",
-      },
-    };
+  if (type === "disabled") return { thinking: { type: "disabled" } };
+
+  var provider = detectThinkingProvider(modelName);
+  var d = depth || "medium";
+
+  if (provider === "claude") {
+    if (isClaudeAdaptiveThinkingModel(modelName)) {
+      return {
+        thinking: { type: "adaptive" },
+        output_config: { effort: d },
+      };
+    }
+    var budget = { low: 2048, medium: 8192, high: 32000 }[d] || 8192;
+    return { thinking: { type: "enabled", budget_tokens: budget } };
   }
-  return { thinking: { type } };
+
+  if (provider === "google") {
+    var name = (modelName || "").toLowerCase();
+    if (name.includes("gemini-3") || name.includes("gemini-4")) {
+      return { thinkingConfig: { thinkingLevel: d } };
+    }
+    var gBudget = { low: 2048, medium: 8192, high: 24576 }[d] || 8192;
+    return { thinkingConfig: { thinkingBudget: gBudget } };
+  }
+
+  if (provider === "deepseek") {
+    var effort = d === "high" ? "max" : "high";
+    return { thinking: { type: "enabled" }, reasoning_effort: effort };
+  }
+
+  if (provider === "openai" || provider === "doubao") {
+    return { reasoning_effort: d };
+  }
+
+  return { thinking: { type: "enabled" } };
+}
+
+function modelSupportsReasoningDepth(modelName) {
+  return detectThinkingProvider(modelName) !== null;
 }
 
 async function createChatCompletion(host, key, model, messages, stream = false, temperature = 0.7) {
