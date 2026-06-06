@@ -1267,3 +1267,11 @@ html[data-theme="light"] .settings-danger-btn:hover {
     word-break: break-word;
   }
 }
+
+.model-cap-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0.6;
+}

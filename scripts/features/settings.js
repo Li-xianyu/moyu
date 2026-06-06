@@ -612,7 +612,14 @@ function renderWorkModels() {
     selectedModels.forEach((model) => {
       const item = document.createElement("div");
       item.className = "work-model-item";
-      item.innerHTML = `<span class="work-model-name">${escapeHtml(model)}</span>`;
+      const caps = window.getModelCapabilities ? window.getModelCapabilities(model) : null;
+      let tags = "";
+      if (caps) {
+        if (caps.input.image) tags += `<span class="model-cap-tag" title="支持图片">📷</span>`;
+        if (caps.tool_call) tags += `<span class="model-cap-tag" title="工具调用">🔧</span>`;
+        if (caps.reasoning) tags += `<span class="model-cap-tag" title="推理模式">🧠</span>`;
+      }
+      item.innerHTML = `<span class="work-model-name">${escapeHtml(model)}</span>${tags}`;
       item.addEventListener("click", () => {
         config.workModels = (config.workModels || []).filter((name) => name !== model);
         persistSettings();
