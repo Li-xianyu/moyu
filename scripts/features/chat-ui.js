@@ -826,6 +826,7 @@ function updateStreamingBubble(targetMessage) {
     const isSingleLine = !targetMessage.pending && !/[\r\n]/.test(targetMessage.content || "");
     bubble.classList.toggle('single-line', isSingleLine);
     applyStreamingTailFade(bubble, targetMessage);
+    syncStreamingTtsForMessage(targetMessage);
   }
 
   // streaming 过程中用户消息钉在视口顶部
@@ -1464,6 +1465,8 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
   } else if (existingTools && message.pending) {
     existingTools.remove();
   }
+
+  syncStreamingTtsForMessage(message);
 }
 
 function buildMessageTools(message) {
@@ -1485,6 +1488,7 @@ function buildMessageTools(message) {
     const ttsBtn = document.createElement("button");
     ttsBtn.type = "button";
     ttsBtn.className = "message-edit-btn";
+    ttsBtn.dataset.action = "tts";
     ttsBtn.title = "朗读";
     ttsBtn.innerHTML = `<i data-lucide="${isTtsActiveForMessage(message.id) ? "pause" : "volume-2"}" class="message-edit-icon"></i>`;
     ttsBtn.addEventListener("click", function(e) {
@@ -1530,10 +1534,14 @@ var TTS_STALL_THRESHOLD_MS = 25000;
 var TTS_CHUNK_GRACE_MS = 8000;
 var TTS_MAX_RESTARTS_PER_CHUNK = 2;
 var TTS_SPEECH_RATE = 1.0;
-var TTS_CHUNK_DELAY_MS = 320;
+var TTS_CHUNK_DELAY_MS = 120;
+var TTS_STREAM_SOFT_BREAK_MIN_LENGTH = 72;
 var _ttsSession = null;
 var _ttsKeepAliveTimer = null;
 var _ttsVoices = [];
+var _ttsAutoQueue = [];
+var _ttsAutoQueuedIds = new Set();
+var _ttsAutoTurnArmed = false;
 
 function isTtsActiveForMessage(messageId) {
   return Boolean(_ttsSession && _ttsSession.messageId === messageId);
@@ -1626,11 +1634,8 @@ function collectTtsTextParts(node, parts) {
   }
 }
 
-function extractRenderedTtsText(btn) {
-  var block = btn?.closest(".message-block.agent");
-  var bubble = block?.querySelector(".message.agent");
+function extractTtsTextFromBubble(bubble, options) {
   if (!bubble) return "";
-
   var clone = bubble.cloneNode(true);
   clone.querySelectorAll(".thinking-section, .tool-trace-section, .typing-row, .code-copy-btn, button").forEach(removeTtsNode);
   clone.querySelectorAll(".pre-code-block, pre").forEach(function(node) {
@@ -1652,15 +1657,32 @@ function extractRenderedTtsText(btn) {
 
   var parts = [];
   collectTtsTextParts(clone, parts);
-  return normalizeTtsText(parts.join(""));
+  return normalizeTtsText(parts.join(""), options);
 }
 
-function normalizeTtsLineBreaks(text) {
+function extractRenderedTtsText(btn, options) {
+  var block = btn?.closest(".message-block.agent");
+  var bubble = block?.querySelector(".message.agent");
+  return extractTtsTextFromBubble(bubble, options);
+}
+
+function extractRenderedTtsTextByMessageId(messageId, options) {
+  if (!messageId || !els.chatMessages) return "";
+  var block = els.chatMessages.querySelector('[data-message-id="' + messageId + '"]');
+  var bubble = block?.querySelector(".message.agent");
+  return extractTtsTextFromBubble(bubble, options);
+}
+
+function normalizeTtsLineBreaks(text, options) {
+  var preserveIncompleteLine = Boolean(options && options.preserveIncompleteLine);
   return String(text || "")
     .split("\n")
     .map(function(line) {
       var trimmed = line.trim();
       if (!trimmed) return "";
+      if (preserveIncompleteLine) {
+        return looksLikeCodeishLine(trimmed) ? "代码片段已省略。" : trimmed;
+      }
       if (looksLikeCodeishLine(trimmed)) {
         return "代码片段已省略。";
       }
@@ -1673,7 +1695,7 @@ function normalizeTtsLineBreaks(text) {
     .join("\n");
 }
 
-function stripMarkdownForTts(text) {
+function stripMarkdownForTts(text, options) {
   var value = String(text || "");
   if (!value) return "";
   value = value.replace(/```[\s\S]*?```/g, "\n代码片段已省略。\n");
@@ -1706,11 +1728,11 @@ function stripMarkdownForTts(text) {
   value = value.replace(/&lt;/gi, "<");
   value = value.replace(/&gt;/gi, ">");
   value = value.replace(/&amp;/gi, "&");
-  return normalizeTtsLineBreaks(value);
+  return normalizeTtsLineBreaks(value, options);
 }
 
-function normalizeTtsText(text) {
-  return stripMarkdownForTts(text)
+function normalizeTtsText(text, options) {
+  return stripMarkdownForTts(text, options)
     .replace(/\r\n/g, "\n")
     .replace(/\u00a0/g, " ")
     .replace(/[ \t]+\n/g, "\n")
@@ -1720,6 +1742,22 @@ function normalizeTtsText(text) {
     .replace(/ {2,}/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function splitNormalizedTtsText(normalizedText) {
+  var normalized = String(normalizedText || "").trim();
+  if (!normalized) return [];
+  var chunks = [];
+
+  normalized.split(/\n+/).forEach(function(paragraph) {
+    var trimmed = String(paragraph || "").trim();
+    if (!trimmed) return;
+    splitTtsParagraph(trimmed, TTS_CHUNK_MAX_LENGTH).forEach(function(piece) {
+      if (piece) chunks.push(piece);
+    });
+  });
+
+  return chunks;
 }
 
 function splitTtsLongSegment(segment, maxLength) {
@@ -1806,19 +1844,202 @@ function splitTtsParagraph(paragraph, maxLength) {
 }
 
 function splitTtsText(text) {
-  var normalized = normalizeTtsText(text);
+  return splitNormalizedTtsText(normalizeTtsText(text));
+}
+
+function findFirstTtsBoundaryIndex(text, pattern, minIndex) {
+  var start = Math.max(0, minIndex || 0);
+  for (var i = start; i < text.length; i++) {
+    if (pattern.indexOf(text.charAt(i)) >= 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function getTtsBoundaryEnd(text, index) {
+  if (index < 0) return 0;
+  if (text.charAt(index) === "\n" && text.charAt(index + 1) === "\n") {
+    return index + 2;
+  }
+  return index + 1;
+}
+
+function splitTtsTextForStreaming(text, forceFlushTail) {
+  var normalized = normalizeTtsText(text, { preserveIncompleteLine: true });
   if (!normalized) return [];
+
+  var remaining = normalized;
   var chunks = [];
 
-  normalized.split(/\n+/).forEach(function(paragraph) {
-    var trimmed = String(paragraph || "").trim();
-    if (!trimmed) return;
-    splitTtsParagraph(trimmed, TTS_CHUNK_MAX_LENGTH).forEach(function(piece) {
-      if (piece) chunks.push(piece);
-    });
-  });
+  while (remaining) {
+    var maxWindow = Math.min(remaining.length, TTS_CHUNK_MAX_LENGTH);
+    var windowText = remaining.slice(0, maxWindow);
+    var nextEnd = 0;
+    var hardBreak = findFirstTtsBoundaryIndex(windowText, "。！？!?\n");
+
+    if (hardBreak >= 0) {
+      nextEnd = getTtsBoundaryEnd(windowText, hardBreak);
+    } else if (remaining.length > TTS_CHUNK_MAX_LENGTH) {
+      var softBreak = findFirstTtsBoundaryIndex(windowText, "，、；：,:;\n", TTS_STREAM_SOFT_BREAK_MIN_LENGTH);
+      if (softBreak >= 0) {
+        nextEnd = getTtsBoundaryEnd(windowText, softBreak);
+      } else {
+        nextEnd = maxWindow;
+      }
+    } else if (forceFlushTail) {
+      nextEnd = remaining.length;
+    } else {
+      break;
+    }
+
+    var chunk = remaining.slice(0, nextEnd).trim();
+    if (chunk) {
+      chunks.push(chunk);
+    }
+    remaining = remaining.slice(nextEnd).replace(/^\n+/, "");
+  }
 
   return chunks;
+}
+
+function getTtsButtonForMessageId(messageId) {
+  if (!messageId || !els.chatMessages) return null;
+  return els.chatMessages.querySelector('[data-message-id="' + messageId + '"] [data-action="tts"]');
+}
+
+function syncTtsSessionButton(session) {
+  if (!session) return null;
+  var btn = getTtsButtonForMessageId(session.messageId);
+  if (btn) {
+    session.btn = btn;
+  }
+  return session.btn || null;
+}
+
+function createTtsSession(message, chunks, options) {
+  var config = options || {};
+  return {
+    messageId: message.id,
+    btn: config.btn || getTtsButtonForMessageId(message.id),
+    chunks: chunks || [],
+    index: 0,
+    cancelled: false,
+    currentUtterance: null,
+    chunkRestartCount: 0,
+    chunkToken: 0,
+    chunkStartedAt: 0,
+    chunkDeadlineAt: 0,
+    lastActivityAt: 0,
+    sourceStreaming: Boolean(message.streaming),
+    auto: Boolean(config.auto),
+  };
+}
+
+function enqueueAutoTtsMessage(message) {
+  if (!message?.id || _ttsAutoQueuedIds.has(message.id)) return;
+  _ttsAutoQueuedIds.add(message.id);
+  _ttsAutoQueue.push(message.id);
+}
+
+function findTtsMessageById(messageId) {
+  var session = getCurrentSession();
+  return session?.messages?.find(function(message) {
+    return message?.id === messageId;
+  }) || null;
+}
+
+function startAutoTtsMessage(message) {
+  if (!message?.id || !message.content || _ttsSession) return false;
+  var renderedText = extractRenderedTtsTextByMessageId(message.id, {
+    preserveIncompleteLine: Boolean(message.streaming),
+  });
+  var sourceText = renderedText || message.content;
+  var chunks = message.streaming
+    ? splitTtsTextForStreaming(sourceText, false)
+    : splitTtsText(sourceText);
+  var session = createTtsSession(message, chunks, { auto: true });
+  _ttsSession = session;
+  setTtsIcon(syncTtsSessionButton(session), "pause");
+  startTtsKeepAlive();
+  if (session.chunks.length) {
+    speakTtsChunk(session);
+  }
+  return true;
+}
+
+function startNextAutoTtsMessage() {
+  if (_ttsSession || !_ttsAutoTurnArmed) return;
+  while (_ttsAutoQueue.length) {
+    var messageId = _ttsAutoQueue.shift();
+    _ttsAutoQueuedIds.delete(messageId);
+    var message = findTtsMessageById(messageId);
+    if (message?.content && startAutoTtsMessage(message)) {
+      return;
+    }
+  }
+}
+
+function prepareAutoTtsTurn() {
+  cancelTtsSession();
+  _ttsAutoTurnArmed = true;
+  _ttsAutoQueue = [];
+  _ttsAutoQueuedIds.clear();
+  try {
+    refreshTtsVoiceCache();
+    window.speechSynthesis?.resume();
+  } catch (err) {}
+}
+
+window.__prepareAutoTtsTurn = prepareAutoTtsTurn;
+window.__cancelAutoTtsTurn = cancelTtsSession;
+
+function syncStreamingTtsForMessage(message) {
+  var session = _ttsSession;
+  if (!message || message.role !== "assistant") {
+    return;
+  }
+
+  if (!session && _ttsAutoTurnArmed && message.streaming && message.content) {
+    startAutoTtsMessage(message);
+    session = _ttsSession;
+  } else if (session && session.messageId !== message.id && _ttsAutoTurnArmed && message.streaming && message.content) {
+    enqueueAutoTtsMessage(message);
+    return;
+  }
+
+  if (!session || session.messageId !== message.id || session.cancelled) return;
+
+  syncTtsSessionButton(session);
+  var renderedText = extractRenderedTtsTextByMessageId(message.id, {
+    preserveIncompleteLine: Boolean(message.streaming),
+  });
+  var sourceText = renderedText || normalizeTtsText(message.content || "", {
+    preserveIncompleteLine: Boolean(message.streaming),
+  });
+  var nextChunks = splitTtsTextForStreaming(sourceText, !message.streaming);
+
+  if (nextChunks.length > session.chunks.length) {
+    for (var i = session.chunks.length; i < nextChunks.length; i++) {
+      session.chunks.push(nextChunks[i]);
+    }
+    markTtsActivity(session);
+  }
+
+  session.sourceStreaming = Boolean(message.streaming);
+
+  if (!session.currentUtterance && session.index < session.chunks.length) {
+    try {
+      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+        speakTtsChunk(session);
+      }
+    } catch (err) {}
+    return;
+  }
+
+  if (!message.streaming && !session.currentUtterance && session.index >= session.chunks.length) {
+    finishTtsSession(session, false);
+  }
 }
 
 function clearTtsKeepAlive() {
@@ -1911,11 +2132,17 @@ function finishTtsSession(session, cancelled) {
   clearTtsKeepAlive();
   session.cancelled = Boolean(cancelled);
   session.currentUtterance = null;
-  setTtsIcon(session.btn, "volume-2");
+  setTtsIcon(syncTtsSessionButton(session), "volume-2");
+  if (!cancelled && session.auto) {
+    window.setTimeout(startNextAutoTtsMessage, TTS_CHUNK_DELAY_MS);
+  }
 }
 
 function cancelTtsSession() {
   var session = _ttsSession;
+  _ttsAutoTurnArmed = false;
+  _ttsAutoQueue = [];
+  _ttsAutoQueuedIds.clear();
   if (!session) return;
   session.cancelled = true;
   clearTtsKeepAlive();
@@ -1924,13 +2151,15 @@ function cancelTtsSession() {
   } catch (err) {}
   _ttsSession = null;
   session.currentUtterance = null;
-  setTtsIcon(session.btn, "volume-2");
+  setTtsIcon(syncTtsSessionButton(session), "volume-2");
 }
 
 function speakTtsChunk(session) {
   if (!session || session.cancelled) return;
   if (session.index >= session.chunks.length) {
-    finishTtsSession(session, false);
+    if (!session.sourceStreaming) {
+      finishTtsSession(session, false);
+    }
     return;
   }
   if (session.currentUtterance) {
@@ -1964,7 +2193,9 @@ function speakTtsChunk(session) {
     session.chunkRestartCount = 0;
     session.index += 1;
     if (session.index >= session.chunks.length) {
-      finishTtsSession(session, false);
+      if (!session.sourceStreaming) {
+        finishTtsSession(session, false);
+      }
       return;
     }
     queueNextTtsChunk(session, TTS_CHUNK_DELAY_MS);
@@ -1987,9 +2218,13 @@ function toggleTts(message, btn) {
     return;
   }
   cancelTtsSession();
-  var renderedText = extractRenderedTtsText(btn);
-  var chunks = splitTtsText(renderedText || message.content || "");
-  if (!chunks.length) return;
+  var renderedText = extractRenderedTtsText(btn, {
+    preserveIncompleteLine: Boolean(message.streaming),
+  });
+  var chunks = message.streaming
+    ? splitTtsTextForStreaming(renderedText || message.content || "", false)
+    : splitTtsText(renderedText || message.content || "");
+  if (!chunks.length && !message.streaming) return;
   var session = {
     messageId: message.id,
     btn: btn,
@@ -2001,15 +2236,19 @@ function toggleTts(message, btn) {
     chunkToken: 0,
     chunkStartedAt: 0,
     chunkDeadlineAt: 0,
-    lastActivityAt: 0
+    lastActivityAt: 0,
+    sourceStreaming: Boolean(message.streaming)
   };
   _ttsSession = session;
   setTtsIcon(btn, "pause");
   startTtsKeepAlive();
-  speakTtsChunk(session);
+  if (session.chunks.length) {
+    speakTtsChunk(session);
+  }
 }
 
 function setTtsIcon(btn, iconName) {
+  if (!btn) return;
   var icon = btn.querySelector(".message-edit-icon");
   if (icon) {
     icon.dataset.lucide = iconName;

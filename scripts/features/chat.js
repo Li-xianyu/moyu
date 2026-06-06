@@ -325,6 +325,9 @@ function stopGeneration() {
   if (typeof window.__cancelChaosAutoplay === "function") {
     window.__cancelChaosAutoplay();
   }
+  if (typeof window.__cancelAutoTtsTurn === "function") {
+    window.__cancelAutoTtsTurn();
+  }
   if (state.abortController) {
     state.abortController.abort();
     state.abortController = null;
@@ -356,6 +359,9 @@ async function sendUserMessage() {
 
   normalizeChatInputWhitespace();
   const content = normalizeUserInputText(els.chatInput.value).trim();
+  if (content && typeof window.__prepareAutoTtsTurn === "function") {
+    window.__prepareAutoTtsTurn();
+  }
   if (!content) {
     setText(els.chatStatus, "请先输入内容");
     return;
