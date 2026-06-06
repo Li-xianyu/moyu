@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "2026.6.6.24";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.6.6.25";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -1229,6 +1229,7 @@
               <div id="chatStatus" class="status-text" data-i18n="chat.readyAfterCreate" data-tone="success">已就绪</div>
             </div>
             <div class="composer">
+              <div id="attachmentPreview" class="attachment-preview"></div>
               <textarea id="chatInput" rows="1" data-i18n-placeholder="chat.inputPlaceholder" placeholder="输入你想说的话..." disabled></textarea>
               <div class="composer-footer">
                 <div class="composer-footer-left">
@@ -1239,6 +1240,7 @@
                       </span>
                     </span>
                   </button>
+                  <button id="attachImageBtn" class="attach-image-btn" type="button" aria-label="附加图片" data-i18n-aria-label="chat.attachImage" data-i18n-title="chat.attachImage"><i data-lucide="paperclip"></i></button>
                   <button id="thinkingToggleBtn" class="thinking-toggle-btn" type="button" data-i18n="chat.thinkingSettings">思考设置</button>
                   <div id="thinkingDepthWrap" class="thinking-depth-wrap hidden">
                     <button id="thinkingDepthBtn" class="thinking-depth-btn" type="button">中</button>
@@ -1427,5 +1429,6 @@
     })();
   </script>
   <div id="toastContainer" class="toast-container"></div>
+  <input type="file" id="imageFileInput" accept="image/*" multiple hidden>
 </body>
 </html>

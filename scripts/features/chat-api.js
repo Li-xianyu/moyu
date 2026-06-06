@@ -305,3 +305,29 @@ async function streamLocalText(message, content) {
   message.streaming = false;
   renderMessages({ stickToBottom: true });
 }
+
+function imageFileToBase64(file) {
+  return new Promise(function (resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function () { resolve(reader.result); };
+    reader.onerror = function () { reject(reader.error); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function buildImageContent(attachments, textContent) {
+  var parts = [];
+  if (textContent && textContent.trim()) {
+    parts.push({ type: "text", text: textContent });
+  }
+  for (var i = 0; i < attachments.length; i++) {
+    parts.push({
+      type: "image_url",
+      image_url: { url: attachments[i].dataUrl },
+    });
+  }
+  if (parts.length === 1 && parts[0].type === "text") {
+    return parts[0].text;
+  }
+  return parts.length ? parts : (textContent || "");
+}

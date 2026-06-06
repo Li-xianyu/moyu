@@ -155,6 +155,7 @@ function bindChat() {
     }
   });
   initThinkingDepthSelector();
+  initAttachmentHandlers();
   els.chatInput.addEventListener("keydown", (event) => {
     // @mention popup navigation takes priority
     if (mentionState) {
@@ -360,14 +361,17 @@ async function sendUserMessage() {
   clearSuggestions();
 
   normalizeChatInputWhitespace();
-  const content = normalizeUserInputText(els.chatInput.value).trim();
-  if (content && typeof window.__prepareAutoTtsTurn === "function") {
+  const textContent = normalizeUserInputText(els.chatInput.value).trim();
+  const hasAttachments = _pendingAttachments.length > 0;
+  if (textContent && typeof window.__prepareAutoTtsTurn === "function") {
     window.__prepareAutoTtsTurn();
   }
-  if (!content) {
+  if (!textContent && !hasAttachments) {
     setText(els.chatStatus, "请先输入内容");
     return;
   }
+
+  const content = hasAttachments ? buildImageContent(_pendingAttachments, textContent) : textContent;
 
   if (!isChaosSending) {
     state.isSending = true;
@@ -423,6 +427,7 @@ async function sendUserMessage() {
   touchSession(session);
   persistSessions();
   els.chatInput.value = "";
+  clearPendingAttachments();
   autoResizeChatInput();
   renderMessages();
   renderChatListMenu();
@@ -969,6 +974,90 @@ function initThinkingDepthSelector() {
   document.addEventListener("click", function () {
     if (els.thinkingDepthDropdown) els.thinkingDepthDropdown.classList.add("hidden");
   });
+}
+
+/* ========== 图片附件 ========== */
+var _pendingAttachments = [];
+
+function clearPendingAttachments() {
+  _pendingAttachments = [];
+  renderAttachmentPreview();
+}
+
+function renderAttachmentPreview() {
+  if (!els.attachmentPreview) return;
+  els.attachmentPreview.innerHTML = "";
+  if (!_pendingAttachments.length) {
+    els.attachmentPreview.classList.remove("has-attachments");
+    return;
+  }
+  els.attachmentPreview.classList.add("has-attachments");
+  _pendingAttachments.forEach(function (att, idx) {
+    var thumb = document.createElement("div");
+    thumb.className = "attachment-thumb";
+    thumb.innerHTML = '<img src="' + att.dataUrl + '" alt="附件"><button class="attachment-remove" data-idx="' + idx + '" title="移除">&times;</button>';
+    els.attachmentPreview.appendChild(thumb);
+  });
+  lucide.createIcons();
+}
+
+async function addImageAttachments(files) {
+  var imageFiles = Array.from(files || []).filter(function (f) { return f.type.startsWith("image/"); });
+  if (!imageFiles.length) return;
+  for (var i = 0; i < imageFiles.length; i++) {
+    var file = imageFiles[i];
+    if (file.size > 10 * 1024 * 1024) {
+      setText(els.chatStatus, "图片 " + file.name + " 超过 10MB 限制");
+      continue;
+    }
+    try {
+      var dataUrl = await imageFileToBase64(file);
+      _pendingAttachments.push({ name: file.name, size: file.size, type: file.type, dataUrl: dataUrl });
+    } catch (err) {
+      console.error("[chat] read image failed", err);
+    }
+  }
+  renderAttachmentPreview();
+}
+
+function removeAttachment(idx) {
+  _pendingAttachments.splice(idx, 1);
+  renderAttachmentPreview();
+}
+
+function initAttachmentHandlers() {
+  if (els.attachImageBtn && els.imageFileInput) {
+    els.attachImageBtn.addEventListener("click", function () {
+      els.imageFileInput.value = "";
+      els.imageFileInput.click();
+    });
+    els.imageFileInput.addEventListener("change", function () {
+      addImageAttachments(els.imageFileInput.files);
+    });
+  }
+  if (els.attachmentPreview) {
+    els.attachmentPreview.addEventListener("click", function (e) {
+      var btn = e.target.closest(".attachment-remove");
+      if (btn) removeAttachment(Number(btn.dataset.idx));
+    });
+  }
+  if (els.chatInput) {
+    els.chatInput.addEventListener("paste", function (e) {
+      var items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
+      if (!items) return;
+      var imageFiles = [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith("image/")) {
+          var file = items[i].getAsFile();
+          if (file) imageFiles.push(file);
+        }
+      }
+      if (imageFiles.length) {
+        e.preventDefault();
+        addImageAttachments(imageFiles);
+      }
+    });
+  }
 }
 
 // 移动端会话消息区底部超拖弹性效果
