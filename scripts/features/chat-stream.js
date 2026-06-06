@@ -176,6 +176,10 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
     ...(session.mode === SESSION_MODE_WORK
       ? [{ role: "system", content: `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}` }]
       : []),
+    // work 模式注入结构化提问技能说明
+    ...(session.mode === SESSION_MODE_WORK
+      ? [{ role: "system", content: WORK_MODE_STRUCTURED_QUESTION_SKILL }]
+      : []),
     // 多 NPC 模式下告知在场角色（单 AI 模式下模型已知自己是谁）
     ...(isSingleAIMode ? [] : [{ role: "system", content: `当前场景中在场的 NPC：${getSceneNpcs(session).map((item) => item.name).join("、")}。所有场内 NPC 始终一起待在当前场景中，不会因发言顺序而离开或入场。你们的对话视为同处一室的当面交谈。` }]),
     // 全局设定（单 AI 模式下可能为空）
