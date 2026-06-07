@@ -1,5 +1,5 @@
 // Bump together with APP_VERSION to force old caches out.
-const SW_VERSION = "2026.6.6.62";
+const SW_VERSION = "2026.6.7.1";
 const CACHE_NAME = "moyu-v" + SW_VERSION;
 
 function cacheable(req, res) {
@@ -68,6 +68,12 @@ self.addEventListener("fetch", (e) => {
       return;
     }
     e.respondWith(cacheFirst(e.request));
+    return;
+  }
+
+  if (e.request.destination === "image") {
+    const corsReq = new Request(e.request.url, { mode: "cors", credentials: "omit" });
+    e.respondWith(networkFirst(corsReq).catch(() => fetch(e.request)));
     return;
   }
 });

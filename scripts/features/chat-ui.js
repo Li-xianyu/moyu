@@ -937,6 +937,14 @@ function updateStreamingBubble(targetMessage) {
 
     bubble.innerHTML = buildBubbleContent(targetMessage);
 
+    bubble.querySelectorAll("img").forEach(function (image) {
+      image.classList.add("chat-content-image");
+      image.alt = image.alt || "会话图片";
+      image.title = "点击查看大图";
+      image.setAttribute("role", "button");
+      image.tabIndex = 0;
+    });
+
     // Restore code element scroll positions synchronously after content replacement
     const newCodes = bubble.querySelectorAll('.pre-code-block code');
     newCodes.forEach((code, i) => {
@@ -1071,9 +1079,9 @@ function applyStreamingTailFade(bubble, message) {
 }
 
 function createStreamBatchController(targetMessage, revealFn, updateFn) {
-  const CHAR_THRESHOLD = 10;
-  const THINKING_THRESHOLD = 6;
-  const TIME_THRESHOLD_MS = 24;
+  const CHAR_THRESHOLD = 3;
+  const THINKING_THRESHOLD = 3;
+  const TIME_THRESHOLD_MS = 8;
   let pendingContent = "";
   let pendingThinking = "";
   let timer = null;
@@ -1790,6 +1798,13 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
     const newContent = buildBubbleContent(message);
     if (bubble.innerHTML !== newContent) {
       bubble.innerHTML = newContent;
+      bubble.querySelectorAll("img").forEach(function (image) {
+        image.classList.add("chat-content-image");
+        image.alt = image.alt || "会话图片";
+        image.title = "点击查看大图";
+        image.setAttribute("role", "button");
+        image.tabIndex = 0;
+      });
       if (typeof hljs !== 'undefined' && enableMd) {
         bubble.querySelectorAll('pre code').forEach(hljs.highlightElement);
         wrapCodeLines(bubble);
