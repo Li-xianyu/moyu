@@ -2,7 +2,14 @@ moyu.zip
 .claude
 tmp-*.png
 .codex
+.codegraph/
+.reasonix/
+.opencode/
 AGENTS.md
+reasonix.toml
+temp_diff.txt
+*.diff
+*.patch
 ssh_helper.py
 setup_reality.py
 setup_fast.py

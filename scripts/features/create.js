@@ -1370,8 +1370,6 @@ async function saveSessionEdits(payload, activeConfig) {
   }
 
   // 检测设定是否发生变化
-  const originalGlobalPrompt = session.globalPrompt || "";
-
   const isSingleNpc = payload.mode === SESSION_MODE_WORK && payload.npcs.length <= 1;
   const chaosMode = isChaosMode(payload.mode);
   const originalNpcNames = new Set((session.npcs || []).map((npc) => npc.name));
@@ -1439,12 +1437,6 @@ async function saveSessionEdits(payload, activeConfig) {
       }
     }
   }
-  const oldPromptMap = new Map(
-    (session.npcs || []).map((npc) => {
-      const newName = renameMap.get(npc.name) || npc.name;
-      return [newName, npc.prompt || ""];
-    })
-  );
   session.npcs = payload.npcs.map(({ originalName, ...npc }) => ({ ...npc }));
   session.transientNpcs = (session.transientNpcs || []).filter((npc) => !session.npcs.some((baseNpc) => baseNpc.name === npc.name));
   // Clean up orphaned agentParams keys (NPCs renamed or removed)
@@ -1457,22 +1449,7 @@ async function saveSessionEdits(payload, activeConfig) {
     });
     session.agentParams = cleaned;
   }
-  // 比较新旧设定
-  const globalPromptChanged = originalGlobalPrompt !== (payload.globalPrompt || "");
-  const npcPromptChanged = payload.npcs.some((newNpc) => {
-    const oldPrompt = oldPromptMap.get(newNpc.name) || "";
-    const newPrompt = newNpc.prompt || "";
-    return oldPrompt !== newPrompt;
-  });
-  const shouldClearSummary = globalPromptChanged || npcPromptChanged;
-  if (shouldClearSummary) {
-    session.directorMemory = normalizeDirectorMemory(null);
-    session.directorSummary = "";
-    session.chatSummary = "";
-    session.compressedUntilMessageId = "";
-    session.compressionSegments = [];
-    session.compressedUntilSequence = -1;
-  }
+  // 编辑会话配置不能抹掉既有摘要与分段历史；发送上下文时再按 token 预算筛选。
   session.suggestionGuide = "";
   session.latestTurnBaseState = null;
   session.latestTurnVariants = null;

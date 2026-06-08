@@ -627,7 +627,7 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   let streamRevealed = false;
   let initialBuffer = "";
   let initialThinkingBuffer = "";
-  const INITIAL_REVEAL_THRESHOLD = 12;
+  const INITIAL_REVEAL_THRESHOLD = 3;
   const streamBatch = createStreamBatchController(
     targetMessage,
     () => renderMessages({ stickToBottom: true }),

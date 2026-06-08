@@ -2010,52 +2010,7 @@ function appendCompressionSegment(session, kind, messages, summary) {
   segments.sort((a, b) => (Number(a.startSeq) || 0) - (Number(b.startSeq) || 0));
   session.compressionSegments = segments;
   session.compressedUntilSequence = Math.max(Number(session.compressedUntilSequence) || -1, endSeq);
-  mergeAdjacentSmallSegments(session, kind);
-  pruneCompressionSegments(session);
   return segment;
-}
-
-function mergeAdjacentSmallSegments(session, kind) {
-  const segments = Array.isArray(session.compressionSegments) ? session.compressionSegments : [];
-  const sameKind = segments.filter((s) => s && s.kind === kind);
-  if (sameKind.length < 2) return;
-  const MERGE_TOKEN_THRESHOLD = 300;
-  let merged = true;
-  while (merged) {
-    merged = false;
-    for (let i = 0; i < sameKind.length - 1; i++) {
-      const a = sameKind[i];
-      const b = sameKind[i + 1];
-      if (!a || !b) continue;
-      const combinedTokens = (Number(a.tokenCount) || 0) + (Number(b.tokenCount) || 0);
-      if (combinedTokens > MERGE_TOKEN_THRESHOLD) continue;
-      a.summary = `${String(a.summary || "").trim()}\n${String(b.summary || "").trim()}`;
-      a.endSeq = b.endSeq;
-      a.endMessageId = b.endMessageId;
-      a.messageCount = (Number(a.messageCount) || 0) + (Number(b.messageCount) || 0);
-      a.tokenCount = combinedTokens;
-      sameKind.splice(i + 1, 1);
-      merged = true;
-      break;
-    }
-  }
-  const otherKinds = segments.filter((segment) => !segment || segment.kind !== kind);
-  session.compressionSegments = otherKinds.concat(sameKind)
-    .sort((a, b) => (Number(a?.startSeq) || 0) - (Number(b?.startSeq) || 0));
-}
-
-function pruneCompressionSegments(session) {
-  const segments = Array.isArray(session?.compressionSegments) ? session.compressionSegments : [];
-  const MAX_SEGMENTS_PER_KIND = 6;
-  const kept = [];
-  ["chat", "director"].forEach((kind) => {
-    kept.push(...segments
-      .filter((segment) => segment?.kind === kind)
-      .sort((a, b) => (Number(a.startSeq) || 0) - (Number(b.startSeq) || 0))
-      .slice(-MAX_SEGMENTS_PER_KIND));
-  });
-  session.compressionSegments = kept
-    .sort((a, b) => (Number(a.startSeq) || 0) - (Number(b.startSeq) || 0));
 }
 
 function scheduleAutoCompressAfterTurn(session) {
