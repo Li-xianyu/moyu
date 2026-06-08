@@ -412,6 +412,7 @@ function normalizeSettings(raw) {
       autoTts: normalizeSessionSettingValue("autoTts", raw?.session?.autoTts),
       modelThinking: normalizeSessionSettingValue("modelThinking", raw?.session?.modelThinking),
     },
+    tts: raw?.tts,
   };
 }
 

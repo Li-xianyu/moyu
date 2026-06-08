@@ -97,6 +97,10 @@ const i18n = {
     "settings.showLineNumbersHint": "在代码左侧显示行号。",
     "settings.autoTtsLabel": "自动播放 TTS",
     "settings.autoTtsHint": "AI 回复时自动朗读；默认关闭，仍可手动播放。",
+    "settings.ttsTab": "语音合成",
+    "settings.ttsTitle": "语音合成 (TTS)",
+    "settings.ttsHint": "选择语音合成方式。在线模式支持 MiMo 等服务商。",
+    "settings.ttsProviderLabel": "工作厂商",
     "settings.sessionDisplayTitle": "显示与阅读",
     "settings.sessionDisplayHint": "决定消息渲染细节、代码可读性和 token 信息是否展示。",
     "settings.sessionTransferTitle": "会话迁移",
@@ -443,6 +447,10 @@ const i18n = {
     "settings.showLineNumbersHint": "Show line numbers on the left side of code blocks.",
     "settings.autoTtsLabel": "Auto-play TTS",
     "settings.autoTtsHint": "Automatically read AI replies aloud. Off by default; manual playback remains available.",
+    "settings.ttsTab": "Text-to-Speech",
+    "settings.ttsTitle": "Text-to-Speech (TTS)",
+    "settings.ttsHint": "Choose TTS provider. Online mode supports MiMo and other services.",
+    "settings.ttsProviderLabel": "Provider",
     "settings.sessionDisplayTitle": "Display & Reading",
     "settings.sessionDisplayHint": "Control render details, code readability, and whether token usage stays visible.",
     "settings.sessionTransferTitle": "Session Transfer",
@@ -815,6 +823,7 @@ const MODEL_PROVIDERS = [
   { id: "ollama", match: /ollama/i, icon: `${MODEL_ICON_CDN}ollama.svg` },
   { id: "huggingface", match: /huggingface|hf/i, icon: `${MODEL_ICON_CDN}huggingface-color.svg` },
   { id: "openrouter", match: /openrouter/i, icon: `${MODEL_ICON_CDN}openrouter.svg` },
+  { id: "mimo", match: /mimo|xiaomi/i, icon: `${MODEL_ICON_CDN}mimo.svg` },
 ];
 
 function detectModelProvider(modelName) {

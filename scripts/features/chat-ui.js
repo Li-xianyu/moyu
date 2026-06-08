@@ -405,6 +405,12 @@ async function ensureSessionMessagesHydrated(session, options = {}) {
   session.messages = recent;
   session.loadedStartSequence = Math.max(0, total - recent.length);
   session.messagesHydrated = true;
+
+  // 修正：如果实际加载数少于预期（stale messageCount），同步为实际值
+  if (recent.length < Math.min(total, desired)) {
+    session.messageCount = recent.length;
+    session.loadedStartSequence = 0;
+  }
   return recent;
 }
 
@@ -1230,7 +1236,15 @@ function syncRenderedMessageWindow(session, options = {}) {
 
 function getRenderedMessagesForSession(session) {
   const windowState = clampChatRenderWindow(session);
-  return (session?.messages || []).slice(windowState.start);
+  const slice = (session?.messages || []).slice(windowState.start);
+  // 按 messageId 去重，兜底防止重复渲染
+  var seen = {};
+  return slice.filter(function (m) {
+    if (!m || !m.id) return true;
+    if (seen[m.id]) return false;
+    seen[m.id] = true;
+    return true;
+  });
 }
 
 async function maybeLoadOlderRenderedMessages() {
@@ -2140,6 +2154,29 @@ var _ttsAutoQueue = [];
 var _ttsAutoQueuedIds = new Set();
 var _ttsAutoTurnArmed = false;
 
+function getTtsConfig() {
+  var cfg = state?.settings?.tts || {};
+  return {
+    provider: cfg.provider || "system",
+    host: cfg.host || "https://api.xiaomimimo.com/v1/chat/completions",
+    apiKey: cfg.apiKey || "",
+    voice: cfg.voice || "冰糖",
+    model: cfg.model || "mimo-v2.5-tts",
+    speed: Number(cfg.speed) || 1,
+    systemVoice: cfg.systemVoice || "",
+    systemSpeed: Number(cfg.systemSpeed) || 1,
+    systemPitch: Number(cfg.systemPitch) || 1,
+  };
+}
+
+function ttsSpeedToHint(speed) {
+  var n = Number(speed) || 1;
+  if (n <= 0.75) return "语速较慢";
+  if (n >= 1.5) return "语速很快";
+  if (n >= 1.25) return "语速偏快";
+  return "正常语速";
+}
+
 function isTtsActiveForMessage(messageId) {
   return Boolean(_ttsSession && _ttsSession.messageId === messageId);
 }
@@ -2156,6 +2193,11 @@ function refreshTtsVoiceCache() {
 
 function getPreferredTtsVoice() {
   refreshTtsVoiceCache();
+  var cfg = getTtsConfig();
+  if (cfg.systemVoice) {
+    var found = _ttsVoices.find(function(v) { return v.voiceURI === cfg.systemVoice; });
+    if (found) return found;
+  }
   return null;
 }
 
@@ -2585,10 +2627,13 @@ function prepareAutoTtsTurn() {
   _ttsAutoQueue = [];
   _ttsAutoQueuedIds.clear();
   if (!_ttsAutoTurnArmed) return;
-  try {
-    refreshTtsVoiceCache();
-    window.speechSynthesis?.resume();
-  } catch (err) {}
+  var ttsCfg = getTtsConfig();
+  if (ttsCfg.provider === "system") {
+    try {
+      refreshTtsVoiceCache();
+      window.speechSynthesis?.resume();
+    } catch (err) {}
+  }
 }
 
 window.__prepareAutoTtsTurn = prepareAutoTtsTurn;
@@ -2631,17 +2676,27 @@ function syncStreamingTtsForMessage(message) {
 
   session.sourceStreaming = Boolean(message.streaming);
 
-  if (!session.currentUtterance && session.index < session.chunks.length) {
-    try {
-      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
-        speakTtsChunk(session);
-      }
-    } catch (err) {}
-    return;
+  var isApiTts = _ttsSession && getTtsConfig().provider === "mimo";
+
+  if (isApiTts) {
+    if (!session.currentAudio && session.index < session.chunks.length) {
+      speakTtsChunk(session);
+    }
+  } else {
+    if (!session.currentUtterance && session.index < session.chunks.length) {
+      try {
+        if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+          speakTtsChunk(session);
+        }
+      } catch (err) {}
+    }
   }
 
-  if (!message.streaming && !session.currentUtterance && session.index >= session.chunks.length) {
-    finishTtsSession(session, false);
+  if (!message.streaming) {
+    var isDone = isApiTts ? !session.currentAudio : !session.currentUtterance;
+    if (isDone && session.index >= session.chunks.length) {
+      finishTtsSession(session, false);
+    }
   }
 }
 
@@ -2696,6 +2751,7 @@ function startTtsKeepAlive() {
       clearTtsKeepAlive();
       return;
     }
+    if (getTtsConfig().provider === "mimo") return;
     try {
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
@@ -2752,6 +2808,10 @@ function cancelTtsSession() {
   try {
     window.speechSynthesis.cancel();
   } catch (err) {}
+  if (session.currentAudio) {
+    try { session.currentAudio.pause(); } catch (err) {}
+    session.currentAudio = null;
+  }
   _ttsSession = null;
   session.currentUtterance = null;
   setTtsIcon(syncTtsSessionButton(session), "volume-2");
@@ -2765,23 +2825,109 @@ function speakTtsChunk(session) {
     }
     return;
   }
+  var ttsCfg = getTtsConfig();
+  if (ttsCfg.provider === "mimo" && ttsCfg.apiKey) {
+    speakTtsChunkApi(session, ttsCfg);
+  } else {
+    speakTtsChunkSystem(session);
+  }
+}
+
+function speakTtsChunkApi(session, ttsCfg) {
+  if (session.currentAudio) {
+    try { session.currentAudio.pause(); } catch (err) {}
+    session.currentAudio = null;
+  }
+  var chunkToken = (session.chunkToken || 0) + 1;
+  var chunkText = session.chunks[session.index];
+  session.chunkToken = chunkToken;
+  session.chunkStartedAt = Date.now();
+  session.chunkDeadlineAt = session.chunkStartedAt + estimateTtsChunkTimeoutMs(chunkText, ttsCfg.speed);
+  markTtsActivity(session);
+
+  fetch(ttsCfg.host.replace(/\/$/, ""), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "api-key": ttsCfg.apiKey,
+    },
+    body: JSON.stringify({
+      model: ttsCfg.model,
+      messages: [
+        { role: "user", content: ttsSpeedToHint(ttsCfg.speed) },
+        { role: "assistant", content: chunkText },
+      ],
+      audio: { format: "wav", voice: ttsCfg.voice },
+      stream: false,
+    }),
+  }).then(function(resp) {
+    if (!resp.ok) throw new Error("TTS API " + resp.status);
+    return resp.json();
+  }).then(function(data) {
+    if (_ttsSession !== session || session.cancelled || session.chunkToken !== chunkToken) return;
+    var audioData = data && ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.audio && data.choices[0].message.audio.data) || (data.message && data.message.audio && data.message.audio.data));
+    if (!audioData) throw new Error("No audio data in response");
+    var binary = atob(audioData);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    var blob = new Blob([bytes], { type: "audio/wav" });
+    var url = URL.createObjectURL(blob);
+    var audio = new Audio(url);
+    session.currentAudio = audio;
+    audio.onended = function() {
+      URL.revokeObjectURL(url);
+      if (_ttsSession !== session || session.cancelled || session.chunkToken !== chunkToken) return;
+      session.currentAudio = null;
+      session.chunkRestartCount = 0;
+      session.index += 1;
+      if (session.index >= session.chunks.length) {
+        if (!session.sourceStreaming) {
+          finishTtsSession(session, false);
+        }
+        return;
+      }
+      queueNextTtsChunk(session, TTS_CHUNK_DELAY_MS);
+    };
+    audio.onerror = function() {
+      URL.revokeObjectURL(url);
+      if (_ttsSession !== session || session.cancelled || session.chunkToken !== chunkToken) return;
+      session.currentAudio = null;
+      retryCurrentTtsChunk(session, 500);
+    };
+    audio.play().catch(function() {});
+  }).catch(function() {
+    if (_ttsSession !== session || session.cancelled || session.chunkToken !== chunkToken) return;
+    session.currentAudio = null;
+    retryCurrentTtsChunk(session, 500);
+  });
+}
+
+function speakTtsChunkSystem(session) {
+  if (!session || session.cancelled) return;
+  if (session.index >= session.chunks.length) {
+    if (!session.sourceStreaming) {
+      finishTtsSession(session, false);
+    }
+    return;
+  }
   if (session.currentUtterance) {
     try { window.speechSynthesis.cancel(); } catch (err) {}
   }
   var chunkToken = (session.chunkToken || 0) + 1;
   var chunkText = session.chunks[session.index];
   var utterance = new SpeechSynthesisUtterance(chunkText);
+  var ttsCfg = getTtsConfig();
   var voice = getPreferredTtsVoice();
   session.chunkToken = chunkToken;
   session.chunkStartedAt = Date.now();
-  session.chunkDeadlineAt = session.chunkStartedAt + estimateTtsChunkTimeoutMs(chunkText, TTS_SPEECH_RATE);
+  session.chunkDeadlineAt = session.chunkStartedAt + estimateTtsChunkTimeoutMs(chunkText, ttsCfg.systemSpeed);
   markTtsActivity(session);
   if (voice) {
     utterance.voice = voice;
   }
   utterance.lang = voice?.lang || "zh-CN";
-  utterance.rate = TTS_SPEECH_RATE;
-  utterance.pitch = 1.0;
+  utterance.rate = ttsCfg.systemSpeed;
+  utterance.pitch = ttsCfg.systemPitch;
   utterance.onstart = function() {
     if (_ttsSession !== session || session.cancelled || session.chunkToken !== chunkToken) return;
     markTtsActivity(session);
@@ -2813,7 +2959,10 @@ function speakTtsChunk(session) {
 }
 
 function toggleTts(message, btn) {
-  if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance !== "function") {
+  var ttsCfg = getTtsConfig();
+  var hasSystemTts = window.speechSynthesis && typeof window.SpeechSynthesisUtterance === "function";
+  var hasApiTts = ttsCfg.provider === "mimo" && Boolean(ttsCfg.apiKey);
+  if (!hasSystemTts && !hasApiTts) {
     return;
   }
   if (isTtsActiveForMessage(message.id)) {
@@ -2865,6 +3014,13 @@ if (window.speechSynthesis && typeof window.speechSynthesis.addEventListener ===
 
 document.addEventListener("visibilitychange", function() {
   if (!_ttsSession || document.visibilityState !== "visible") {
+    return;
+  }
+  var ttsCfg = getTtsConfig();
+  if (ttsCfg.provider === "mimo") {
+    if (_ttsSession.currentAudio && _ttsSession.index < _ttsSession.chunks.length) {
+      _ttsSession.currentAudio.play().catch(function() {});
+    }
     return;
   }
   try {

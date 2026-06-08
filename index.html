@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "2026.6.8.3";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.6.9.1";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -835,6 +835,10 @@
                 <i data-lucide="server" class="settings-section-icon" aria-hidden="true"></i>
                 <span class="settings-section-label" data-i18n="settings.apiTab">接口设置</span>
               </button>
+              <button id="ttsSettingsTabBtn" class="settings-section-btn" type="button">
+                <i data-lucide="volume-2" class="settings-section-icon" aria-hidden="true"></i>
+                <span class="settings-section-label" data-i18n="settings.ttsTab">语音合成</span>
+              </button>
             </div>
           </section>
 
@@ -1127,6 +1131,183 @@
                 </section>
               </div>
             </section>
+
+            <section id="ttsSettingsPanel" class="settings-page-panel">
+              <div class="settings-page-grid">
+                <section class="settings-card">
+                  <div class="settings-card-head">
+                    <div>
+                      <h3 data-i18n="settings.ttsTitle">语音合成 (TTS)</h3>
+                      <p class="hint-text" data-i18n="settings.ttsHint">选择语音合成方式。在线模式支持 MiMo 等服务商。</p>
+                    </div>
+                  </div>
+                  <div class="settings-card-body">
+                    <label class="field">
+                      <span data-i18n="settings.ttsProviderLabel">工作厂商</span>
+                      <select id="ttsProviderSelect">
+                        <option value="system">系统语音 (浏览器内置)</option>
+                        <option value="mimo">小米 MiMo</option>
+                      </select>
+                    </label>
+                  </div>
+                </section>
+
+                <section id="ttsProviderGridCard" class="settings-card">
+                  <div class="settings-section-divider" aria-hidden="true"></div>
+                  <div class="settings-card-head">
+                    <div>
+                      <h3>配置厂商</h3>
+                      <p class="hint-text">点击厂商卡片进入详细配置。</p>
+                    </div>
+                  </div>
+                  <div class="settings-card-body">
+                    <div class="tts-provider-grid">
+                      <button class="tts-provider-card" data-provider="system" type="button">
+                        <div class="tts-provider-logo">
+                          <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="36" height="36" rx="8" fill="var(--theme-accent, #666)"/>
+                            <path d="M12 10h12v2H12zm-1 4h14v2H11zm0 4h14v2H11zm2 4h10v2H13z" fill="#fff"/>
+                          </svg>
+                        </div>
+                        <span class="tts-provider-name">系统 TTS</span>
+                      </button>
+                      <button class="tts-provider-card" data-provider="mimo" type="button">
+                        <div class="tts-provider-logo">
+                          <img src="./vendor/lobehub-icons/1.90.0/icons/mimo.svg" alt="MiMo">
+                        </div>
+                        <span class="tts-provider-name">MIMO</span>
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                <section id="ttsMimoDetail" class="settings-card tts-provider-detail" style="display:none">
+                  <div class="settings-section-divider" aria-hidden="true"></div>
+                  <div class="settings-card-head">
+                    <div class="tts-detail-header">
+                      <button id="ttsMimoBackBtn" class="tts-back-btn" type="button">
+                        <i data-lucide="arrow-left" style="width:16px;height:16px"></i>
+                        <span>返回</span>
+                      </button>
+                      <div>
+                        <h3>MiMo 配置</h3>
+                        <p class="hint-text">填写 MiMo TTS 的 API 地址和密钥。</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="settings-card-body">
+                    <label class="field">
+                      <span>API Host</span>
+                      <input id="ttsHostInput" type="text" placeholder="https://api.xiaomimimo.com/v1/chat/completions">
+                    </label>
+                    <label class="field">
+                      <span>API Key</span>
+                      <input id="ttsApiKeyInput" type="password" placeholder="sk-...">
+                    </label>
+                    <div class="settings-actions-row">
+                      <button id="ttsSaveConfigBtn" class="primary-btn" type="button">保存配置</button>
+                      <span id="ttsConfigStatus" class="hint-text"></span>
+                    </div>
+
+                    <div class="settings-section-divider" aria-hidden="true"></div>
+
+                    <div>
+                      <h3 style="margin:0;font-size:15px;font-weight:700">音色与参数</h3>
+                      <p class="hint-text">选择 MiMo 预设音色或手动输入音色 ID。</p>
+                    </div>
+
+                    <label class="field">
+                      <span>预设音色</span>
+                      <select id="ttsVoiceSelect">
+                        <option value="冰糖">冰糖 (中文女声)</option>
+                        <option value="茉莉">茉莉 (中文女声)</option>
+                        <option value="苏打">苏打 (中文男声)</option>
+                        <option value="白桦">白桦 (中文男声)</option>
+                        <option value="Mia">Mia (英文女声)</option>
+                        <option value="Chloe">Chloe (英文女声)</option>
+                        <option value="Milo">Milo (英文男声)</option>
+                        <option value="Dean">Dean (英文男声)</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>自定义音色 ID</span>
+                      <input id="ttsCustomVoiceInput" type="text" placeholder="填了优先用这个，不填用上方选择">
+                    </label>
+                    <label class="field">
+                      <span>模型</span>
+                      <select id="ttsModelInput">
+                        <option value="mimo-v2.5-tts">mimo-v2.5-tts</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>语速</span>
+                      <select id="ttsSpeedSelect">
+                        <option value="0.75">0.75x (慢)</option>
+                        <option value="1" selected>1.0x (正常)</option>
+                        <option value="1.25">1.25x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2.0x (快)</option>
+                      </select>
+                    </label>
+                    <div class="settings-actions-row">
+                      <button id="ttsTestBtn" class="secondary-btn" type="button">测试语音</button>
+                      <span id="ttsTestStatus" class="hint-text"></span>
+                    </div>
+                  </div>
+                </section>
+
+                <section id="ttsSystemDetail" class="settings-card tts-provider-detail" style="display:none">
+                  <div class="settings-section-divider" aria-hidden="true"></div>
+                  <div class="settings-card-head">
+                    <div class="tts-detail-header">
+                      <button id="ttsSystemBackBtn" class="tts-back-btn" type="button">
+                        <i data-lucide="arrow-left" style="width:16px;height:16px"></i>
+                        <span>返回</span>
+                      </button>
+                      <div>
+                        <h3>系统 TTS 配置</h3>
+                        <p class="hint-text">选择浏览器/系统的语音合成参数。</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="settings-card-body">
+                    <label class="field">
+                      <span>音色</span>
+                      <select id="ttsSystemVoiceSelect">
+                        <option value="">默认音色</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>语速</span>
+                      <select id="ttsSystemSpeedSelect">
+                        <option value="0.5">0.5x (很慢)</option>
+                        <option value="0.75">0.75x (慢)</option>
+                        <option value="1" selected>1.0x (正常)</option>
+                        <option value="1.25">1.25x (偏快)</option>
+                        <option value="1.5">1.5x (快)</option>
+                        <option value="2">2.0x (很快)</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>音高</span>
+                      <select id="ttsSystemPitchSelect">
+                        <option value="0.5">0.5 (低沉)</option>
+                        <option value="0.75">0.75 (偏低)</option>
+                        <option value="1" selected>1.0 (正常)</option>
+                        <option value="1.25">1.25 (偏高)</option>
+                        <option value="1.5">1.5 (高亢)</option>
+                        <option value="2">2.0 (尖锐)</option>
+                      </select>
+                    </label>
+                    <div class="settings-actions-row">
+                      <button id="ttsSystemTestBtn" class="secondary-btn" type="button">测试语音</button>
+                      <span id="ttsSystemTestStatus" class="hint-text"></span>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </section>
+
           </section>
         </div>
       </section>

@@ -55,6 +55,10 @@ function bindSettings() {
     switchSettingsSection("session");
   });
 
+  els.ttsSettingsTabBtn?.addEventListener("click", () => {
+    switchSettingsSection("tts");
+  });
+
   els.localeSelect.addEventListener("change", () => {
     state.locale = els.localeSelect.value || "zh-CN";
     applyI18n();
@@ -179,6 +183,270 @@ function bindSettings() {
         window.__cancelAutoTtsTurn();
       }
     });
+  }
+
+  const ttsProviderSelect = document.getElementById("ttsProviderSelect");
+  const ttsProviderGridCard = document.getElementById("ttsProviderGridCard");
+  const ttsMimoDetail = document.getElementById("ttsMimoDetail");
+  const ttsMimoBackBtn = document.getElementById("ttsMimoBackBtn");
+  const ttsSystemDetail = document.getElementById("ttsSystemDetail");
+  const ttsSystemBackBtn = document.getElementById("ttsSystemBackBtn");
+  const ttsSystemVoiceSelect = document.getElementById("ttsSystemVoiceSelect");
+  const ttsSystemSpeedSelect = document.getElementById("ttsSystemSpeedSelect");
+  const ttsSystemPitchSelect = document.getElementById("ttsSystemPitchSelect");
+  const ttsSystemTestBtn = document.getElementById("ttsSystemTestBtn");
+  const ttsSystemTestStatus = document.getElementById("ttsSystemTestStatus");
+  const ttsHostInput = document.getElementById("ttsHostInput");
+  const ttsApiKeyInput = document.getElementById("ttsApiKeyInput");
+  const ttsVoiceSelect = document.getElementById("ttsVoiceSelect");
+  const ttsCustomVoiceInput = document.getElementById("ttsCustomVoiceInput");
+  const ttsModelInput = document.getElementById("ttsModelInput");
+  const ttsSpeedSelect = document.getElementById("ttsSpeedSelect");
+  const ttsTestBtn = document.getElementById("ttsTestBtn");
+  const ttsTestStatus = document.getElementById("ttsTestStatus");
+  const ttsSaveConfigBtn = document.getElementById("ttsSaveConfigBtn");
+  const ttsConfigStatus = document.getElementById("ttsConfigStatus");
+
+  function persistTtsSettings() {
+    var p = document.getElementById("ttsProviderSelect");
+    var h = document.getElementById("ttsHostInput");
+    var k = document.getElementById("ttsApiKeyInput");
+    var v = document.getElementById("ttsVoiceSelect");
+    var c = document.getElementById("ttsCustomVoiceInput");
+    var m = document.getElementById("ttsModelInput");
+    var s = document.getElementById("ttsSpeedSelect");
+    var sv = document.getElementById("ttsSystemVoiceSelect");
+    var ss = document.getElementById("ttsSystemSpeedSelect");
+    var sp = document.getElementById("ttsSystemPitchSelect");
+    state.settings.tts = state.settings.tts || {};
+    state.settings.tts.provider = p?.value || "system";
+    state.settings.tts.host = h?.value?.trim() || "";
+    state.settings.tts.apiKey = k?.value?.trim() || "";
+    state.settings.tts.voice = c?.value?.trim() || v?.value || "冰糖";
+    state.settings.tts.model = m?.value || "mimo-v2.5-tts";
+    state.settings.tts.speed = s?.value || "1";
+    state.settings.tts.systemVoice = sv?.value || "";
+    state.settings.tts.systemSpeed = ss?.value || "1";
+    state.settings.tts.systemPitch = sp?.value || "1";
+    persistSettings();
+  }
+
+  function refreshSystemVoices() {
+    if (!ttsSystemVoiceSelect) return;
+    var currentVal = ttsSystemVoiceSelect.value;
+    if (!window.speechSynthesis || typeof window.speechSynthesis.getVoices !== "function") return;
+    var voices = window.speechSynthesis.getVoices() || [];
+    ttsSystemVoiceSelect.innerHTML = '<option value="">默认音色</option>';
+    voices.forEach(function(v) {
+      var opt = document.createElement("option");
+      opt.value = v.voiceURI;
+      opt.textContent = v.name + " (" + v.lang + ")";
+      ttsSystemVoiceSelect.appendChild(opt);
+    });
+    if (currentVal) ttsSystemVoiceSelect.value = currentVal;
+  }
+
+  function updateTtsPanels() {
+    if (ttsMimoDetail) ttsMimoDetail.style.display = "none";
+    if (ttsSystemDetail) ttsSystemDetail.style.display = "none";
+    if (ttsProviderGridCard) ttsProviderGridCard.style.display = "";
+  }
+
+  function showProviderDetail(provider) {
+    if (ttsProviderGridCard) ttsProviderGridCard.style.display = "none";
+    if (provider === "mimo" && ttsMimoDetail) {
+      ttsMimoDetail.style.display = "";
+      if (ttsSystemDetail) ttsSystemDetail.style.display = "none";
+    } else if (provider === "system" && ttsSystemDetail) {
+      ttsSystemDetail.style.display = "";
+      if (ttsMimoDetail) ttsMimoDetail.style.display = "none";
+      refreshSystemVoices();
+    }
+    lucide.createIcons();
+  }
+
+  function hideAllProviderDetails() {
+    if (ttsMimoDetail) ttsMimoDetail.style.display = "none";
+    if (ttsSystemDetail) ttsSystemDetail.style.display = "none";
+    if (ttsProviderGridCard) ttsProviderGridCard.style.display = "";
+    lucide.createIcons();
+  }
+
+  if (ttsProviderSelect) {
+    ttsProviderSelect.addEventListener("change", () => {
+      updateTtsPanels();
+      persistTtsSettings();
+    });
+  }
+
+  document.querySelectorAll(".tts-provider-card[data-provider]").forEach(card => {
+    card.addEventListener("click", () => {
+      showProviderDetail(card.dataset.provider);
+    });
+  });
+
+  if (ttsMimoBackBtn) {
+    ttsMimoBackBtn.addEventListener("click", hideAllProviderDetails);
+  }
+
+  if (ttsSystemBackBtn) {
+    ttsSystemBackBtn.addEventListener("click", hideAllProviderDetails);
+  }
+
+  var _ttsStatusTimer = null;
+  function showTtsStatus(el, text) {
+    setText(el, text);
+    clearTimeout(_ttsStatusTimer);
+    if (text) _ttsStatusTimer = setTimeout(function() { setText(el, ""); }, 3000);
+  }
+
+  if (ttsSaveConfigBtn) {
+    ttsSaveConfigBtn.addEventListener("click", async () => {
+      var h = document.getElementById("ttsHostInput");
+      var k = document.getElementById("ttsApiKeyInput");
+      var host = h?.value?.trim();
+      var key = k?.value?.trim();
+      if (!host || !key) {
+        showTtsStatus(ttsConfigStatus, "请先填写 Host 和 Key");
+        return;
+      }
+      persistTtsSettings();
+      showTtsStatus(ttsConfigStatus, "✓ 配置已保存");
+    });
+  }
+
+  if (ttsTestBtn) {
+    ttsTestBtn.addEventListener("click", async () => {
+      var h = document.getElementById("ttsHostInput");
+      var k = document.getElementById("ttsApiKeyInput");
+      var v = document.getElementById("ttsVoiceSelect");
+      var c = document.getElementById("ttsCustomVoiceInput");
+      var m = document.getElementById("ttsModelInput");
+      var s = document.getElementById("ttsSpeedSelect");
+      var host = h?.value?.trim();
+      var key = k?.value?.trim();
+      var voice = c?.value?.trim() || v?.value || "冰糖";
+      var model = m?.value || "mimo-v2.5-tts";
+      var speed = Number(s?.value) || 1;
+      if (!host || !key) {
+        showTtsStatus(ttsTestStatus, "请先填写 Host 和 Key");
+        return;
+      }
+      ttsTestBtn.disabled = true;
+      showTtsStatus(ttsTestStatus, "测试中...");
+      var speedHint = speed <= 0.75 ? "语速较慢" : speed >= 1.5 ? "语速很快" : speed >= 1.25 ? "语速偏快" : "正常语速";
+      try {
+        const resp = await fetch(host.replace(/\/$/, ""), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "api-key": key,
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              { role: "user", content: speedHint },
+              { role: "assistant", content: "你好，这是语音合成测试。" },
+            ],
+            audio: { format: "wav", voice: voice },
+            stream: false,
+          }),
+        });
+        if (!resp.ok) {
+          const err = await resp.text().catch(() => resp.statusText);
+          showTtsStatus(ttsTestStatus, "❌ " + (resp.status === 401 ? "Key 无效" : "HTTP " + resp.status));
+          return;
+        }
+        const data = await resp.json();
+        const audioData = data?.choices?.[0]?.message?.audio?.data || data?.message?.audio?.data;
+        if (!audioData) {
+          console.log("[TTS] 响应结构:", JSON.stringify(data).slice(0, 500));
+          showTtsStatus(ttsTestStatus, "❌ 响应中无音频数据");
+          return;
+        }
+        const binary = atob(audioData);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: "audio/wav" });
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => { URL.revokeObjectURL(url); };
+        audio.play();
+        showTtsStatus(ttsTestStatus, "✓ 播放中...");
+        persistTtsSettings();
+      } catch (e) {
+        showTtsStatus(ttsTestStatus, "❌ 网络错误，请检查 Host 地址和网络");
+      } finally {
+        ttsTestBtn.disabled = false;
+      }
+    });
+  }
+
+  if (ttsSystemTestBtn) {
+    ttsSystemTestBtn.addEventListener("click", function() {
+      var voiceId = ttsSystemVoiceSelect?.value || "";
+      var speed = Number(ttsSystemSpeedSelect?.value) || 1;
+      var pitch = Number(ttsSystemPitchSelect?.value) || 1;
+      if (!window.speechSynthesis || typeof window.speechSynthesis.speak !== "function") {
+        showTtsStatus(ttsSystemTestStatus, "❌ 浏览器不支持语音合成");
+        return;
+      }
+      ttsSystemTestBtn.disabled = true;
+      showTtsStatus(ttsSystemTestStatus, "播放中...");
+      window.speechSynthesis.cancel();
+      var utterance = new SpeechSynthesisUtterance("这是一段语音合成测试，用来验证音色、语速和音高设置。");
+      utterance.rate = speed;
+      utterance.pitch = pitch;
+      if (voiceId) {
+        var voices = window.speechSynthesis.getVoices() || [];
+        var found = voices.find(function(v) { return v.voiceURI === voiceId; });
+        if (found) utterance.voice = found;
+      }
+      utterance.onend = function() {
+        ttsSystemTestBtn.disabled = false;
+        showTtsStatus(ttsSystemTestStatus, "✓ 播放完成");
+      };
+      utterance.onerror = function() {
+        ttsSystemTestBtn.disabled = false;
+        showTtsStatus(ttsSystemTestStatus, "❌ 播放失败");
+      };
+      window.speechSynthesis.speak(utterance);
+      persistTtsSettings();
+    });
+  }
+
+  function persistSystemTtsSettings() {
+    var sv = document.getElementById("ttsSystemVoiceSelect");
+    var ss = document.getElementById("ttsSystemSpeedSelect");
+    var sp = document.getElementById("ttsSystemPitchSelect");
+    state.settings.tts = state.settings.tts || {};
+    state.settings.tts.systemVoice = sv?.value || "";
+    state.settings.tts.systemSpeed = ss?.value || "1";
+    state.settings.tts.systemPitch = sp?.value || "1";
+    persistSettings();
+  }
+
+  if (ttsSystemVoiceSelect) ttsSystemVoiceSelect.addEventListener("change", persistSystemTtsSettings);
+  if (ttsSystemSpeedSelect) ttsSystemSpeedSelect.addEventListener("change", persistSystemTtsSettings);
+  if (ttsSystemPitchSelect) ttsSystemPitchSelect.addEventListener("change", persistSystemTtsSettings);
+  if (window.speechSynthesis && typeof window.speechSynthesis.addEventListener === "function") {
+    window.speechSynthesis.addEventListener("voiceschanged", function() {
+      if (ttsSystemDetail && ttsSystemDetail.style.display !== "none") {
+        refreshSystemVoices();
+      }
+    });
+  }
+
+  if (ttsCustomVoiceInput) ttsCustomVoiceInput.addEventListener("change", persistTtsSettings);
+  if (ttsModelInput) ttsModelInput.addEventListener("change", persistTtsSettings);
+  if (ttsSpeedSelect) ttsSpeedSelect.addEventListener("change", persistTtsSettings);
+  if (ttsHostInput) {
+    ttsHostInput.addEventListener("input", persistTtsSettings);
+    ttsHostInput.addEventListener("change", persistTtsSettings);
+  }
+  if (ttsApiKeyInput) {
+    ttsApiKeyInput.addEventListener("input", persistTtsSettings);
+    ttsApiKeyInput.addEventListener("change", persistTtsSettings);
   }
 
   els.addConfigBtn.addEventListener("click", () => {
@@ -343,7 +611,7 @@ function preventToggleWhileTyping() {
 
 function switchSettingsSection(section) {
   const previousSection = state.currentSettingsSection;
-  state.currentSettingsSection = ["global", "assistant", "session", "api"].includes(section) ? section : "global";
+  state.currentSettingsSection = ["global", "assistant", "session", "api", "tts"].includes(section) ? section : "global";
   if (state.currentSettingsSection === "api" && previousSection !== "api") {
     collapseApiEditorForMobile();
   }
@@ -356,15 +624,18 @@ function renderSettingsSection() {
   const isAssistant = section === "assistant";
   const isApi = section === "api";
   const isSession = section === "session";
+  const isTts = section === "tts";
 
   els.globalSettingsTabBtn.classList.toggle("active", isGlobal);
   els.assistantSettingsTabBtn.classList.toggle("active", isAssistant);
   els.apiSettingsTabBtn.classList.toggle("active", isApi);
   els.sessionSettingsTabBtn.classList.toggle("active", isSession);
+  els.ttsSettingsTabBtn?.classList.toggle("active", isTts);
   els.globalSettingsPanel.classList.toggle("active", isGlobal);
   els.assistantSettingsPanel.classList.toggle("active", isAssistant);
   els.apiSettingsPanel.classList.toggle("active", isApi);
   els.sessionSettingsPanel.classList.toggle("active", isSession);
+  els.ttsSettingsPanel?.classList.toggle("active", isTts);
   syncApiEditorVisibility();
 
 }
@@ -395,6 +666,35 @@ function hydrateSettingsInputs() {
   if (autoTtsToggle) {
     autoTtsToggle.checked = state.settings?.session?.autoTts === true;
   }
+  const ttsProviderSelect = document.getElementById("ttsProviderSelect");
+  const ttsProviderGridCard = document.getElementById("ttsProviderGridCard");
+  const ttsMimoDetail = document.getElementById("ttsMimoDetail");
+  const ttsHostInput = document.getElementById("ttsHostInput");
+  const ttsApiKeyInput = document.getElementById("ttsApiKeyInput");
+  const ttsVoiceSelect = document.getElementById("ttsVoiceSelect");
+  const ttsCustomVoiceInput = document.getElementById("ttsCustomVoiceInput");
+  const ttsSpeedSelect = document.getElementById("ttsSpeedSelect");
+  if (ttsProviderSelect) {
+    const provider = state.settings?.tts?.provider || "system";
+    ttsProviderSelect.value = provider;
+    if (ttsProviderGridCard) ttsProviderGridCard.style.display = "";
+    if (ttsMimoDetail) ttsMimoDetail.style.display = "none";
+    const ttsSystemDetail = document.getElementById("ttsSystemDetail");
+    if (ttsSystemDetail) ttsSystemDetail.style.display = "none";
+  }
+  if (ttsHostInput) ttsHostInput.value = state.settings?.tts?.host || "https://api.xiaomimimo.com/v1/chat/completions";
+  if (ttsApiKeyInput) ttsApiKeyInput.value = state.settings?.tts?.apiKey || "";
+  if (ttsVoiceSelect) ttsVoiceSelect.value = state.settings?.tts?.voice || "冰糖";
+  if (ttsCustomVoiceInput) ttsCustomVoiceInput.value = "";
+  const ttsModelInput = document.getElementById("ttsModelInput");
+  if (ttsModelInput) ttsModelInput.value = state.settings?.tts?.model || "mimo-v2.5-tts";
+  if (ttsSpeedSelect) ttsSpeedSelect.value = String(state.settings?.tts?.speed || "1");
+  var ttsSystemVoiceSelect = document.getElementById("ttsSystemVoiceSelect");
+  var ttsSystemSpeedSelect = document.getElementById("ttsSystemSpeedSelect");
+  var ttsSystemPitchSelect = document.getElementById("ttsSystemPitchSelect");
+  if (ttsSystemVoiceSelect) ttsSystemVoiceSelect.value = state.settings?.tts?.systemVoice || "";
+  if (ttsSystemSpeedSelect) ttsSystemSpeedSelect.value = String(state.settings?.tts?.systemSpeed || "1");
+  if (ttsSystemPitchSelect) ttsSystemPitchSelect.value = String(state.settings?.tts?.systemPitch || "1");
   els.configNameInput.value = activeConfig?.name || "";
   els.apiHostInput.value = activeConfig?.host || "";
   els.apiKeyInput.value = activeConfig?.key || "";

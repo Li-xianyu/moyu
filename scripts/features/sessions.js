@@ -1191,9 +1191,8 @@ async function buildSessionArchiveBlob(task, sessionId = "") {
     const meta = buildArchiveSessionMeta(session);
     appendLine({ t: "s", d: meta });
 
-    const total = Math.max(0, Number(meta.messageCount) || 0);
     let offset = 0;
-    while (offset < total) {
+    while (true) {
       if (task?.cancelled) {
         throw new Error("EXPORT_ABORTED");
       }
