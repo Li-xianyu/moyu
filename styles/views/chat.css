@@ -1242,16 +1242,16 @@
   object-fit: contain;
   border-radius: 12px;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
-  transform: scale(0.97);
-  transition: transform 0.18s ease;
+  transform-origin: 0 0;
+  cursor: grab;
   user-select: none;
   -webkit-user-select: none;
   -webkit-user-drag: none;
   -webkit-touch-callout: none;
 }
 
-.image-lightbox.open .image-lightbox-preview {
-  transform: scale(1);
+.image-lightbox-preview.dragging {
+  cursor: grabbing;
 }
 
 .image-lightbox-close {
