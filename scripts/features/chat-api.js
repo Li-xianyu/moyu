@@ -338,6 +338,12 @@ function textFileToString(file) {
   });
 }
 
+function getTextFilePromptLabel(file) {
+  var name = String(file?.name || "");
+  var mediaType = String(file?.mediaType || file?.type || "").toLowerCase();
+  return mediaType === "text/markdown" || /\.(?:md|markdown)$/i.test(name) ? "Markdown" : "TXT";
+}
+
 function normalizeChatMessagesForRequest(messages) {
   return (messages || []).map(function (message) {
     if (!Array.isArray(message?.content)) return message;
@@ -345,13 +351,14 @@ function normalizeChatMessagesForRequest(messages) {
       if (part?.type !== "file_text") return part;
       var file = part.file_text || {};
       var name = String(file.name || "附件.txt").replace(/[\r\n]+/g, " ");
+      var label = getTextFilePromptLabel(file);
       return {
         type: "text",
         text: [
           "",
-          "[TXT 文件：" + name + "]",
+          "[" + label + " 文件：" + name + "]",
           String(file.content || ""),
-          "[TXT 文件结束]",
+          "[" + label + " 文件结束]",
         ].join("\n"),
       };
     });
@@ -366,10 +373,11 @@ function getUserContentContextText(content) {
     if (part?.type === "image_url") return "[图片附件]";
     if (part?.type === "file_text") {
       var file = part.file_text || {};
+      var label = getTextFilePromptLabel(file);
       return [
-        "[TXT 文件：" + String(file.name || "附件.txt") + "]",
+        "[" + label + " 文件：" + String(file.name || "附件.txt") + "]",
         String(file.content || ""),
-        "[TXT 文件结束]",
+        "[" + label + " 文件结束]",
       ].join("\n");
     }
     return "";

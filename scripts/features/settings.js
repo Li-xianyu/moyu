@@ -194,6 +194,7 @@ function bindSettings() {
   const ttsSystemVoiceSelect = document.getElementById("ttsSystemVoiceSelect");
   const ttsSystemSpeedSelect = document.getElementById("ttsSystemSpeedSelect");
   const ttsSystemPitchSelect = document.getElementById("ttsSystemPitchSelect");
+  const ttsSystemTestTextInput = document.getElementById("ttsSystemTestTextInput");
   const ttsSystemTestBtn = document.getElementById("ttsSystemTestBtn");
   const ttsSystemTestStatus = document.getElementById("ttsSystemTestStatus");
   const ttsHostInput = document.getElementById("ttsHostInput");
@@ -202,6 +203,7 @@ function bindSettings() {
   const ttsCustomVoiceInput = document.getElementById("ttsCustomVoiceInput");
   const ttsModelInput = document.getElementById("ttsModelInput");
   const ttsSpeedSelect = document.getElementById("ttsSpeedSelect");
+  const ttsTestTextInput = document.getElementById("ttsTestTextInput");
   const ttsTestBtn = document.getElementById("ttsTestBtn");
   const ttsTestStatus = document.getElementById("ttsTestStatus");
   const ttsSaveConfigBtn = document.getElementById("ttsSaveConfigBtn");
@@ -218,6 +220,8 @@ function bindSettings() {
     var sv = document.getElementById("ttsSystemVoiceSelect");
     var ss = document.getElementById("ttsSystemSpeedSelect");
     var sp = document.getElementById("ttsSystemPitchSelect");
+    var tt = document.getElementById("ttsTestTextInput");
+    var stt = document.getElementById("ttsSystemTestTextInput");
     state.settings.tts = state.settings.tts || {};
     state.settings.tts.provider = p?.value || "system";
     state.settings.tts.host = h?.value?.trim() || "";
@@ -228,6 +232,8 @@ function bindSettings() {
     state.settings.tts.systemVoice = sv?.value || "";
     state.settings.tts.systemSpeed = ss?.value || "1";
     state.settings.tts.systemPitch = sp?.value || "1";
+    state.settings.tts.testText = tt?.value || "";
+    state.settings.tts.systemTestText = stt?.value || "";
     persistSettings();
   }
 
@@ -323,17 +329,20 @@ function bindSettings() {
       var c = document.getElementById("ttsCustomVoiceInput");
       var m = document.getElementById("ttsModelInput");
       var s = document.getElementById("ttsSpeedSelect");
+      var testTextInput = document.getElementById("ttsTestTextInput");
       var host = h?.value?.trim();
       var key = k?.value?.trim();
       var voice = c?.value?.trim() || v?.value || "冰糖";
       var model = m?.value || "mimo-v2.5-tts";
       var speed = Number(s?.value) || 1;
+      var testText = testTextInput?.value?.trim() || "你好，这是语音合成测试。";
       if (!host || !key) {
         showTtsStatus(ttsTestStatus, "请先填写 Host 和 Key");
         return;
       }
       ttsTestBtn.disabled = true;
       showTtsStatus(ttsTestStatus, "测试中...");
+      var startedAt = performance.now();
       var speedHint = speed <= 0.75 ? "语速较慢" : speed >= 1.5 ? "语速很快" : speed >= 1.25 ? "语速偏快" : "正常语速";
       try {
         const resp = await fetch(host.replace(/\/$/, ""), {
@@ -346,7 +355,7 @@ function bindSettings() {
             model: model,
             messages: [
               { role: "user", content: speedHint },
-              { role: "assistant", content: "你好，这是语音合成测试。" },
+              { role: "assistant", content: testText },
             ],
             audio: { format: "wav", voice: voice },
             stream: false,
@@ -372,7 +381,8 @@ function bindSettings() {
         const audio = new Audio(url);
         audio.onended = () => { URL.revokeObjectURL(url); };
         audio.play();
-        showTtsStatus(ttsTestStatus, "✓ 播放中...");
+        var elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
+        showTtsStatus(ttsTestStatus, "✓ " + elapsedSeconds + " 秒，播放中...");
         persistTtsSettings();
       } catch (e) {
         showTtsStatus(ttsTestStatus, "❌ 网络错误，请检查 Host 地址和网络");
@@ -387,6 +397,7 @@ function bindSettings() {
       var voiceId = ttsSystemVoiceSelect?.value || "";
       var speed = Number(ttsSystemSpeedSelect?.value) || 1;
       var pitch = Number(ttsSystemPitchSelect?.value) || 1;
+      var testText = ttsSystemTestTextInput?.value?.trim() || "这是一段语音合成测试，用来验证音色、语速和音高设置。";
       if (!window.speechSynthesis || typeof window.speechSynthesis.speak !== "function") {
         showTtsStatus(ttsSystemTestStatus, "❌ 浏览器不支持语音合成");
         return;
@@ -394,7 +405,7 @@ function bindSettings() {
       ttsSystemTestBtn.disabled = true;
       showTtsStatus(ttsSystemTestStatus, "播放中...");
       window.speechSynthesis.cancel();
-      var utterance = new SpeechSynthesisUtterance("这是一段语音合成测试，用来验证音色、语速和音高设置。");
+      var utterance = new SpeechSynthesisUtterance(testText);
       utterance.rate = speed;
       utterance.pitch = pitch;
       if (voiceId) {
@@ -419,16 +430,19 @@ function bindSettings() {
     var sv = document.getElementById("ttsSystemVoiceSelect");
     var ss = document.getElementById("ttsSystemSpeedSelect");
     var sp = document.getElementById("ttsSystemPitchSelect");
+    var stt = document.getElementById("ttsSystemTestTextInput");
     state.settings.tts = state.settings.tts || {};
     state.settings.tts.systemVoice = sv?.value || "";
     state.settings.tts.systemSpeed = ss?.value || "1";
     state.settings.tts.systemPitch = sp?.value || "1";
+    state.settings.tts.systemTestText = stt?.value || "";
     persistSettings();
   }
 
   if (ttsSystemVoiceSelect) ttsSystemVoiceSelect.addEventListener("change", persistSystemTtsSettings);
   if (ttsSystemSpeedSelect) ttsSystemSpeedSelect.addEventListener("change", persistSystemTtsSettings);
   if (ttsSystemPitchSelect) ttsSystemPitchSelect.addEventListener("change", persistSystemTtsSettings);
+  if (ttsSystemTestTextInput) ttsSystemTestTextInput.addEventListener("input", persistSystemTtsSettings);
   if (window.speechSynthesis && typeof window.speechSynthesis.addEventListener === "function") {
     window.speechSynthesis.addEventListener("voiceschanged", function() {
       if (ttsSystemDetail && ttsSystemDetail.style.display !== "none") {
@@ -440,6 +454,7 @@ function bindSettings() {
   if (ttsCustomVoiceInput) ttsCustomVoiceInput.addEventListener("change", persistTtsSettings);
   if (ttsModelInput) ttsModelInput.addEventListener("change", persistTtsSettings);
   if (ttsSpeedSelect) ttsSpeedSelect.addEventListener("change", persistTtsSettings);
+  if (ttsTestTextInput) ttsTestTextInput.addEventListener("input", persistTtsSettings);
   if (ttsHostInput) {
     ttsHostInput.addEventListener("input", persistTtsSettings);
     ttsHostInput.addEventListener("change", persistTtsSettings);
@@ -674,6 +689,7 @@ function hydrateSettingsInputs() {
   const ttsVoiceSelect = document.getElementById("ttsVoiceSelect");
   const ttsCustomVoiceInput = document.getElementById("ttsCustomVoiceInput");
   const ttsSpeedSelect = document.getElementById("ttsSpeedSelect");
+  const ttsTestTextInput = document.getElementById("ttsTestTextInput");
   if (ttsProviderSelect) {
     const provider = state.settings?.tts?.provider || "system";
     ttsProviderSelect.value = provider;
@@ -689,12 +705,19 @@ function hydrateSettingsInputs() {
   const ttsModelInput = document.getElementById("ttsModelInput");
   if (ttsModelInput) ttsModelInput.value = state.settings?.tts?.model || "mimo-v2.5-tts";
   if (ttsSpeedSelect) ttsSpeedSelect.value = String(state.settings?.tts?.speed || "1");
+  if (ttsTestTextInput) {
+    ttsTestTextInput.value = state.settings?.tts?.testText || "你好，这是语音合成测试。";
+  }
   var ttsSystemVoiceSelect = document.getElementById("ttsSystemVoiceSelect");
   var ttsSystemSpeedSelect = document.getElementById("ttsSystemSpeedSelect");
   var ttsSystemPitchSelect = document.getElementById("ttsSystemPitchSelect");
+  var ttsSystemTestTextInput = document.getElementById("ttsSystemTestTextInput");
   if (ttsSystemVoiceSelect) ttsSystemVoiceSelect.value = state.settings?.tts?.systemVoice || "";
   if (ttsSystemSpeedSelect) ttsSystemSpeedSelect.value = String(state.settings?.tts?.systemSpeed || "1");
   if (ttsSystemPitchSelect) ttsSystemPitchSelect.value = String(state.settings?.tts?.systemPitch || "1");
+  if (ttsSystemTestTextInput) {
+    ttsSystemTestTextInput.value = state.settings?.tts?.systemTestText || "这是一段语音合成测试，用来验证音色、语速和音高设置。";
+  }
   els.configNameInput.value = activeConfig?.name || "";
   els.apiHostInput.value = activeConfig?.host || "";
   els.apiKeyInput.value = activeConfig?.key || "";

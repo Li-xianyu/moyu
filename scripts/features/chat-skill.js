@@ -55,13 +55,11 @@ const SKILL_ITEMS = [
       "5. 选项要互斥且覆盖主要情况",
       "",
       "### 结束格式",
-      "当所有问题回答完毕，使用以下格式返回结果：",
+      "当所有问题回答完毕，不再输出问卷卡片。请基于用户在本轮问卷中的全部问题与回答，直接给出一段自然、具体、有用的 Markdown 总结。",
+      "总结应像正常回复一样流畅呈现：先概括用户的核心选择，再给出必要的判断、建议或下一步；不要机械复述字段，不要输出 JSON。",
+      "总结正文结束后，另起一行输出结束标记。结束标记只用于内部状态识别，不要解释它：",
       "",
       "[[SKILL_COMPLETE]]",
-      '{  "skill_name": "技能名称",',
-      '  "summary": { "key1": "value1", "key2": "value2" }',
-      "}",
-      "[[SKILL_COMPLETE_END]]",
     ].join("\n"),
   },
 ];
@@ -211,7 +209,7 @@ function parseSkillResult(content) {
 
 function getSkillResponseRenderState(content) {
   const raw = typeof content === "string" ? content : "";
-  const markers = ["[[SKILL_START]]", "[[SKILL_COMPLETE]]"];
+  const markers = ["[[SKILL_REQUEST:questionnaire]]", "[[SKILL_START]]", "[[SKILL_COMPLETE]]"];
   let markerIndex = -1;
 
   markers.forEach(function(marker) {
@@ -253,6 +251,7 @@ function getSkillResponseRenderState(content) {
 }
 
 function isQuestionnaireActive(session) {
+  if (session?._questionnaireSkillRequested) return true;
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   let awaitingAnswer = false;
 
@@ -287,6 +286,10 @@ function isQuestionnaireActive(session) {
   return false;
 }
 
+function isQuestionnaireSkillRequest(content) {
+  return String(content || "").trim() === "[[SKILL_REQUEST:questionnaire]]";
+}
+
 function renderSkillCard(skillData, messageId) {
   const card = document.createElement("div");
   card.className = "skill-bubble";
@@ -300,8 +303,14 @@ function renderSkillCard(skillData, messageId) {
   }
   const header = document.createElement("div");
   header.className = "skill-bubble-header";
-  header.innerHTML = '<span class="skill-bubble-name">' + escapeHtml(skillData.skill_name) + '</span><span class="skill-bubble-step">(' + skillData.step + '/' + skillData.total_steps + ')</span>';
+  header.innerHTML = '<span class="skill-bubble-name">' + escapeHtml(skillData.skill_name) + '</span><span class="skill-bubble-step">' + skillData.step + ' / ' + skillData.total_steps + '</span>';
   card.appendChild(header);
+  const progress = document.createElement("div");
+  progress.className = "skill-bubble-progress";
+  const progressValue = document.createElement("span");
+  progressValue.style.width = Math.max(0, Math.min(100, Number(skillData.step || 0) / Math.max(1, Number(skillData.total_steps || 1)) * 100)) + "%";
+  progress.appendChild(progressValue);
+  card.appendChild(progress);
   const question = document.createElement("div");
   question.className = "skill-bubble-question";
   question.textContent = skillData.question;
@@ -318,7 +327,7 @@ function renderSkillCard(skillData, messageId) {
   if (skillData.allow_custom) {
     const customRow = document.createElement("div"); customRow.className = "skill-bubble-custom";
     const input = document.createElement("input"); input.type = "text"; input.className = "skill-bubble-custom-input"; input.placeholder = "自定义输入..."; input.maxLength = 500;
-    const sendBtn = document.createElement("button"); sendBtn.type = "button"; sendBtn.className = "skill-bubble-custom-btn"; sendBtn.textContent = "发送";
+    const sendBtn = document.createElement("button"); sendBtn.type = "button"; sendBtn.className = "skill-bubble-custom-btn"; sendBtn.title = "发送自定义回答"; sendBtn.setAttribute("aria-label", "发送自定义回答"); sendBtn.innerHTML = '<i data-lucide="arrow-up"></i>';
     const doSend = function() { var text = input.value.trim(); if (text) handleSkillAnswer(skillData.skill_name, skillData.step, "custom", text, text, messageId, skillData.question); };
     sendBtn.addEventListener("click", doSend);
     input.addEventListener("keydown", function(e) { if (e.key === "Enter") doSend(); });
@@ -341,17 +350,6 @@ function renderSkillAnswerTranscript(answer) {
   transcript.appendChild(question);
   transcript.appendChild(response);
   return transcript;
-}
-
-function renderSkillResult(skillResult) {
-  const card = document.createElement("div");
-  card.className = "skill-bubble skill-bubble-result";
-  const header = document.createElement("div"); header.className = "skill-bubble-header"; header.innerHTML = '<span class="skill-bubble-name">' + escapeHtml(skillResult.skill_name) + ' - 完成</span>'; card.appendChild(header);
-  const body = document.createElement("div"); body.className = "skill-bubble-body";
-  const summary = skillResult.summary || {};
-  const html = Object.entries(summary).map(function(kv) { return '<div class="skill-result-line"><strong>' + escapeHtml(kv[0]) + ':</strong> ' + escapeHtml(String(kv[1])) + '</div>'; }).join("");
-  body.innerHTML = html || "分析完成"; card.appendChild(body);
-  return card;
 }
 
 async function handleSkillAnswer(skillName, step, optionId, optionText, customText, messageId, question) {

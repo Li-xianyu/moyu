@@ -654,6 +654,12 @@ function extractTextAttachments(content) {
   return content.filter(function (part) { return part?.type === "file_text"; });
 }
 
+function getTextFileDisplayFormat(file) {
+  var name = String(file?.name || "");
+  var mediaType = String(file?.mediaType || file?.type || "").toLowerCase();
+  return mediaType === "text/markdown" || /\.(?:md|markdown)$/i.test(name) ? "Markdown" : "TXT";
+}
+
 function formatAttachmentSize(bytes) {
   var size = Math.max(0, Number(bytes || 0));
   var exactBytes = Math.round(size).toLocaleString("zh-CN") + " B";
@@ -668,6 +674,14 @@ function buildBubbleContent(message) {
   const session = getCurrentSession();
   const sessionMode = session?.mode || SESSION_MODE_STORY;
   let html = "";
+  if (message._skillPrompt) {
+    const enterClass = message._skillPromptEntered ? "" : " skill-prompt-enter";
+    html += `<details class="skill-prompt-section${enterClass}"${message.skillPromptExpanded ? " open" : ""}>`;
+    html += `<summary>查看 Skills Prompt</summary>`;
+    html += `<div class="skill-prompt-content">${escapeHtml(message._skillPrompt).replace(/\n/g, "<br>")}</div>`;
+    html += `</details>`;
+    message._skillPromptEntered = true;
+  }
   const thinkingText = (message.thinking || "").trim();
   if (thinkingText) {
     html += `<details class="thinking-section"${message.streaming || message.thinkingExpanded ? " open" : ""}>`;
@@ -894,6 +908,16 @@ function updateStreamingBubble(targetMessage) {
     const isSingleLine = !targetMessage.pending && !/[\r\n]/.test(narrationText);
     bubble.classList.toggle('single-line', isSingleLine);
   } else {
+    const skillState = typeof getSkillResponseRenderState === "function"
+      ? getSkillResponseRenderState(targetMessage.content)
+      : null;
+    if (skillState?.buffering) {
+      const displayMessage = { ...targetMessage, content: skillState.visibleText };
+      bubble.innerHTML = buildBubbleContent(displayMessage);
+      bubble.style.display = skillState.visibleText || targetMessage._skillPrompt ? "" : "none";
+      renderMessages({ stickToBottom: true });
+      return;
+    }
     // Streaming incremental: inside an unclosed code block → update text
     // only, avoiding DOM destruction (fixes mobile scroll during streaming).
     if (targetMessage.streaming) {
@@ -1525,12 +1549,13 @@ function buildMessageBlock(message, sessionMode, enableMd) {
       fileWrap.className = "message-files";
       textFiles.forEach(function (part) {
         var file = part.file_text || {};
+        var format = getTextFileDisplayFormat(file);
         var card = document.createElement("div");
         card.className = "message-file-card";
         card._textFile = file;
         card.setAttribute("role", "button");
-        card.setAttribute("aria-label", "预览 TXT 文件 " + String(file.name || "附件.txt"));
-        card.title = "点击预览 TXT 文件";
+        card.setAttribute("aria-label", "预览 " + format + " 文件 " + String(file.name || "附件.txt"));
+        card.title = "点击预览 " + format + " 文件";
         card.tabIndex = 0;
 
         var icon = document.createElement("i");
@@ -1542,7 +1567,7 @@ function buildMessageBlock(message, sessionMode, enableMd) {
         var name = document.createElement("strong");
         name.textContent = String(file.name || "附件.txt");
         var meta = document.createElement("small");
-        meta.textContent = "TXT · " + formatAttachmentSize(file.size);
+        meta.textContent = format + " · " + formatAttachmentSize(file.size);
         copy.append(name, meta);
 
         card.append(icon, copy);
@@ -1612,19 +1637,16 @@ function buildMessageBlock(message, sessionMode, enableMd) {
       ? getSkillResponseRenderState(message.content)
       : null;
     const skillData = skillState?.skillData || null;
-    const skillResult = skillState?.skillResult || null;
 
     if (skillState && skillState.buffering) {
       const displayMessage = { ...message, content: skillState.visibleText };
-      bubble.innerHTML = skillState.visibleText ? buildBubbleContent(displayMessage) : "";
-      bubble.style.display = skillState.visibleText ? "" : "none";
+      bubble.innerHTML = buildBubbleContent(displayMessage);
+      bubble.style.display = skillState.visibleText || message._skillPrompt ? "" : "none";
       block.appendChild(bubble);
 
       const card = skillData && typeof renderSkillCard === "function"
         ? renderSkillCard(skillData, message.id)
-        : skillResult && typeof renderSkillResult === "function"
-          ? renderSkillResult(skillResult)
-          : null;
+        : null;
       if (card) block.appendChild(card);
       const transcript = typeof renderSkillAnswerTranscript === "function"
         ? renderSkillAnswerTranscript(message._skillAnswer)
@@ -1775,19 +1797,18 @@ function refreshMessageBlock(block, message, sessionMode, enableMd) {
       const displayMessage = { ...message, content: skillState.visibleText };
       const visibleContent = skillState.visibleText;
       bubble.className = `message agent ${message.streaming ? "streaming" : ""} ${sessionMode === SESSION_MODE_WORK ? "agent-plain" : ""}`.trim();
-      bubble.style.display = visibleContent ? "" : "none";
-      const newContent = visibleContent ? buildBubbleContent(displayMessage) : "";
+      bubble.style.display = visibleContent || message._skillPrompt ? "" : "none";
+      const newContent = buildBubbleContent(displayMessage);
       if (bubble.innerHTML !== newContent) bubble.innerHTML = newContent;
 
       const existingCard = block.querySelector(".skill-bubble");
-      const cardData = skillState.skillData || skillState.skillResult;
-      if (cardData && !existingCard) {
-        const card = skillState.skillData && typeof renderSkillCard === "function"
+      if (skillState.skillData && !existingCard) {
+        const card = typeof renderSkillCard === "function"
           ? renderSkillCard(skillState.skillData, message.id)
-          : typeof renderSkillResult === "function"
-            ? renderSkillResult(skillState.skillResult)
-            : null;
+          : null;
         if (card) block.appendChild(card);
+      } else if (!skillState.skillData && existingCard) {
+        existingCard.remove();
       }
       const existingTranscript = block.querySelector(".skill-answer-transcript");
       if (!existingTranscript && typeof renderSkillAnswerTranscript === "function") {
@@ -2147,6 +2168,7 @@ var TTS_MAX_RESTARTS_PER_CHUNK = 2;
 var TTS_SPEECH_RATE = 1.0;
 var TTS_CHUNK_DELAY_MS = 120;
 var TTS_STREAM_SOFT_BREAK_MIN_LENGTH = 72;
+var TTS_API_PREFETCH_COUNT = 1;
 var _ttsSession = null;
 var _ttsKeepAliveTimer = null;
 var _ttsVoices = [];
@@ -2565,6 +2587,7 @@ function createTtsSession(message, chunks, options) {
     index: 0,
     cancelled: false,
     currentUtterance: null,
+    currentAudioUrl: "",
     chunkRestartCount: 0,
     chunkToken: 0,
     chunkStartedAt: 0,
@@ -2572,6 +2595,8 @@ function createTtsSession(message, chunks, options) {
     lastActivityAt: 0,
     sourceStreaming: Boolean(message.streaming),
     auto: Boolean(config.auto),
+    apiAudioCache: new Map(),
+    apiAbortControllers: new Map(),
   };
 }
 
@@ -2791,6 +2816,7 @@ function finishTtsSession(session, cancelled) {
   clearTtsKeepAlive();
   session.cancelled = Boolean(cancelled);
   session.currentUtterance = null;
+  cleanupTtsApiResources(session);
   setTtsIcon(syncTtsSessionButton(session), "volume-2");
   if (!cancelled && session.auto) {
     window.setTimeout(startNextAutoTtsMessage, TTS_CHUNK_DELAY_MS);
@@ -2812,9 +2838,92 @@ function cancelTtsSession() {
     try { session.currentAudio.pause(); } catch (err) {}
     session.currentAudio = null;
   }
+  if (session.currentAudioUrl) {
+    URL.revokeObjectURL(session.currentAudioUrl);
+    session.currentAudioUrl = "";
+  }
+  cleanupTtsApiResources(session);
   _ttsSession = null;
   session.currentUtterance = null;
   setTtsIcon(syncTtsSessionButton(session), "volume-2");
+}
+
+function cleanupTtsApiResources(session) {
+  if (!session) return;
+  if (session.apiAbortControllers) {
+    session.apiAbortControllers.forEach(function(controller) {
+      try { controller.abort(); } catch (err) {}
+    });
+    session.apiAbortControllers.clear();
+  }
+  if (session.apiAudioCache) {
+    session.apiAudioCache.forEach(function(entry) {
+      Promise.resolve(entry).then(function(result) {
+        if (result?.url) URL.revokeObjectURL(result.url);
+      });
+    });
+    session.apiAudioCache.clear();
+  }
+}
+
+function requestTtsChunkApi(session, ttsCfg, chunkIndex) {
+  if (!session || session.cancelled || chunkIndex >= session.chunks.length) {
+    return Promise.resolve({ error: new Error("TTS chunk unavailable") });
+  }
+  session.apiAudioCache = session.apiAudioCache || new Map();
+  session.apiAbortControllers = session.apiAbortControllers || new Map();
+  if (session.apiAudioCache.has(chunkIndex)) {
+    return session.apiAudioCache.get(chunkIndex);
+  }
+
+  var chunkText = session.chunks[chunkIndex];
+  var controller = new AbortController();
+  session.apiAbortControllers.set(chunkIndex, controller);
+  var startedAt = performance.now();
+  var request = fetch(ttsCfg.host.replace(/\/$/, ""), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "api-key": ttsCfg.apiKey,
+    },
+    signal: controller.signal,
+    body: JSON.stringify({
+      model: ttsCfg.model,
+      messages: [
+        { role: "user", content: ttsSpeedToHint(ttsCfg.speed) },
+        { role: "assistant", content: chunkText },
+      ],
+      audio: { format: "wav", voice: ttsCfg.voice },
+      stream: false,
+    }),
+  }).then(function(resp) {
+    if (!resp.ok) throw new Error("TTS API " + resp.status);
+    return resp.json();
+  }).then(function(data) {
+    var audioData = data && ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.audio && data.choices[0].message.audio.data) || (data.message && data.message.audio && data.message.audio.data));
+    if (!audioData) throw new Error("No audio data in response");
+    var binary = atob(audioData);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    var url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+    console.debug("[TTS] MiMo chunk", chunkIndex + 1, Math.round(performance.now() - startedAt) + "ms");
+    return { url: url };
+  }).catch(function(error) {
+    return { error: error };
+  }).finally(function() {
+    session.apiAbortControllers?.delete(chunkIndex);
+  });
+  session.apiAudioCache.set(chunkIndex, request);
+  return request;
+}
+
+function prefetchNextTtsChunks(session, ttsCfg, fromIndex) {
+  for (var offset = 1; offset <= TTS_API_PREFETCH_COUNT; offset++) {
+    var nextIndex = fromIndex + offset;
+    if (nextIndex < session.chunks.length) {
+      requestTtsChunkApi(session, ttsCfg, nextIndex);
+    }
+  }
 }
 
 function speakTtsChunk(session) {
@@ -2845,37 +2954,18 @@ function speakTtsChunkApi(session, ttsCfg) {
   session.chunkDeadlineAt = session.chunkStartedAt + estimateTtsChunkTimeoutMs(chunkText, ttsCfg.speed);
   markTtsActivity(session);
 
-  fetch(ttsCfg.host.replace(/\/$/, ""), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": ttsCfg.apiKey,
-    },
-    body: JSON.stringify({
-      model: ttsCfg.model,
-      messages: [
-        { role: "user", content: ttsSpeedToHint(ttsCfg.speed) },
-        { role: "assistant", content: chunkText },
-      ],
-      audio: { format: "wav", voice: ttsCfg.voice },
-      stream: false,
-    }),
-  }).then(function(resp) {
-    if (!resp.ok) throw new Error("TTS API " + resp.status);
-    return resp.json();
-  }).then(function(data) {
+  requestTtsChunkApi(session, ttsCfg, session.index).then(function(result) {
     if (_ttsSession !== session || session.cancelled || session.chunkToken !== chunkToken) return;
-    var audioData = data && ((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.audio && data.choices[0].message.audio.data) || (data.message && data.message.audio && data.message.audio.data));
-    if (!audioData) throw new Error("No audio data in response");
-    var binary = atob(audioData);
-    var bytes = new Uint8Array(binary.length);
-    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    var blob = new Blob([bytes], { type: "audio/wav" });
-    var url = URL.createObjectURL(blob);
+    session.apiAudioCache?.delete(session.index);
+    if (result?.error || !result?.url) throw result?.error || new Error("No audio URL");
+    var url = result.url;
     var audio = new Audio(url);
     session.currentAudio = audio;
+    session.currentAudioUrl = url;
+    prefetchNextTtsChunks(session, ttsCfg, session.index);
     audio.onended = function() {
       URL.revokeObjectURL(url);
+      session.currentAudioUrl = "";
       if (_ttsSession !== session || session.cancelled || session.chunkToken !== chunkToken) return;
       session.currentAudio = null;
       session.chunkRestartCount = 0;
@@ -2890,6 +2980,7 @@ function speakTtsChunkApi(session, ttsCfg) {
     };
     audio.onerror = function() {
       URL.revokeObjectURL(url);
+      session.currentAudioUrl = "";
       if (_ttsSession !== session || session.cancelled || session.chunkToken !== chunkToken) return;
       session.currentAudio = null;
       retryCurrentTtsChunk(session, 500);
@@ -2897,6 +2988,7 @@ function speakTtsChunkApi(session, ttsCfg) {
     audio.play().catch(function() {});
   }).catch(function() {
     if (_ttsSession !== session || session.cancelled || session.chunkToken !== chunkToken) return;
+    session.apiAudioCache?.delete(session.index);
     session.currentAudio = null;
     retryCurrentTtsChunk(session, 500);
   });
@@ -2984,12 +3076,15 @@ function toggleTts(message, btn) {
     index: 0,
     cancelled: false,
     currentUtterance: null,
+    currentAudioUrl: "",
     chunkRestartCount: 0,
     chunkToken: 0,
     chunkStartedAt: 0,
     chunkDeadlineAt: 0,
     lastActivityAt: 0,
-    sourceStreaming: Boolean(message.streaming)
+    sourceStreaming: Boolean(message.streaming),
+    apiAudioCache: new Map(),
+    apiAbortControllers: new Map()
   };
   _ttsSession = session;
   setTtsIcon(btn, "pause");
@@ -3100,6 +3195,7 @@ function animateThinkingSection(section, shouldOpen, onStateChange) {
     return;
   }
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    section.classList.remove("thinking-collapsing");
     section.open = shouldOpen;
     clearThinkingContentInlineStyles(content);
     syncThinkingArrowRotation(section, false, shouldOpen);
@@ -3109,6 +3205,7 @@ function animateThinkingSection(section, shouldOpen, onStateChange) {
 
   const finish = function(finalOpen) {
     section.dataset.thinkingAnimating = "false";
+    section.classList.remove("thinking-collapsing");
     section.open = finalOpen;
     clearThinkingContentInlineStyles(content);
     syncThinkingArrowRotation(section, false);
@@ -3118,6 +3215,7 @@ function animateThinkingSection(section, shouldOpen, onStateChange) {
   section.dataset.thinkingAnimating = "true";
 
   if (shouldOpen) {
+    section.classList.remove("thinking-collapsing");
     section.open = true;
     syncThinkingArrowRotation(section, false, true);
     content.style.overflowY = "hidden";
@@ -3132,6 +3230,7 @@ function animateThinkingSection(section, shouldOpen, onStateChange) {
       content.style.paddingBottom = "8px";
     });
   } else {
+    section.classList.add("thinking-collapsing");
     syncThinkingArrowRotation(section, false, false);
     const currentHeight = Math.max(content.getBoundingClientRect().height, getThinkingContentExpandedHeight(content));
     content.style.overflowY = "hidden";
@@ -3184,6 +3283,13 @@ function bindInlineMetaToggles(block, message) {
       if (window.persistSessions) {
         window.persistSessions();
       }
+    });
+  }
+  const skillPromptSection = block.querySelector(".skill-prompt-section");
+  if (skillPromptSection && !skillPromptSection.dataset.boundToggle) {
+    skillPromptSection.dataset.boundToggle = "true";
+    skillPromptSection.addEventListener("toggle", function() {
+      message.skillPromptExpanded = skillPromptSection.open;
     });
   }
   const toolTraceSection = block.querySelector(".tool-trace-section");

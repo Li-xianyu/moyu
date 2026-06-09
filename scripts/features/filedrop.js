@@ -139,7 +139,7 @@ function bindFileDrop() {
     if (getDropContext() === "chat") {
       const attachments = Array.from(files).filter(isSupportedChatAttachment);
       if (!attachments.length) {
-        setText(els.chatStatus, "仅支持 PNG、JPEG、WEBP、GIF 图片或 TXT 文件");
+        setText(els.chatStatus, "仅支持 PNG、JPEG、WEBP、GIF 图片、TXT 或 Markdown 文件");
         return;
       }
       addAttachments(attachments);

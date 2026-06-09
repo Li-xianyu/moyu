@@ -55,6 +55,9 @@ const NPC_RESPONSE_TIMEOUT_MS = 8000;
 
 async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = []) {
   const skillContinuation = session._skillContinuation;
+  const hasQuestionnairePrompt = session.mode === SESSION_MODE_WORK
+    && typeof isQuestionnaireActive === "function"
+    && isQuestionnaireActive(session);
   const targetMessage = {
     id: `msg-${npc.name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     role: "assistant",
@@ -68,6 +71,7 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
       && (!skillContinuation.speaker || skillContinuation.speaker === npc.name)
       ? skillContinuation.sourceMessageId
       : "",
+    _skillPrompt: hasQuestionnairePrompt ? WORK_MODE_STRUCTURED_QUESTION_SKILL : "",
   };
   if (targetMessage._skillContinuationOf) {
     session._skillContinuation = null;
@@ -184,12 +188,14 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
     ...(session.mode === SESSION_MODE_WORK
       ? [{ role: "system", content: `当前时间：${new Date().toLocaleString("zh-CN", { hour12: false })}` }]
       : []),
-    // 只让当前有效分支中正在进行或刚触发的问卷继续注入技能说明。
+    // 普通轮次只提供技能索引；模型请求或问卷进行中才加载完整协议。
     ...(session.mode === SESSION_MODE_WORK
       && typeof isQuestionnaireActive === "function"
       && isQuestionnaireActive(session)
       ? [{ role: "system", content: WORK_MODE_STRUCTURED_QUESTION_SKILL }]
-      : []),
+      : session.mode === SESSION_MODE_WORK
+        ? [{ role: "system", content: WORK_MODE_SKILL_INDEX }]
+        : []),
     // 多 NPC 模式下告知在场角色（单 AI 模式下模型已知自己是谁）
     ...(isSingleAIMode ? [] : [{ role: "system", content: `当前场景中在场的 NPC：${getSceneNpcs(session).map((item) => item.name).join("、")}。所有场内 NPC 始终一起待在当前场景中，不会因发言顺序而离开或入场。你们的对话视为同处一室的当面交谈。` }]),
     // 全局设定（单 AI 模式下可能为空）
@@ -369,13 +375,43 @@ async function callNpc(session, npc, npcInstructions = {}, parallelPeerNames = [
     clearTimeout(npcTimeoutId);
   }
 
+  if (!targetMessage._skillPrompt
+      && typeof parseSkillFromResponse === "function"
+      && parseSkillFromResponse(targetMessage.content)) {
+    targetMessage._skillPrompt = WORK_MODE_STRUCTURED_QUESTION_SKILL;
+    renderMessages({ stickToBottom: true });
+  }
+
+  if (session.mode === SESSION_MODE_WORK
+      && !session._questionnaireSkillRequested
+      && typeof isQuestionnaireSkillRequest === "function"
+      && isQuestionnaireSkillRequest(targetMessage.content)) {
+    const targetIndex = session.messages.indexOf(targetMessage);
+    if (targetIndex >= 0) session.messages.splice(targetIndex, 1);
+    syncLoadedSessionMessageCount(session);
+    session._questionnaireSkillRequested = true;
+    touchSession(session);
+    persistSessions();
+    renderMessages({ stickToBottom: true });
+    setInlineChatStatus("正在加载问卷技能...");
+    try {
+      await callNpc(session, npc, npcInstructions, parallelPeerNames);
+    } finally {
+      session._questionnaireSkillRequested = false;
+    }
+    return;
+  }
+
   // ── 保存 AI 响应到 IndexedDB ──
   if (window.__chatDB && !targetMessage.streaming) {
     try {
+      const storedTargetMessage = targetMessage._skillPrompt
+        ? { ...targetMessage, _skillPrompt: "", skillPromptExpanded: false }
+        : targetMessage;
       if (window.__chatDB.appendMessage) {
-        await window.__chatDB.appendMessage(session.id, targetMessage);
+        await window.__chatDB.appendMessage(session.id, storedTargetMessage);
       } else {
-        await window.__chatDB.saveMessage(session.id, targetMessage, getMessageSequenceInSession(session, targetMessage));
+        await window.__chatDB.saveMessage(session.id, storedTargetMessage, getMessageSequenceInSession(session, targetMessage));
       }
       await window.__chatDB.updateSessionMeta(session);
     } catch (err) {
@@ -941,4 +977,3 @@ async function streamChatCompletion(session, speaker, model, messages, configId 
   persistSessions();
   renderMessages({ stickToBottom: true });
 }
-

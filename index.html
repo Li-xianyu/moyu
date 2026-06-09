@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "2026.6.9.1";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.6.9.3";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -511,6 +511,195 @@
     .skill-result-line:last-child {
       margin-bottom: 0;
     }
+    .skill-bubble {
+      margin: 6px 0;
+      padding: 16px;
+      max-width: min(100%, 560px);
+      border: 1px solid color-mix(in srgb, var(--theme-border-subtle) 72%, transparent);
+      border-radius: 18px;
+      background: var(--theme-bg-elevated);
+      box-shadow: 0 5px 18px rgba(0, 0, 0, 0.08);
+    }
+    .skill-bubble-header {
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 7px;
+      font-size: inherit;
+      color: inherit;
+    }
+    .skill-bubble-name {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--theme-text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .skill-bubble-step {
+      flex: 0 0 auto;
+      padding: 0;
+      background: transparent;
+      color: var(--theme-text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+    .skill-bubble-progress {
+      height: 3px;
+      margin-bottom: 15px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--theme-text-muted) 14%, transparent);
+    }
+    .skill-bubble-progress > span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--theme-accent);
+      transition: width 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+    }
+    .skill-bubble-question {
+      margin-bottom: 15px;
+      color: var(--theme-text-primary);
+      font-size: 17px;
+      font-weight: 650;
+      line-height: 1.45;
+      letter-spacing: -0.015em;
+    }
+    .skill-bubble-options {
+      display: grid;
+      gap: 8px;
+      overflow: visible;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    .skill-bubble-opt {
+      position: relative;
+      width: 100%;
+      min-height: 45px;
+      padding: 10px 14px 10px 44px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--theme-bg-panel-alt) 82%, transparent);
+      color: var(--theme-text-primary);
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.45;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
+    }
+    .skill-bubble-opt::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 15px;
+      width: 17px;
+      height: 17px;
+      border: 1.5px solid color-mix(in srgb, var(--theme-text-muted) 72%, transparent);
+      border-radius: 50%;
+      transform: translateY(-50%);
+    }
+    .skill-bubble-opt:hover:not(:disabled) {
+      border-color: color-mix(in srgb, var(--theme-accent) 24%, transparent);
+      background: color-mix(in srgb, var(--theme-accent) 8%, var(--theme-bg-panel-alt));
+    }
+    .skill-bubble-opt:active:not(:disabled) {
+      background: color-mix(in srgb, var(--theme-accent) 14%, var(--theme-bg-panel-alt));
+      transform: scale(0.985);
+    }
+    .skill-bubble-opt:focus-visible,
+    .skill-bubble-custom-input:focus-visible,
+    .skill-bubble-custom-btn:focus-visible {
+      outline: 2px solid var(--theme-accent);
+      outline-offset: 2px;
+    }
+    .skill-bubble-opt:disabled {
+      opacity: 0.42;
+      cursor: default;
+    }
+    .skill-bubble-custom {
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+      padding: 5px 5px 5px 13px;
+      border: 1px solid color-mix(in srgb, var(--theme-border-subtle) 76%, transparent);
+      border-radius: 13px;
+      background: var(--theme-bg-input);
+      transition: border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+    .skill-bubble-custom:focus-within {
+      border-color: color-mix(in srgb, var(--theme-accent) 64%, transparent);
+      background: var(--theme-bg-input);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--theme-accent) 11%, transparent);
+    }
+    .skill-bubble-custom-input {
+      min-width: 0;
+      height: 38px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--theme-text-primary);
+    }
+    .skill-bubble-custom-input::placeholder {
+      color: var(--theme-text-muted);
+    }
+    .skill-bubble-custom-btn {
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      min-width: 0;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border-radius: 50%;
+      background: var(--theme-accent);
+      transition: filter 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+    }
+    .skill-bubble-custom-btn svg {
+      width: 17px;
+      height: 17px;
+      stroke-width: 2.5;
+    }
+    .skill-bubble-custom-btn:hover:not(:disabled) {
+      opacity: 1;
+      filter: brightness(1.08);
+    }
+    .skill-bubble-custom-btn:active:not(:disabled) {
+      transform: scale(0.96);
+    }
+    .skill-bubble-locked {
+      opacity: 0.58;
+    }
+    .skill-bubble-result {
+      border-color: color-mix(in srgb, var(--theme-success) 42%, var(--theme-border-subtle));
+    }
+    html[data-theme="light"] .skill-bubble {
+      box-shadow: 0 5px 18px rgba(15, 23, 42, 0.06);
+    }
+    @media (max-width: 640px) {
+      .skill-bubble {
+        padding: 14px;
+        border-radius: 19px;
+      }
+      .skill-bubble-question {
+        font-size: 16px;
+      }
+      .skill-bubble-opt {
+        min-height: 46px;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .skill-bubble-opt,
+      .skill-bubble-custom,
+      .skill-bubble-custom-btn {
+        transition: none;
+      }
+    }
   </style>
   <script>
     // Suppress unhandled rejections from third-party CDN scripts
@@ -749,7 +938,7 @@
           <span class="nav-btn-icon" aria-hidden="true">
             <i data-lucide="wand-2" class="nav-icon-svg"></i>
           </span>
-          <span data-i18n="nav.skills">技能</span>
+          <span data-i18n="nav.skills">技能中心</span>
         </button>
 
         <div class="chat-list-control">
@@ -1161,22 +1350,27 @@
                     </div>
                   </div>
                   <div class="settings-card-body">
-                    <div class="tts-provider-grid">
-                      <button class="tts-provider-card" data-provider="system" type="button">
-                        <div class="tts-provider-logo">
-                          <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <rect width="36" height="36" rx="8" fill="var(--theme-accent, #666)"/>
-                            <path d="M12 10h12v2H12zm-1 4h14v2H11zm0 4h14v2H11zm2 4h10v2H13z" fill="#fff"/>
-                          </svg>
-                        </div>
-                        <span class="tts-provider-name">系统 TTS</span>
-                      </button>
-                      <button class="tts-provider-card" data-provider="mimo" type="button">
-                        <div class="tts-provider-logo">
-                          <img src="./vendor/lobehub-icons/1.90.0/icons/mimo.svg" alt="MiMo">
-                        </div>
-                        <span class="tts-provider-name">MIMO</span>
-                      </button>
+                    <div class="tts-provider-layout">
+                      <div class="tts-provider-system">
+                        <button class="tts-provider-card tts-provider-card-system" data-provider="system" type="button">
+                          <div class="tts-provider-logo">
+                            <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <rect width="36" height="36" rx="8" fill="var(--theme-accent, #666)"/>
+                              <path d="M12 10h12v2H12zm-1 4h14v2H11zm0 4h14v2H11zm2 4h10v2H13z" fill="#fff"/>
+                            </svg>
+                          </div>
+                          <span class="tts-provider-name">系统 TTS</span>
+                        </button>
+                      </div>
+                      <div class="tts-provider-separator" aria-hidden="true"></div>
+                      <div class="tts-provider-grid">
+                        <button class="tts-provider-card" data-provider="mimo" type="button">
+                          <div class="tts-provider-logo">
+                            <img src="./vendor/lobehub-icons/1.90.0/icons/mimo.svg" alt="MiMo">
+                          </div>
+                          <span class="tts-provider-name">MIMO</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -1249,6 +1443,10 @@
                         <option value="2">2.0x (快)</option>
                       </select>
                     </label>
+                    <label class="field">
+                      <span>测试文本</span>
+                      <textarea id="ttsTestTextInput" rows="3" placeholder="输入要用于测试语音合成的文本">你好，这是语音合成测试。</textarea>
+                    </label>
                     <div class="settings-actions-row">
                       <button id="ttsTestBtn" class="secondary-btn" type="button">测试语音</button>
                       <span id="ttsTestStatus" class="hint-text"></span>
@@ -1298,6 +1496,10 @@
                         <option value="1.5">1.5 (高亢)</option>
                         <option value="2">2.0 (尖锐)</option>
                       </select>
+                    </label>
+                    <label class="field">
+                      <span>测试文本</span>
+                      <textarea id="ttsSystemTestTextInput" rows="3" placeholder="输入要用于测试语音合成的文本">这是一段语音合成测试，用来验证音色、语速和音高设置。</textarea>
                     </label>
                     <div class="settings-actions-row">
                       <button id="ttsSystemTestBtn" class="secondary-btn" type="button">测试语音</button>
@@ -1373,7 +1575,7 @@
           <section class="settings-list-panel">
             <div class="settings-list-head">
               <div class="settings-list-head-copy">
-                <h3 data-i18n="nav.skills">技能</h3>
+                <h3 data-i18n="nav.skills">技能中心</h3>
                 <p class="hint-text" data-i18n="skills.subtitle">模型驱动的结构化提问技能，帮助你分析问题、梳理思路。</p>
               </div>
             </div>
@@ -1918,6 +2120,6 @@
     })();
   </script>
   <div id="toastContainer" class="toast-container"></div>
-  <input type="file" id="imageFileInput" accept="image/png,image/jpeg,image/webp,image/gif,text/plain,.txt" multiple hidden>
+  <input type="file" id="imageFileInput" accept="image/png,image/jpeg,image/webp,image/gif,text/plain,text/markdown,.txt,.md,.markdown" multiple hidden>
 </body>
 </html>

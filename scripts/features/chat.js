@@ -978,7 +978,9 @@ function initThinkingDepthSelector() {
 /* ========== 图片附件 ========== */
 var _pendingAttachments = [];
 var _imageLightboxReturnFocus = null;
+var _imageLightboxSource = null;
 var _imageLightboxPositionFrame = 0;
+var _imageLightboxTransitionTimer = 0;
 var _lightboxZoom = { scale: 1, tx: 0, ty: 0, dragging: false, moved: false, dragStartX: 0, dragStartY: 0, dragTx: 0, dragTy: 0 };
 var _touchPinch = { prevDist: 0, scale: 1, tx: 0, ty: 0, cx: 0, cy: 0 };
 var _touchPanning = false;
@@ -1004,6 +1006,41 @@ function syncImageLightboxBounds() {
   lightbox.style.width = "";
   lightbox.style.height = "";
   _imageLightboxPositionFrame = 0;
+}
+
+function getLightboxSourceRect(source) {
+  if (!source?.isConnected) return null;
+  var rect = source.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0 ||
+      rect.bottom <= 0 || rect.right <= 0 ||
+      rect.top >= window.innerHeight || rect.left >= window.innerWidth) {
+    return null;
+  }
+  return rect;
+}
+
+function getLightboxSharedTransform(sourceRect, previewRect) {
+  if (!sourceRect || !previewRect?.width || !previewRect?.height) return "";
+  var sourceCenterX = sourceRect.left + sourceRect.width / 2;
+  var sourceCenterY = sourceRect.top + sourceRect.height / 2;
+  var previewCenterX = previewRect.left + previewRect.width / 2;
+  var previewCenterY = previewRect.top + previewRect.height / 2;
+  return "translate(" + (sourceCenterX - previewCenterX) + "px, " +
+    (sourceCenterY - previewCenterY) + "px) scale(" +
+    (sourceRect.width / previewRect.width) + ", " +
+    (sourceRect.height / previewRect.height) + ")";
+}
+
+function clearImageLightboxTransition() {
+  window.clearTimeout(_imageLightboxTransitionTimer);
+  _imageLightboxTransitionTimer = 0;
+}
+
+function restoreImageLightboxSource() {
+  if (_imageLightboxSource?.isConnected) {
+    _imageLightboxSource.classList.remove("lightbox-source-hidden");
+  }
+  _imageLightboxSource = null;
 }
 
 function resetLightboxZoom() {
@@ -1112,19 +1149,48 @@ async function openLightboxImageInNewTab() {
 function closeImageLightbox() {
   var lightbox = document.getElementById("imageLightbox");
   if (!lightbox || !lightbox.classList.contains("open")) return;
-  lightbox.classList.remove("open");
-  lightbox.setAttribute("aria-hidden", "true");
-  lightbox.hidden = true;
-  document.querySelector(".main")?.classList.remove("image-lightbox-open");
-  document.body.classList.remove("image-lightbox-open");
-  cancelAnimationFrame(_imageLightboxPositionFrame);
-  _imageLightboxPositionFrame = 0;
+  var preview = lightbox.querySelector(".image-lightbox-preview");
+  var sourceRect = getLightboxSourceRect(_imageLightboxSource);
+  var reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  clearImageLightboxTransition();
   resetLightboxZoom();
-  updateLightboxScaleBadge();
-
+  if (preview) {
+    preview.style.transition = "none";
+    preview.style.transform = "translate(0px, 0px) scale(1)";
+  }
+  lightbox.classList.remove("entering");
+  lightbox.classList.add("leaving");
+  if (_imageLightboxSource?.isConnected) {
+    _imageLightboxSource.classList.remove("lightbox-source-hidden");
+  }
   var returnFocus = _imageLightboxReturnFocus;
   _imageLightboxReturnFocus = null;
-  if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+  var finishClose = function () {
+    lightbox.classList.remove("open", "leaving");
+    lightbox.setAttribute("aria-hidden", "true");
+    lightbox.hidden = true;
+    if (preview) {
+      preview.style.transition = "none";
+      preview.style.transform = "";
+      preview.style.borderRadius = "";
+    }
+    restoreImageLightboxSource();
+    document.querySelector(".main")?.classList.remove("image-lightbox-open");
+    document.body.classList.remove("image-lightbox-open");
+    cancelAnimationFrame(_imageLightboxPositionFrame);
+    _imageLightboxPositionFrame = 0;
+    updateLightboxScaleBadge();
+    if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true });
+  };
+  if (!preview || !sourceRect || reduceMotion) {
+    finishClose();
+    return;
+  }
+  var previewRect = preview.getBoundingClientRect();
+  preview.style.transition = "transform 0.28s cubic-bezier(0.32, 0.72, 0, 1), border-radius 0.28s ease";
+  preview.style.transform = getLightboxSharedTransform(sourceRect, previewRect);
+  preview.style.borderRadius = getComputedStyle(_imageLightboxSource).borderRadius || "8px";
+  _imageLightboxTransitionTimer = window.setTimeout(finishClose, 290);
 }
 
 function openImageLightbox(image) {
@@ -1134,22 +1200,45 @@ function openImageLightbox(image) {
   if (!lightbox || !preview || !image?.src) return;
 
   _imageLightboxReturnFocus = image;
+  restoreImageLightboxSource();
+  _imageLightboxSource = image;
+  var sourceRect = getLightboxSourceRect(image);
+  var sourceRadius = getComputedStyle(image).borderRadius || "8px";
+  var reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   preview.src = image.currentSrc || image.src;
   preview.alt = image.alt || "图片预览";
   resetLightboxZoom();
+  clearImageLightboxTransition();
   preview.style.transition = "none";
-  preview.style.transform = "scale(0.97)";
+  preview.style.transform = "";
+  preview.style.borderRadius = sourceRadius;
   lightbox.hidden = false;
-  lightbox.classList.add("open");
+  lightbox.classList.remove("leaving");
+  lightbox.classList.add("open", "entering");
   lightbox.setAttribute("aria-hidden", "false");
   document.querySelector(".main")?.classList.add("image-lightbox-open");
   document.body.classList.add("image-lightbox-open");
   cancelAnimationFrame(_imageLightboxPositionFrame);
   syncImageLightboxBounds();
   requestAnimationFrame(function () {
-    preview.style.transition = "transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1)";
-    updateLightboxTransform();
-    setTimeout(function () { preview.style.transition = "none"; }, 180);
+    var previewRect = preview.getBoundingClientRect();
+    if (!sourceRect || reduceMotion) {
+      preview.style.transform = "translate(0px, 0px) scale(1)";
+      preview.style.borderRadius = "";
+      lightbox.classList.remove("entering");
+      return;
+    }
+    preview.style.transform = getLightboxSharedTransform(sourceRect, previewRect);
+    image.classList.add("lightbox-source-hidden");
+    requestAnimationFrame(function () {
+      preview.style.transition = "transform 0.34s cubic-bezier(0.32, 0.72, 0, 1), border-radius 0.34s ease";
+      preview.style.transform = "translate(0px, 0px) scale(1)";
+      preview.style.borderRadius = "";
+      _imageLightboxTransitionTimer = window.setTimeout(function () {
+        preview.style.transition = "none";
+        lightbox.classList.remove("entering");
+      }, 350);
+    });
   });
   lightbox.querySelector(".image-lightbox-close")?.focus({ preventScroll: true });
 }
@@ -1163,11 +1252,11 @@ function updateTextPreviewSearch(preview, direction, keepSearchFocus) {
   var query = input.value;
   if (!query) {
     count.textContent = "";
-    contentEl.textContent = contentEl.textContent;
+    renderTextPreviewContent(preview);
     return;
   }
 
-  var source = contentEl.textContent;
+  var source = String(preview?._textFile?.content || "");
   var lowerSource = source.toLocaleLowerCase();
   var needle = query.toLocaleLowerCase();
   var matches = [];
@@ -1181,7 +1270,7 @@ function updateTextPreviewSearch(preview, direction, keepSearchFocus) {
 
   if (!matches.length) {
     count.textContent = "0/0";
-    contentEl.textContent = source;
+    renderTextPreviewContent(preview);
     return;
   }
 
@@ -1207,6 +1296,50 @@ function updateTextPreviewSearch(preview, direction, keepSearchFocus) {
   }
 
   if (keepSearchFocus) input.focus({ preventScroll: true });
+}
+
+function renderTextPreviewContent(preview) {
+  var contentEl = preview?.querySelector(".text-preview-content");
+  var file = preview?._textFile || {};
+  if (!contentEl) return;
+  var source = String(file.content || "");
+  var isMarkdownPreview = getTextAttachmentFormat(file) === "Markdown"
+    && preview.dataset.viewMode !== "source";
+  contentEl.classList.toggle("markdown-preview-content", isMarkdownPreview);
+  if (isMarkdownPreview && typeof renderMarkdownContent === "function") {
+    contentEl.innerHTML = renderMarkdownContent(escapeHtml(source));
+    contentEl.querySelectorAll("a").forEach(function(link) {
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+    });
+    contentEl.querySelectorAll("img").forEach(function(image) {
+      image.loading = "lazy";
+    });
+    if (typeof hljs !== "undefined") {
+      contentEl.querySelectorAll("pre code").forEach(function(block) {
+        try { hljs.highlightElement(block); } catch (err) {}
+      });
+    }
+    lucide.createIcons();
+    return;
+  }
+  contentEl.textContent = source;
+}
+
+function syncTextPreviewMode(preview, mode) {
+  var file = preview?._textFile || {};
+  var isMarkdown = getTextAttachmentFormat(file) === "Markdown";
+  preview.dataset.viewMode = isMarkdown && mode === "source" ? "source" : "preview";
+  preview.classList.toggle("source-mode", preview.dataset.viewMode === "source");
+  var button = preview.querySelector(".text-preview-mode-btn");
+  if (button) {
+    var nextMode = preview.dataset.viewMode === "source" ? "preview" : "source";
+    button.dataset.mode = nextMode;
+    button.textContent = nextMode === "source" ? "原文" : "预览";
+    button.title = nextMode === "source" ? "查看 Markdown 原文" : "查看 Markdown 预览";
+    button.setAttribute("aria-label", button.title);
+  }
+  renderTextPreviewContent(preview);
 }
 
 function highlightMatches(source, matches, matchLen, currentIndex) {
@@ -1256,10 +1389,16 @@ function openTextPreview(trigger) {
   closeImageLightbox();
   _textPreviewReturnFocus = trigger;
   preview._textFile = file;
+  var format = getTextAttachmentFormat(file);
+  var isMarkdown = format === "Markdown";
   preview.dataset.searchIndex = "-1";
-  preview.querySelector(".text-preview-name").textContent = file.name || "附件.txt";
-  preview.querySelector(".text-preview-meta").textContent = "TXT · " + formatAttachmentSize(file.size);
-  preview.querySelector(".text-preview-content").textContent = String(file.content || "");
+  preview.querySelector(".text-preview-name").textContent = file.name || (format === "Markdown" ? "附件.md" : "附件.txt");
+  preview.querySelector(".text-preview-meta").textContent = format + " · " + formatAttachmentSize(file.size);
+  preview.setAttribute("aria-label", format + " 文件预览");
+  preview.querySelector(".text-preview-close")?.setAttribute("aria-label", "关闭 " + format + " 预览");
+  preview.querySelector(".text-preview-content")?.setAttribute("aria-label", format + " 文件内容");
+  preview.querySelector(".text-preview-mode-btn")?.classList.toggle("hidden", !isMarkdown);
+  syncTextPreviewMode(preview, isMarkdown ? "preview" : "source");
   preview.querySelector(".text-preview-search").value = "";
   preview.querySelector(".text-preview-search-count").textContent = "";
   preview.classList.remove("search-open");
@@ -1287,7 +1426,9 @@ function initTextPreview() {
   preview.innerHTML = [
     '<section class="text-preview-panel">',
     '<header class="text-preview-head">',
-    '<div class="text-preview-title"><i data-lucide="file-text"></i><span><strong class="text-preview-name"></strong><small class="text-preview-meta"></small></span></div>',
+    '<div class="text-preview-title"><i data-lucide="file-text"></i><span><strong class="text-preview-name"></strong><small class="text-preview-meta"></small></span>',
+    '<button class="text-preview-mode-btn hidden" data-mode="source" type="button" title="查看 Markdown 原文" aria-label="查看 Markdown 原文">原文</button>',
+    "</div>",
     '<div class="text-preview-actions">',
     '<button class="text-preview-copy" type="button" title="复制全文"><i data-lucide="copy"></i><span>复制</span></button>',
     '<button class="text-preview-download" type="button" title="下载文件"><i data-lucide="download"></i><span>下载</span></button>',
@@ -1319,6 +1460,13 @@ function initTextPreview() {
       return;
     }
     var file = preview._textFile || {};
+    var modeButton = event.target.closest(".text-preview-mode-btn");
+    if (modeButton) {
+      syncTextPreviewMode(preview, modeButton.dataset.mode);
+      var searchInput = preview.querySelector(".text-preview-search");
+      if (searchInput?.value) updateTextPreviewSearch(preview, 0);
+      return;
+    }
     if (event.target.closest(".text-preview-search-toggle")) {
       var searchInput = preview.querySelector(".text-preview-search");
       var isOpen = preview.classList.toggle("search-open");
@@ -1333,7 +1481,7 @@ function initTextPreview() {
     }
     if (event.target.closest(".text-preview-copy")) {
       navigator.clipboard.writeText(String(file.content || ""))
-        .then(function () { showToast("TXT 内容已复制", "success", 1800); })
+        .then(function () { showToast(getTextAttachmentFormat(file) + " 内容已复制", "success", 1800); })
         .catch(function () { showToast("复制失败，请手动选择文本", "error", 2200); });
     } else if (event.target.closest(".text-preview-download")) {
       var blob = new Blob([String(file.content || "")], { type: "text/plain;charset=utf-8" });
@@ -1483,8 +1631,9 @@ function initImageLightbox() {
   });
 
   lightbox.addEventListener("dblclick", function (e) {
-    if (e.target.closest(".image-lightbox-close")) return;
-    if (e.target.closest(".image-lightbox-toolbar")) return;
+    if (lightbox.classList.contains("leaving")) return;
+    if (!e.target.closest(".image-lightbox-preview")) return;
+    e.preventDefault();
     var z = _lightboxZoom;
     if (z.scale > 1) {
       resetImageLightboxView(true);
@@ -1613,6 +1762,12 @@ function clearPendingAttachments() {
   renderAttachmentPreview();
 }
 
+function getTextAttachmentFormat(file) {
+  var name = String(file?.name || "");
+  var mediaType = String(file?.type || file?.mediaType || "").toLowerCase();
+  return mediaType === "text/markdown" || /\.(?:md|markdown)$/i.test(name) ? "Markdown" : "TXT";
+}
+
 function renderAttachmentPreview() {
   if (!els.attachmentPreview) return;
   els.attachmentPreview.innerHTML = "";
@@ -1625,10 +1780,11 @@ function renderAttachmentPreview() {
     var thumb = document.createElement("div");
     thumb.className = "attachment-thumb" + (att.kind === "text" ? " attachment-text" : "");
     if (att.kind === "text") {
+      var format = getTextAttachmentFormat(att);
       thumb._textFile = att;
       thumb.setAttribute("role", "button");
-      thumb.setAttribute("aria-label", "预览 TXT 文件 " + att.name);
-      thumb.title = "点击预览 TXT 文件";
+      thumb.setAttribute("aria-label", "预览 " + format + " 文件 " + att.name);
+      thumb.title = "点击预览 " + format + " 文件";
       thumb.tabIndex = 0;
       var icon = document.createElement("i");
       icon.setAttribute("data-lucide", "file-text");
@@ -1663,21 +1819,21 @@ async function addAttachments(files) {
   for (var i = 0; i < selectedFiles.length; i++) {
     var file = selectedFiles[i];
     var fileType = String(file.type || "").toLowerCase();
-    var isText = fileType === "text/plain" || /\.txt$/i.test(file.name || "");
+    var isText = ["text/plain", "text/markdown"].includes(fileType) || /\.(?:txt|md|markdown)$/i.test(file.name || "");
     try {
       if (isText) {
-        if (file.size > 256 * 1024) {
-          setText(els.chatStatus, "TXT 文件 " + file.name + " 超过 256KB 限制");
-          continue;
-        }
+        var format = getTextAttachmentFormat(file);
         var textContent = await textFileToString(file);
         _pendingAttachments.push({
           kind: "text",
-          name: file.name || "附件.txt",
+          name: file.name || (format === "Markdown" ? "附件.md" : "附件.txt"),
           size: file.size,
           type: file.type || "text/plain",
           content: textContent,
         });
+        if (file.size > 256 * 1024) {
+          setText(els.chatStatus, format + " 文件较大，实际能否发送取决于所选模型的上下文限制");
+        }
       } else if (supportedTypes.includes(fileType)) {
         if (file.size > 8 * 1024 * 1024) {
           setText(els.chatStatus, "图片 " + file.name + " 超过 8MB 限制");
@@ -1703,8 +1859,8 @@ function isSupportedChatAttachment(file) {
   if (!file) return false;
   var type = String(file.type || "").toLowerCase();
   var name = String(file.name || "");
-  return ["image/png", "image/jpeg", "image/webp", "image/gif", "text/plain"].includes(type)
-    || /\.txt$/i.test(name);
+  return ["image/png", "image/jpeg", "image/webp", "image/gif", "text/plain", "text/markdown"].includes(type)
+    || /\.(?:txt|md|markdown)$/i.test(name);
 }
 
 function removeAttachment(idx) {

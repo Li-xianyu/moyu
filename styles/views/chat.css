@@ -785,17 +785,17 @@
 
 .skill-answer-question {
   width: 100%;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 400;
+  color: var(--theme-text-primary);
+  font-size: 15px;
+  font-weight: 600;
   text-align: left;
 }
 
 .skill-answer-response {
   width: 100%;
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 600;
+  color: color-mix(in srgb, var(--theme-accent) 72%, var(--theme-text-muted));
+  font-size: 13px;
+  font-weight: 500;
   text-align: left;
 }
 
@@ -1131,6 +1131,8 @@
   background: color-mix(in srgb, var(--theme-bg-elevated) 88%, transparent);
   color: var(--theme-text-primary);
   cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
   box-shadow: var(--theme-shadow-sm);
   backdrop-filter: blur(12px) saturate(1.08);
   -webkit-backdrop-filter: blur(12px) saturate(1.08);
@@ -1240,7 +1242,7 @@ body.image-lightbox-open {
   -webkit-backdrop-filter: blur(18px) saturate(1.1);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.18s ease, visibility 0.18s ease;
+  transition: opacity 0.24s ease, visibility 0.24s ease;
   overscroll-behavior: contain;
   touch-action: none;
   user-select: none;
@@ -1264,6 +1266,16 @@ body.image-lightbox-open {
   visibility: visible;
 }
 
+.image-lightbox.leaving {
+  opacity: 0;
+  visibility: visible;
+  pointer-events: none;
+}
+
+.lightbox-source-hidden {
+  opacity: 0 !important;
+}
+
 .image-lightbox[hidden],
 .text-preview[hidden] {
   display: none !important;
@@ -1284,6 +1296,7 @@ body.image-lightbox-open {
   -webkit-user-select: none;
   -webkit-user-drag: none;
   -webkit-touch-callout: none;
+  will-change: transform, border-radius;
 }
 
 .image-lightbox-preview.dragging {
@@ -1308,6 +1321,20 @@ body.image-lightbox-open {
   backdrop-filter: blur(14px) saturate(1.2);
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
   transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.image-lightbox.entering .image-lightbox-toolbar,
+.image-lightbox.leaving .image-lightbox-close,
+.image-lightbox.leaving .image-lightbox-toolbar {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.image-lightbox-close,
+.image-lightbox-toolbar {
+  transition-property: opacity, background, transform;
+  transition-duration: 0.18s;
+  transition-timing-function: ease;
 }
 
 .image-lightbox-close:hover {
@@ -1466,6 +1493,7 @@ body.image-lightbox-open {
 
 .text-preview-title {
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   align-items: center;
   gap: 10px;
@@ -1511,6 +1539,33 @@ body.image-lightbox-open {
   background: var(--lightbox-toolbar-bg, rgba(28, 28, 30, 0.7));
   backdrop-filter: blur(18px) saturate(1.25);
   -webkit-backdrop-filter: blur(18px) saturate(1.25);
+}
+
+.text-preview-title .text-preview-mode-btn.hidden {
+  display: none;
+}
+
+.text-preview-title .text-preview-mode-btn {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--theme-accent) 16%, transparent);
+  color: var(--theme-accent);
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.text-preview.source-mode .text-preview-mode-btn {
+  background: var(--theme-accent);
+  color: var(--theme-accent-contrast, #fff);
+}
+
+.text-preview-title .text-preview-mode-btn:active {
+  transform: scale(0.96);
 }
 
 .text-preview-actions button,
@@ -1650,6 +1705,32 @@ body.image-lightbox-open {
   color: var(--theme-text-primary);
 }
 
+.text-preview-content.markdown-preview-content {
+  padding: 24px clamp(20px, 4vw, 48px) 36px;
+  white-space: normal;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.text-preview-content.markdown-preview-content > :first-child {
+  margin-top: 0;
+}
+
+.text-preview-content.markdown-preview-content > :last-child {
+  margin-bottom: 0;
+}
+
+.text-preview-content.markdown-preview-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+
+.text-preview-content.markdown-preview-content pre {
+  overflow: auto;
+}
+
 @media (max-width: 640px) {
   .image-lightbox {
     padding: max(12px, env(safe-area-inset-top)) 12px max(78px, env(safe-area-inset-bottom));
@@ -1683,6 +1764,11 @@ body.image-lightbox-open {
   .text-preview-head {
     gap: 10px;
     padding: 10px 10px 9px 12px;
+  }
+
+  .text-preview-title .text-preview-mode-btn {
+    min-height: 27px;
+    padding: 0 9px;
   }
 
   .text-preview-actions span {
@@ -1877,9 +1963,15 @@ body.image-lightbox-open {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--theme-accent);
+  background: #d4a84b;
   border: 2px solid color-mix(in srgb, var(--theme-text-primary) 20%, transparent);
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.12s ease;
+}
+
+.thinking-section[open].thinking-collapsing::after {
+  opacity: 0;
 }
 
 /* Push content right so text doesn't overlap the line */
@@ -2410,7 +2502,7 @@ html[data-theme="light"] .message.agent .story-thought {
   max-height: none;
   overflow: hidden;
   padding: 0 0 0 22px;
-  color: #c8ccd3;
+  color: color-mix(in srgb, var(--theme-text-muted) 84%, transparent);
   line-height: 1.65;
   transition:
     height 0.24s cubic-bezier(0.22, 1, 0.36, 1),
@@ -2459,8 +2551,12 @@ html[data-theme="light"] .thinking-section .thinking-label {
   color: #0f5fb8;
 }
 
+html[data-theme="light"] .thinking-section[open]::after {
+  background: #0f5fb8;
+}
+
 html[data-theme="light"] .thinking-content {
-  color: #1f2937;
+  color: color-mix(in srgb, var(--theme-text-muted) 88%, transparent);
 }
 
 @media (max-width: 640px) {
@@ -2848,6 +2944,54 @@ html[data-theme="light"] .thinking-content {
   border: 1px solid var(--theme-border-subtle);
 }
 
+.skill-prompt-section {
+  margin: 0 0 8px;
+  border: 0;
+  background: transparent;
+}
+
+.skill-prompt-section.skill-prompt-enter {
+  animation: skill-prompt-enter 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.skill-prompt-section > summary {
+  cursor: pointer;
+  color: var(--theme-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: left;
+  user-select: none;
+}
+
+.skill-prompt-content {
+  max-height: min(42vh, 520px);
+  margin-top: 6px;
+  padding: 8px 0 8px 16px;
+  overflow: auto;
+  border-left: 2px solid color-mix(in srgb, var(--theme-text-muted) 28%, transparent);
+  color: var(--theme-text-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+@keyframes skill-prompt-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skill-prompt-section.skill-prompt-enter {
+    animation: none;
+  }
+}
+
 .attachment-thumb.attachment-text {
   width: 164px;
   height: 58px;
@@ -2858,6 +3002,8 @@ html[data-theme="light"] .thinking-content {
   border-color: color-mix(in srgb, var(--theme-border-subtle) 76%, transparent);
   border-radius: 14px;
   background: color-mix(in srgb, var(--theme-bg-elevated) 88%, transparent);
+  user-select: none;
+  -webkit-user-select: none;
   box-shadow: var(--theme-shadow-sm);
   backdrop-filter: blur(12px) saturate(1.08);
   -webkit-backdrop-filter: blur(12px) saturate(1.08);

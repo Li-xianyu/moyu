@@ -1298,10 +1298,30 @@ html[data-theme="light"] .settings-danger-btn:hover {
 }
 
 /* ── TTS provider grid ── */
+.tts-provider-layout {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+
+.tts-provider-system {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.tts-provider-separator {
+  width: 44px;
+  height: 1px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-text-muted) 32%, transparent);
+}
+
 .tts-provider-grid {
   display: flex;
+  width: 100%;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 10px;
 }
 
@@ -1320,6 +1340,11 @@ html[data-theme="light"] .settings-danger-btn:hover {
   color: inherit;
   text-align: left;
   flex: 0 1 200px;
+}
+
+.tts-provider-card-system {
+  flex: 0 1 220px;
+  justify-content: center;
 }
 
 .tts-provider-card:hover {
@@ -1383,13 +1408,23 @@ html[data-theme="light"] .settings-danger-btn:hover {
 
 /* ── responsive ── */
 @media (max-width: 480px) {
+  .tts-provider-layout {
+    gap: 12px;
+  }
+
   .tts-provider-grid {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
   }
+
   .tts-provider-card {
     flex: none;
     padding: 12px 14px;
+  }
+
+  .tts-provider-card-system {
+    width: min(220px, 100%);
+    justify-content: center;
   }
 }
