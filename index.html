@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="./favicon.svg">
   <title>MOYU - 模鱼空间</title>
-  <script>window.APP_VERSION = "2026.6.9.3";window.__moyuBootStart = performance.now();</script>
+  <script>window.APP_VERSION = "2026.6.10.1";window.__moyuBootStart = performance.now();</script>
   <script>
     (function() {
       var theme = "dark";
@@ -54,6 +54,51 @@
     }
     .loading-screen--fade-out {
       opacity: 0; visibility: hidden; pointer-events: none;
+    }
+    .global-top-loader {
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: 10020;
+      width: 100%;
+      height: 3px;
+      overflow: hidden;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 160ms ease, visibility 0s linear 160ms;
+      transform: translateZ(0);
+    }
+    .global-top-loader.active {
+      opacity: 1;
+      visibility: visible;
+      transition-delay: 0s;
+    }
+    .global-top-loader-particle {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: clamp(100px, 22vw, 240px);
+      border-radius: 999px;
+      background: linear-gradient(90deg, transparent 0%, rgba(10, 132, 255, 0.18) 25%, #0a84ff 68%, #d9f1ff 86%, transparent 100%);
+      box-shadow: 0 0 7px rgba(10, 132, 255, 0.9), 0 0 15px rgba(10, 132, 255, 0.42);
+      transform: translate3d(-110%, 0, 0);
+      will-change: transform;
+    }
+    .global-top-loader.active .global-top-loader-particle {
+      animation: global-top-loader-travel 1.15s cubic-bezier(0.32, 0, 0.68, 1) infinite;
+    }
+    @keyframes global-top-loader-travel {
+      from { transform: translate3d(-110%, 0, 0); }
+      to { transform: translate3d(calc(100vw + 10%), 0, 0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .global-top-loader.active .global-top-loader-particle {
+        width: 100%;
+        animation: global-top-loader-pulse 1.2s ease-in-out infinite;
+      }
+      @keyframes global-top-loader-pulse {
+        0%, 100% { opacity: 0.35; transform: none; }
+        50% { opacity: 1; transform: none; }
+      }
     }
     .loading-screen-content {
       display: grid; gap: 24px; justify-items: center; text-align: center;
@@ -811,6 +856,9 @@
       <span class="typewriter-cursor">|</span>
     </div>
   </div>
+</div>
+<div id="globalTopLoader" class="global-top-loader" role="progressbar" aria-label="正在加载" aria-hidden="true">
+  <span class="global-top-loader-particle"></span>
 </div>
 <script>
 (function() {

@@ -329,6 +329,9 @@ function renderChatListMenu() {
       if (state.currentSessionId === session.id && !state.showWelcomeHome && els.views.chat?.classList.contains("active")) {
         return;
       }
+      if (typeof window.startGlobalTopLoading === "function") {
+        window.startGlobalTopLoading();
+      }
       // 切换会话前先中止正在进行的生成，避免流写入错乱
       if (state.isSending && typeof stopGeneration === "function") {
         stopGeneration();
@@ -337,8 +340,15 @@ function renderChatListMenu() {
       if (state.renameSessionId) {
         commitRenameIfNeeded();
       }
-      if (typeof window.ensureChatFeatureLoaded === "function") {
-        await window.ensureChatFeatureLoaded();
+      try {
+        if (typeof window.ensureChatFeatureLoaded === "function") {
+          await window.ensureChatFeatureLoaded();
+        }
+      } catch (error) {
+        if (typeof window.finishGlobalTopLoading === "function") {
+          window.finishGlobalTopLoading();
+        }
+        throw error;
       }
       clearUserMessageEdit();
       state.showWelcomeHome = false;
@@ -356,24 +366,28 @@ function renderChatListMenu() {
         }
         renderSessionLoadingShell(session);
         setTimeout(async () => {
-          if (!session.messagesHydrated && typeof ensureSessionMessagesHydrated === "function") {
-            try {
+          try {
+            if (!session.messagesHydrated && typeof ensureSessionMessagesHydrated === "function") {
               await ensureSessionMessagesHydrated(session);
-            } catch (error) {
-              debugWarn("[session] hydrate failed", error);
+            }
+            if (state.currentSessionId !== session.id || state.showWelcomeHome) {
+              return;
+            }
+            renderSession();
+            scrollChatToBottom();
+            setTimeout(persistSessions, 0);
+            setTimeout(() => {
+              if (previousSession && previousSession.id !== state.currentSessionId) {
+                trimInactiveSessionBuffer(previousSession);
+              }
+            }, 0);
+          } catch (error) {
+            debugWarn("[session] hydrate failed", error);
+          } finally {
+            if (typeof window.finishGlobalTopLoading === "function") {
+              window.finishGlobalTopLoading();
             }
           }
-          if (state.currentSessionId !== session.id || state.showWelcomeHome) {
-            return;
-          }
-          renderSession();
-          scrollChatToBottom();
-          setTimeout(persistSessions, 0);
-          setTimeout(() => {
-            if (previousSession && previousSession.id !== state.currentSessionId) {
-              trimInactiveSessionBuffer(previousSession);
-            }
-          }, 0);
         }, 0);
       }, 0);
     });

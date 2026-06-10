@@ -35,6 +35,48 @@ let _createRuntimePromise = null;
 let _settingsRuntimePromise = null;
 let _sessionEditorRuntimePromise = null;
 let _chatFeatureBound = false;
+let _globalTopLoaderCount = 0;
+let _globalTopLoaderShownAt = 0;
+let _globalTopLoaderShowTimer = 0;
+let _globalTopLoaderHideTimer = 0;
+
+function startGlobalTopLoading() {
+  const loader = document.getElementById("globalTopLoader");
+  _globalTopLoaderCount += 1;
+  if (!loader || _globalTopLoaderCount > 1) return;
+  clearTimeout(_globalTopLoaderHideTimer);
+  clearTimeout(_globalTopLoaderShowTimer);
+  _globalTopLoaderShowTimer = setTimeout(() => {
+    if (_globalTopLoaderCount < 1) return;
+    _globalTopLoaderShownAt = performance.now();
+    loader.classList.add("active");
+    loader.setAttribute("aria-hidden", "false");
+  }, 80);
+}
+
+function finishGlobalTopLoading() {
+  const loader = document.getElementById("globalTopLoader");
+  _globalTopLoaderCount = Math.max(0, _globalTopLoaderCount - 1);
+  if (!loader || _globalTopLoaderCount > 0) return;
+  clearTimeout(_globalTopLoaderShowTimer);
+  const visibleFor = performance.now() - _globalTopLoaderShownAt;
+  const hideDelay = loader.classList.contains("active") ? Math.max(0, 320 - visibleFor) : 0;
+  clearTimeout(_globalTopLoaderHideTimer);
+  _globalTopLoaderHideTimer = setTimeout(() => {
+    if (_globalTopLoaderCount > 0) return;
+    loader.classList.remove("active");
+    loader.setAttribute("aria-hidden", "true");
+  }, hideDelay);
+}
+
+async function withGlobalTopLoading(task) {
+  startGlobalTopLoading();
+  try {
+    return await task();
+  } finally {
+    finishGlobalTopLoading();
+  }
+}
 
 function _loadScript(src) {
   if (_scriptState[src] === "loaded") return Promise.resolve();
@@ -448,24 +490,26 @@ function bindNav() {
 
   els.navButtons.forEach((button) => {
     button.addEventListener("click", async () => {
-      const view = button.dataset.view;
-      if (view === "create") {
-        await ensureCreateRuntimeLoaded();
-        initCreateView();
-        const returnTarget = state.showWelcomeHome ? "welcome" : "chat";
-        prepareCreateViewForNewSession({ returnTarget });
-      } else if (view === "settings") {
-        await ensureSettingsRuntimeLoaded();
-        initSettingsView();
-      } else if (view === "roles") {
-        await ensureRolesStylesLoaded();
-        await _loadScript("./scripts/features/roles.js");
-        initRolesView();
-      } else if (view === "skills") {
-        await ensureSkillsStylesLoaded();
-        if (typeof initSkillsView === "function") initSkillsView();
-      }
-      if (view) switchView(view);
+      await withGlobalTopLoading(async () => {
+        const view = button.dataset.view;
+        if (view === "create") {
+          await ensureCreateRuntimeLoaded();
+          initCreateView();
+          const returnTarget = state.showWelcomeHome ? "welcome" : "chat";
+          prepareCreateViewForNewSession({ returnTarget });
+        } else if (view === "settings") {
+          await ensureSettingsRuntimeLoaded();
+          initSettingsView();
+        } else if (view === "roles") {
+          await ensureRolesStylesLoaded();
+          await _loadScript("./scripts/features/roles.js");
+          initRolesView();
+        } else if (view === "skills") {
+          await ensureSkillsStylesLoaded();
+          if (typeof initSkillsView === "function") initSkillsView();
+        }
+        if (view) switchView(view);
+      });
     });
     if (button.dataset.view === "settings") {
       ["pointerenter", "focus", "touchstart"].forEach((eventName) => {
@@ -533,6 +577,9 @@ window.ensureCreateRuntimeLoaded = ensureCreateRuntimeLoaded;
 window.ensureSessionEditorRuntimeLoaded = ensureSessionEditorRuntimeLoaded;
 window.warmChatFeature = warmChatFeature;
 window.warmSettingsRuntime = warmSettingsRuntime;
+window.startGlobalTopLoading = startGlobalTopLoading;
+window.finishGlobalTopLoading = finishGlobalTopLoading;
+window.withGlobalTopLoading = withGlobalTopLoading;
 
 function isMobileViewport() {
   return window.matchMedia("(max-width: 960px)").matches;
@@ -1005,6 +1052,7 @@ function bindMobileSwipeGesture() {
   function isLocalHorizontalGestureArea(target) {
     if (!(target instanceof Element)) return false;
     const area = target.closest([
+      ".text-preview",
       ".settings-section-nav",
       ".settings-config-list",
       ".session-edit-tabs"

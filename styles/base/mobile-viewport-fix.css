@@ -180,7 +180,8 @@ body::after {
 
   /* 创建页：在 .main 内由 .panel 负责滚动，不用 fixed
      （.panel 自带 height:100%; overflow:auto，足够独立滚动） */
-  #createView.view.active {
+  #createView.view.active,
+  #skillsView.view.active {
     height: 100% !important;
     min-height: 0 !important;
     overflow-y: auto !important;
@@ -287,7 +288,8 @@ body::after {
   }
 
   #settingsView.view.active,
-  #createView.view.active {
+  #createView.view.active,
+  #skillsView.view.active {
     padding-bottom: 40px !important;
   }
 }

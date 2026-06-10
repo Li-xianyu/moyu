@@ -544,6 +544,7 @@
 
   .nav-btn-create,
   .nav-btn-roles,
+  .nav-btn-skills,
   .nav-btn-settings,
   .nav-text-toggle {
     min-height: 42px;
@@ -757,6 +758,11 @@
   }
 
   .nav-btn-roles {
+    display: flex;
+    width: 100%;
+  }
+
+  .nav-btn-skills {
     display: flex;
     width: 100%;
   }
